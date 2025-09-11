@@ -18,7 +18,7 @@ from thestrat.schemas import (
 data = pd.DataFrame({
     'timestamp': pd.date_range('2024-01-01 09:30', periods=300, freq='1min'),
     'open': [100 + i*0.1 for i in range(300)],
-    'high': [100.5 + i*0.1 for i in range(300)], 
+    'high': [100.5 + i*0.1 for i in range(300)],
     'low': [99.5 + i*0.1 for i in range(300)],
     'close': [100.2 + i*0.1 for i in range(300)],
     'volume': [1000 + i*10 for i in range(300)]
@@ -84,12 +84,12 @@ def analyze_multiple_timeframes(data, timeframes=['5m', '15m', '1h']):
             ]
         )
     )
-    
+
     # Single pipeline processes all timeframes
     pipeline = Factory.create_all(config)
     aggregated = pipeline["aggregation"].process(data)
     analyzed = pipeline["indicators"].process(aggregated)
-    
+
     # Extract results by timeframe from normalized output
     results = {}
     for tf in timeframes:
@@ -101,7 +101,7 @@ def analyze_multiple_timeframes(data, timeframes=['5m', '15m', '1h']):
             'pivot_highs': tf_data['pivot_high'].sum() if 'pivot_high' in tf_data.columns else 0,
             'pivot_lows': tf_data['pivot_low'].sum() if 'pivot_low' in tf_data.columns else 0
         }
-    
+
     return results, analyzed  # Return both summary and full data
 
 # Use with your data
@@ -155,7 +155,7 @@ print(f"Crypto analysis: 24/7 trading, {len(crypto_signals)} hourly bars")
 fx_config = FactoryConfig(
     aggregation=AggregationConfig(
         target_timeframes=["4h"],
-        asset_class="fx", 
+        asset_class="fx",
         timezone="UTC"
     ),
     indicators=IndicatorsConfig(
@@ -179,7 +179,7 @@ eurusd_analyzed = fx_pipeline["indicators"].process(eurusd_aggregated)
 
 # Find major swing points (check for boolean columns indicating new pivots)
 major_swings = eurusd_analyzed[
-    (eurusd_analyzed.get('new_pivot_high', False) == True) | 
+    (eurusd_analyzed.get('new_pivot_high', False) == True) |
     (eurusd_analyzed.get('new_pivot_low', False) == True)
 ] if 'new_pivot_high' in eurusd_analyzed.columns or 'new_pivot_low' in eurusd_analyzed.columns else []
 print(f"Found {len(major_swings)} major swing points in EUR/USD")
@@ -249,21 +249,21 @@ def analyze_cross_timeframe_signals(data):
             ]
         )
     )
-    
+
     pipeline = Factory.create_all(config)
     aggregated = pipeline["aggregation"].process(data)
     analyzed = pipeline["indicators"].process(aggregated)
-    
+
     # Find synchronized signals across timeframes
     synchronized_signals = []
-    
+
     # Get latest bar for each timeframe
     latest_by_tf = {}
     for tf in ["5m", "15m", "1h"]:
         tf_data = analyzed[analyzed['timeframe'] == tf]
         if len(tf_data) > 0:
             latest_by_tf[tf] = tf_data.iloc[-1]
-    
+
     # Check for signal alignment
     if all(bar.get('outside_bar', False) for bar in latest_by_tf.values()):
         synchronized_signals.append({
@@ -271,7 +271,7 @@ def analyze_cross_timeframe_signals(data):
             'timeframes': list(latest_by_tf.keys()),
             'timestamp': list(latest_by_tf.values())[0]['timestamp']
         })
-    
+
     return synchronized_signals, analyzed
 
 # Example usage
@@ -287,14 +287,14 @@ print(f"Found {len(signals)} synchronized signals across multiple timeframes")
 def detect_strat_patterns(data):
     """Detect common TheStrat patterns."""
     patterns = []
-    
+
     for i in range(2, len(data)):
         current = data.iloc[i]
-        prev1 = data.iloc[i-1] 
+        prev1 = data.iloc[i-1]
         prev2 = data.iloc[i-2]
-        
+
         # Inside bar followed by breakout (2-1-2 Continuation)
-        if (prev2['outside_bar'] and 
+        if (prev2['outside_bar'] and
             prev1['inside_bar'] and
             current['close'] > prev2['high']):
             patterns.append({
@@ -303,9 +303,9 @@ def detect_strat_patterns(data):
                 'entry_price': prev2['high'],
                 'target': current['close'] + (current['close'] - prev2['low']) * 0.5
             })
-        
+
         # Outside bar reversal
-        if (current['outside_bar'] and 
+        if (current['outside_bar'] and
             prev1['close'] > prev1['open'] and  # Previous bar was bullish
             current['close'] < current['open']):  # Current bar is bearish
             patterns.append({
@@ -314,7 +314,7 @@ def detect_strat_patterns(data):
                 'entry_price': current['low'],
                 'stop_loss': current['high']
             })
-    
+
     return patterns
 
 # Apply pattern detection
@@ -332,23 +332,23 @@ for pattern in patterns[-5:]:
 def calculate_position_sizes(signals, account_balance, risk_percent=2.0):
     """Calculate position sizes based on TheStrat signals."""
     positions = []
-    
+
     for signal in signals:
         if 'entry_price' in signal and 'stop_loss' in signal:
             # Calculate risk per share
             risk_per_share = abs(signal['entry_price'] - signal['stop_loss'])
-            
+
             # Calculate position size
             risk_amount = account_balance * (risk_percent / 100)
             position_size = int(risk_amount / risk_per_share) if risk_per_share > 0 else 0
-            
+
             positions.append({
                 **signal,
                 'position_size': position_size,
                 'risk_amount': risk_amount,
                 'risk_per_share': risk_per_share
             })
-    
+
     return positions
 
 # Example usage
@@ -374,7 +374,7 @@ from datetime import datetime
 
 def simulate_real_time_analysis(historical_data, interval_seconds=60):
     """Simulate real-time TheStrat analysis with Pydantic models."""
-    
+
     config = FactoryConfig(
         aggregation=AggregationConfig(target_timeframes=["5m"], asset_class="equities"),
         indicators=IndicatorsConfig(
@@ -386,32 +386,32 @@ def simulate_real_time_analysis(historical_data, interval_seconds=60):
             ]
         )
     )
-    
+
     pipeline = Factory.create_all(config)
-    
+
     # Simulate streaming data
     for i in range(50, len(historical_data), 5):  # Add 5 bars at a time
         current_data = historical_data.iloc[:i]
-        
+
         # Process latest data
         aggregated = pipeline["aggregation"].process(current_data)
         analyzed = pipeline["indicators"].process(aggregated)
-        
+
         # Check for new signals (last bar)
         if len(analyzed) > 0:
             latest = analyzed.iloc[-1]
-            
+
             if latest['inside_bar']:
                 print(f"{datetime.now()}: Inside bar detected @ {latest['close']:.2f}")
             elif latest['outside_bar']:
                 print(f"{datetime.now()}: Outside bar detected @ {latest['close']:.2f}")
-            
+
             # Check for pivot points
             if latest.get('new_pivot_high', False):
                 print(f"{datetime.now()}: New Pivot HIGH @ {latest['high']:.2f}")
             elif latest.get('new_pivot_low', False):
                 print(f"{datetime.now()}: New Pivot LOW @ {latest['low']:.2f}")
-        
+
         time.sleep(interval_seconds)
 
 # Run simulation (comment out for docs)
@@ -426,16 +426,16 @@ def simulate_real_time_analysis(historical_data, interval_seconds=60):
 def batch_process_symbols(symbol_data_dict, config_template):
     """Process multiple symbols efficiently with new API."""
     results = {}
-    
+
     # Create pipeline once - supports multiple timeframes per symbol
     pipeline = Factory.create_all(config_template)
-    
+
     for symbol, data in symbol_data_dict.items():
         try:
             # Process each symbol - now handles multiple timeframes
             aggregated = pipeline["aggregation"].process(data)
             analyzed = pipeline["indicators"].process(aggregated)
-            
+
             # Store results with timeframe breakdown
             results[symbol] = {
                 'data': analyzed,
@@ -445,19 +445,19 @@ def batch_process_symbols(symbol_data_dict, config_template):
                 'last_price': analyzed.iloc[-1]['close'],
                 'total_bars': len(analyzed)
             }
-            
+
             print(f"Processed {symbol}: {len(analyzed)} bars across {len(analyzed['timeframe'].unique())} timeframes")
-            
+
         except Exception as e:
             print(f"Error processing {symbol}: {e}")
             results[symbol] = None
-    
+
     return results
 
 # Example usage
 symbols_data = {
     'AAPL': aapl_data,
-    'MSFT': msft_data, 
+    'MSFT': msft_data,
     'GOOGL': googl_data
 }
 
@@ -469,10 +469,10 @@ batch_results = batch_process_symbols(symbols_data, config)
 ```python
 def process_large_dataset(data, chunk_size=1000):
     """Process large datasets in chunks to manage memory with new API."""
-    
+
     config = FactoryConfig(
         aggregation=AggregationConfig(
-            target_timeframes=["5m"], 
+            target_timeframes=["5m"],
             asset_class="equities"
         ),
         indicators=IndicatorsConfig(
@@ -484,31 +484,31 @@ def process_large_dataset(data, chunk_size=1000):
             ]
         )
     )
-    
+
     pipeline = Factory.create_all(config)
     results = []
-    
+
     # Process in chunks
     for start_idx in range(0, len(data), chunk_size):
         end_idx = min(start_idx + chunk_size, len(data))
         chunk = data.iloc[start_idx:end_idx]
-        
+
         # Include overlap for continuity
         if start_idx > 0:
             overlap = data.iloc[max(0, start_idx-100):start_idx]
             chunk = pd.concat([overlap, chunk])
-        
+
         # Process chunk
         aggregated = pipeline["aggregation"].process(chunk)
         analyzed = pipeline["indicators"].process(aggregated)
-        
+
         # Store results (excluding overlap)
         if start_idx > 0:
             analyzed = analyzed.iloc[20:]  # Remove overlap portion
-        
+
         results.append(analyzed)
         print(f"Processed chunk {start_idx//chunk_size + 1}")
-    
+
     # Combine results
     final_result = pd.concat(results, ignore_index=True)
     return final_result
@@ -526,7 +526,7 @@ class TheStratStrategy(bt.Strategy):
     def __init__(self):
         self.thestrat_config = FactoryConfig(
             aggregation=AggregationConfig(
-                target_timeframes=["5m"], 
+                target_timeframes=["5m"],
                 asset_class="equities"
             ),
             indicators=IndicatorsConfig(
@@ -539,16 +539,16 @@ class TheStratStrategy(bt.Strategy):
             )
         )
         self.pipeline = Factory.create_all(self.thestrat_config)
-    
+
     def next(self):
         # Convert backtrader data to DataFrame
         data = self.convert_bt_data()
-        
+
         # Apply TheStrat analysis
         analyzed = self.pipeline["indicators"].process(
             self.pipeline["aggregation"].process(data)
         )
-        
+
         # Trading logic based on TheStrat signals
         if analyzed.iloc[-1]['outside_bar'] and not self.position:
             self.buy()
@@ -561,7 +561,7 @@ from zipline.api import order, record, symbol
 def thestrat_zipline_algo(context, data):
     # Get price data
     prices = data.history(symbol('AAPL'), ['open', 'high', 'low', 'close'], 100, '1d')
-    
+
     # Apply TheStrat with new API
     config = FactoryConfig(
         aggregation=AggregationConfig(target_timeframes=["1d"]),
@@ -577,11 +577,11 @@ def thestrat_zipline_algo(context, data):
     pipeline = Factory.create_all(config)
     aggregated = pipeline["aggregation"].process(prices.reset_index())
     analyzed = pipeline["indicators"].process(aggregated)
-    
+
     # Trading decisions
     if analyzed.iloc[-1]['outside_bar']:
         order(symbol('AAPL'), 100)
-    
+
     record(inside_bars=analyzed['inside_bar'].sum())
 ```
 

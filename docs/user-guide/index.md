@@ -13,7 +13,7 @@ This user guide is organized into the following sections:
 ### [Installation](installation.md)
 How to install and set up the TheStrat module in your environment.
 
-### [Quick Start](quickstart.md) 
+### [Quick Start](quickstart.md)
 Get up and running quickly with basic examples and common use cases.
 
 ### [Examples](examples.md)

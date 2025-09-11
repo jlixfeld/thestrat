@@ -27,7 +27,7 @@ from thestrat.schemas import (
 sample_data = pd.DataFrame({
     'timestamp': pd.date_range('2024-01-01 09:30', periods=100, freq='1min'),
     'open': [100.0] * 100,
-    'high': [101.0] * 100, 
+    'high': [101.0] * 100,
     'low': [99.0] * 100,
     'close': [100.5] * 100,
     'volume': [1000] * 100
@@ -89,7 +89,7 @@ simple_config = FactoryConfig(
     )
 )
 
-# Full configuration with all options  
+# Full configuration with all options
 full_config = FactoryConfig(
     aggregation=AggregationConfig(
         target_timeframes=["5m", "15m"],  # Multiple timeframes supported
@@ -134,7 +134,7 @@ print(five_min_bars.columns)
 Analyze market structure:
 
 ```python
-# Get the indicators component  
+# Get the indicators component
 indicators = components["indicators"]
 
 # Apply TheStrat analysis
@@ -193,12 +193,12 @@ crypto_config = FactoryConfig(
 crypto_pipeline = Factory.create_all(crypto_config)
 ```
 
-### Forex (24/5 Trading) 
+### Forex (24/5 Trading)
 
 ```python
 fx_config = FactoryConfig(
     aggregation=AggregationConfig(
-        target_timeframes=["4h"], 
+        target_timeframes=["4h"],
         asset_class="fx",
         timezone="UTC"  # Always UTC for FX
     ),
@@ -260,20 +260,20 @@ print(f"Total analysis: {len(analyzed)} bars across {len(analyzed['timeframe'].u
 def find_breakouts(data):
     """Find potential breakout signals"""
     breakouts = []
-    
+
     for i in range(1, len(data)):
         current = data.iloc[i]
         previous = data.iloc[i-1]
-        
+
         # Outside bar followed by continuation
-        if (previous['outside_bar'] and 
+        if (previous['outside_bar'] and
             current['close'] > previous['high']):
             breakouts.append({
                 'timestamp': current['timestamp'],
                 'type': 'bullish_breakout',
                 'price': current['close']
             })
-    
+
     return breakouts
 
 # Apply to your analyzed data
@@ -286,19 +286,19 @@ print(f"Found {len(signals)} breakout signals")
 Now that you understand the basics:
 
 1. **Explore [Examples](examples.md)** - More detailed use cases and advanced features
-2. **Review [Asset Classes](asset-classes.md)** - Understand market-specific behaviors  
+2. **Review [Asset Classes](asset-classes.md)** - Understand market-specific behaviors
 3. **Check [API Reference](../reference/index.md)** - Detailed documentation of all methods and parameters
 
 ## Common Questions
 
-**Q: What timeframes are supported?**  
+**Q: What timeframes are supported?**
 A: Standard timeframes: 1m, 5m, 15m, 30m, 1h, 4h, 1d. Custom intervals can be configured.
 
-**Q: Can I use my own data format?**  
+**Q: Can I use my own data format?**
 A: Yes, as long as it has OHLCV columns and a timestamp. The data will be automatically standardized.
 
-**Q: How do I handle missing data?**  
+**Q: How do I handle missing data?**
 A: TheStrat includes built-in handling for gaps and missing bars appropriate to each asset class.
 
-**Q: Can I backtest strategies?**  
+**Q: Can I backtest strategies?**
 A: TheStrat provides the analysis foundation. You'll need to combine it with your backtesting framework.

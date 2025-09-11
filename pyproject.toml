@@ -75,10 +75,31 @@ markers = [
     "integration: Integration tests",
 ]
 
+[tool.pyright]
+pythonVersion = "3.11"
+venvPath = "."
+venv = ".venv"
+typeCheckingMode = "basic"
+reportMissingImports = true
+reportMissingTypeStubs = false
+reportPrivateUsage = false
+reportUnusedImport = false
+reportUnusedClass = false
+reportUnusedFunction = false
+reportUnusedVariable = false
+reportUntypedFunctionDecorator = false
+reportIncompatibleMethodOverride = false
+reportIncompatibleVariableOverride = false
+reportOverlappingOverload = false
+reportUninitializedInstanceVariable = false
+reportArgumentType = false
+reportAttributeAccessIssue = false
+
 [dependency-groups]
 dev = [
     "git-changelog>=2.6.2",
     "pytest>=8.4.2",
     "ruff>=0.11.13",
+    "pre-commit>=3.0.0",
+    "pyright>=1.1.405",
 ]
-

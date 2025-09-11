@@ -7,7 +7,7 @@ TheStrat supports multiple asset classes, each with specific market characterist
 Asset classes in TheStrat determine:
 
 - **Trading hours** and session handling
-- **Timezone** requirements and defaults  
+- **Timezone** requirements and defaults
 - **Gap handling** for market opens/closes
 - **Aggregation behavior** for weekends and holidays
 
@@ -26,7 +26,7 @@ from thestrat.schemas import FactoryConfig, AggregationConfig, IndicatorsConfig
 crypto_config = FactoryConfig(
     aggregation=AggregationConfig(
         target_timeframes=["1h"],
-        asset_class="crypto", 
+        asset_class="crypto",
         timezone="UTC"  # Always UTC for crypto
     )
 )
@@ -121,7 +121,7 @@ short_term_config = FactoryConfig(
     )
 )
 
-# Regular session analysis  
+# Regular session analysis
 regular_config = FactoryConfig(
     aggregation=AggregationConfig(
         target_timeframes=["5m"],
@@ -162,11 +162,11 @@ lse_config = FactoryConfig(
     )
 )
 
-# Tokyo Stock Exchange  
+# Tokyo Stock Exchange
 tse_config = FactoryConfig(
     aggregation=AggregationConfig(
         target_timeframes=["30m"],
-        asset_class="equities", 
+        asset_class="equities",
         timezone="Asia/Tokyo"    # 9:00-15:00 JST
     ),
     indicators=IndicatorsConfig(
@@ -209,12 +209,12 @@ fx_config = FactoryConfig(
 ```python
 def analyze_fx_sessions(eurusd_data):
     """Analyze EUR/USD across major FX sessions."""
-    
+
     sessions = {
         "asian": FactoryConfig(
             aggregation=AggregationConfig(
                 target_timeframes=["1h"],
-                asset_class="fx", 
+                asset_class="fx",
                 timezone="UTC"  # Asian session: 10 PM - 8 AM UTC
             )
         ),
@@ -227,13 +227,13 @@ def analyze_fx_sessions(eurusd_data):
         ),
         "newyork": FactoryConfig(
             aggregation=AggregationConfig(
-                target_timeframes=["15min"], 
+                target_timeframes=["15min"],
                 asset_class="fx",
                 timezone="UTC"  # New York session: 12 PM - 9 PM UTC
             )
         )
     }
-    
+
     results = {}
     for session, config in sessions.items():
         pipeline = Factory.create_all(config)
@@ -241,7 +241,7 @@ def analyze_fx_sessions(eurusd_data):
             pipeline["aggregation"].process(eurusd_data)
         )
         results[session] = analyzed
-    
+
     return results
 ```
 
@@ -250,7 +250,7 @@ def analyze_fx_sessions(eurusd_data):
 # Major pairs with different characteristics
 pairs = {
     "EURUSD": {"threshold": 0.3, "window": 5},   # Lower volatility
-    "GBPJPY": {"threshold": 0.8, "window": 4},   # Higher volatility  
+    "GBPJPY": {"threshold": 0.8, "window": 4},   # Higher volatility
     "AUDUSD": {"threshold": 0.4, "window": 6},   # Commodity currency
     "USDCAD": {"threshold": 0.5, "window": 5}    # Oil correlation
 }
@@ -258,8 +258,8 @@ pairs = {
 for pair, params in pairs.items():
     config = FactoryConfig(
         aggregation=AggregationConfig(
-            target_timeframes=["4h"], 
-            asset_class="fx", 
+            target_timeframes=["4h"],
+            asset_class="fx",
             timezone="UTC"
         ),
         indicators=IndicatorsConfig(
@@ -313,9 +313,9 @@ custom_config = FactoryConfig(
 ```python
 def analyze_multi_asset_portfolio(assets):
     """Analyze multiple asset classes in one portfolio."""
-    
+
     results = {}
-    
+
     for asset_name, (data, asset_class) in assets.items():
         # Get appropriate config for asset class
         base_config = {
@@ -323,7 +323,7 @@ def analyze_multi_asset_portfolio(assets):
             "equities": {"target_timeframes": ["15min"], "timezone": "US/Eastern", "threshold": 1.5},
             "fx": {"target_timeframes": ["1h"], "timezone": "UTC", "threshold": 0.5}
         }
-        
+
         if asset_class in base_config:
             config = FactoryConfig(
                 aggregation=AggregationConfig(
@@ -343,24 +343,24 @@ def analyze_multi_asset_portfolio(assets):
                     ]
                 )
             )
-            
+
             pipeline = Factory.create_all(config)
             aggregated = pipeline["aggregation"].process(data)
             analyzed = pipeline["indicators"].process(aggregated)
-            
+
             results[asset_name] = {
                 'asset_class': asset_class,
                 'data': analyzed,
                 'inside_bars': analyzed['inside_bar'].sum(),
                 'outside_bars': analyzed['outside_bar'].sum()
             }
-    
+
     return results
 
 # Example usage
 portfolio = {
     'BTC': (btc_data, 'crypto'),
-    'AAPL': (aapl_data, 'equities'), 
+    'AAPL': (aapl_data, 'equities'),
     'EURUSD': (eurusd_data, 'fx')
 }
 
@@ -375,7 +375,7 @@ portfolio_analysis = analyze_multi_asset_portfolio(portfolio)
 - Consider 24/7 nature in signal interpretation
 - Include incomplete bars for real-time analysis
 
-### Equities  
+### Equities
 - Respect market hours and gaps
 - Lower volatility thresholds (1-2%)
 - Consider pre/post market sessions separately

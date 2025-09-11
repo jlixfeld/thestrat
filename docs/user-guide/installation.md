@@ -159,7 +159,7 @@ TheStrat has the following dependencies:
     uv add git+https://github.com/jlixfeld/thestrat.git
     ```
 
-**Permission Errors**: Cannot write to installation directory  
+**Permission Errors**: Cannot write to installation directory
 :   Use a virtual environment or user installation:
     ```bash
     # Create virtual environment

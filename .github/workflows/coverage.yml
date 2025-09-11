@@ -13,7 +13,7 @@ permissions:
 jobs:
   coverage:
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -49,18 +49,18 @@ jobs:
         run: |
           COVERAGE=${{ steps.coverage.outputs.percentage }}
           COLOR="red"
-          
+
           # Set badge color based on coverage percentage
           if (( $(echo "$COVERAGE >= 90" | bc -l) )); then
             COLOR="brightgreen"
           elif (( $(echo "$COVERAGE >= 80" | bc -l) )); then
-            COLOR="green"  
+            COLOR="green"
           elif (( $(echo "$COVERAGE >= 70" | bc -l) )); then
             COLOR="yellow"
           elif (( $(echo "$COVERAGE >= 60" | bc -l) )); then
             COLOR="orange"
           fi
-          
+
           # Create badge JSON
           mkdir -p .github/badges
           cat > .github/badges/coverage.json << EOF
@@ -71,14 +71,14 @@ jobs:
             "color": "$COLOR"
           }
           EOF
-          
+
           echo "Created coverage badge with ${COVERAGE}% coverage"
 
       - name: Display coverage result
         run: |
           echo "Coverage: ${{ steps.coverage.outputs.percentage }}%"
           echo "Badge manually updated at: https://gist.github.com/jlixfeld/c383059dafef5a6c070532174f3f0ba8"
-          
+
           # Note: Gist update requires personal access token with gist scope
           # For now, the badge shows the current coverage percentage
           # To update automatically, add a PAT as repository secret
