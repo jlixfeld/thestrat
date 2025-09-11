@@ -1272,7 +1272,7 @@
 <p>Asset classes in TheStrat determine:</p>
 <ul>
 <li><strong>Trading hours</strong> and session handling</li>
-<li><strong>Timezone</strong> requirements and defaults  </li>
+<li><strong>Timezone</strong> requirements and defaults</li>
 <li><strong>Gap handling</strong> for market opens/closes</li>
 <li><strong>Aggregation behavior</strong> for weekends and holidays</li>
 </ul>
@@ -1286,7 +1286,7 @@
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="n">crypto_config</span> <span class="o">=</span> <span class="n">FactoryConfig</span><span class="p">(</span>
 </span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    <span class="n">aggregation</span><span class="o">=</span><span class="n">AggregationConfig</span><span class="p">(</span>
 </span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>        <span class="n">target_timeframes</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;1h&quot;</span><span class="p">],</span>
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>        <span class="n">asset_class</span><span class="o">=</span><span class="s2">&quot;crypto&quot;</span><span class="p">,</span> 
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>        <span class="n">asset_class</span><span class="o">=</span><span class="s2">&quot;crypto&quot;</span><span class="p">,</span>
 </span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>        <span class="n">timezone</span><span class="o">=</span><span class="s2">&quot;UTC&quot;</span>  <span class="c1"># Always UTC for crypto</span>
 </span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>    <span class="p">)</span>
 </span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="p">)</span>
@@ -1367,7 +1367,7 @@
 </span><span id="__span-3-15"><a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a>    <span class="p">)</span>
 </span><span id="__span-3-16"><a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a><span class="p">)</span>
 </span><span id="__span-3-17"><a id="__codelineno-3-17" name="__codelineno-3-17" href="#__codelineno-3-17"></a>
-</span><span id="__span-3-18"><a id="__codelineno-3-18" name="__codelineno-3-18" href="#__codelineno-3-18"></a><span class="c1"># Regular session analysis  </span>
+</span><span id="__span-3-18"><a id="__codelineno-3-18" name="__codelineno-3-18" href="#__codelineno-3-18"></a><span class="c1"># Regular session analysis</span>
 </span><span id="__span-3-19"><a id="__codelineno-3-19" name="__codelineno-3-19" href="#__codelineno-3-19"></a><span class="n">regular_config</span> <span class="o">=</span> <span class="n">FactoryConfig</span><span class="p">(</span>
 </span><span id="__span-3-20"><a id="__codelineno-3-20" name="__codelineno-3-20" href="#__codelineno-3-20"></a>    <span class="n">aggregation</span><span class="o">=</span><span class="n">AggregationConfig</span><span class="p">(</span>
 </span><span id="__span-3-21"><a id="__codelineno-3-21" name="__codelineno-3-21" href="#__codelineno-3-21"></a>        <span class="n">target_timeframes</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;5m&quot;</span><span class="p">],</span>
@@ -1406,11 +1406,11 @@
 </span><span id="__span-4-15"><a id="__codelineno-4-15" name="__codelineno-4-15" href="#__codelineno-4-15"></a>    <span class="p">)</span>
 </span><span id="__span-4-16"><a id="__codelineno-4-16" name="__codelineno-4-16" href="#__codelineno-4-16"></a><span class="p">)</span>
 </span><span id="__span-4-17"><a id="__codelineno-4-17" name="__codelineno-4-17" href="#__codelineno-4-17"></a>
-</span><span id="__span-4-18"><a id="__codelineno-4-18" name="__codelineno-4-18" href="#__codelineno-4-18"></a><span class="c1"># Tokyo Stock Exchange  </span>
+</span><span id="__span-4-18"><a id="__codelineno-4-18" name="__codelineno-4-18" href="#__codelineno-4-18"></a><span class="c1"># Tokyo Stock Exchange</span>
 </span><span id="__span-4-19"><a id="__codelineno-4-19" name="__codelineno-4-19" href="#__codelineno-4-19"></a><span class="n">tse_config</span> <span class="o">=</span> <span class="n">FactoryConfig</span><span class="p">(</span>
 </span><span id="__span-4-20"><a id="__codelineno-4-20" name="__codelineno-4-20" href="#__codelineno-4-20"></a>    <span class="n">aggregation</span><span class="o">=</span><span class="n">AggregationConfig</span><span class="p">(</span>
 </span><span id="__span-4-21"><a id="__codelineno-4-21" name="__codelineno-4-21" href="#__codelineno-4-21"></a>        <span class="n">target_timeframes</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;30m&quot;</span><span class="p">],</span>
-</span><span id="__span-4-22"><a id="__codelineno-4-22" name="__codelineno-4-22" href="#__codelineno-4-22"></a>        <span class="n">asset_class</span><span class="o">=</span><span class="s2">&quot;equities&quot;</span><span class="p">,</span> 
+</span><span id="__span-4-22"><a id="__codelineno-4-22" name="__codelineno-4-22" href="#__codelineno-4-22"></a>        <span class="n">asset_class</span><span class="o">=</span><span class="s2">&quot;equities&quot;</span><span class="p">,</span>
 </span><span id="__span-4-23"><a id="__codelineno-4-23" name="__codelineno-4-23" href="#__codelineno-4-23"></a>        <span class="n">timezone</span><span class="o">=</span><span class="s2">&quot;Asia/Tokyo&quot;</span>    <span class="c1"># 9:00-15:00 JST</span>
 </span><span id="__span-4-24"><a id="__codelineno-4-24" name="__codelineno-4-24" href="#__codelineno-4-24"></a>    <span class="p">),</span>
 </span><span id="__span-4-25"><a id="__codelineno-4-25" name="__codelineno-4-25" href="#__codelineno-4-25"></a>    <span class="n">indicators</span><span class="o">=</span><span class="n">IndicatorsConfig</span><span class="p">(</span>
@@ -1450,7 +1450,7 @@
 </span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>        <span class="s2">&quot;asian&quot;</span><span class="p">:</span> <span class="n">FactoryConfig</span><span class="p">(</span>
 </span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a>            <span class="n">aggregation</span><span class="o">=</span><span class="n">AggregationConfig</span><span class="p">(</span>
 </span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a>                <span class="n">target_timeframes</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;1h&quot;</span><span class="p">],</span>
-</span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a>                <span class="n">asset_class</span><span class="o">=</span><span class="s2">&quot;fx&quot;</span><span class="p">,</span> 
+</span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a>                <span class="n">asset_class</span><span class="o">=</span><span class="s2">&quot;fx&quot;</span><span class="p">,</span>
 </span><span id="__span-6-9"><a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a>                <span class="n">timezone</span><span class="o">=</span><span class="s2">&quot;UTC&quot;</span>  <span class="c1"># Asian session: 10 PM - 8 AM UTC</span>
 </span><span id="__span-6-10"><a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a>            <span class="p">)</span>
 </span><span id="__span-6-11"><a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a>        <span class="p">),</span>
@@ -1463,7 +1463,7 @@
 </span><span id="__span-6-18"><a id="__codelineno-6-18" name="__codelineno-6-18" href="#__codelineno-6-18"></a>        <span class="p">),</span>
 </span><span id="__span-6-19"><a id="__codelineno-6-19" name="__codelineno-6-19" href="#__codelineno-6-19"></a>        <span class="s2">&quot;newyork&quot;</span><span class="p">:</span> <span class="n">FactoryConfig</span><span class="p">(</span>
 </span><span id="__span-6-20"><a id="__codelineno-6-20" name="__codelineno-6-20" href="#__codelineno-6-20"></a>            <span class="n">aggregation</span><span class="o">=</span><span class="n">AggregationConfig</span><span class="p">(</span>
-</span><span id="__span-6-21"><a id="__codelineno-6-21" name="__codelineno-6-21" href="#__codelineno-6-21"></a>                <span class="n">target_timeframes</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;15min&quot;</span><span class="p">],</span> 
+</span><span id="__span-6-21"><a id="__codelineno-6-21" name="__codelineno-6-21" href="#__codelineno-6-21"></a>                <span class="n">target_timeframes</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;15min&quot;</span><span class="p">],</span>
 </span><span id="__span-6-22"><a id="__codelineno-6-22" name="__codelineno-6-22" href="#__codelineno-6-22"></a>                <span class="n">asset_class</span><span class="o">=</span><span class="s2">&quot;fx&quot;</span><span class="p">,</span>
 </span><span id="__span-6-23"><a id="__codelineno-6-23" name="__codelineno-6-23" href="#__codelineno-6-23"></a>                <span class="n">timezone</span><span class="o">=</span><span class="s2">&quot;UTC&quot;</span>  <span class="c1"># New York session: 12 PM - 9 PM UTC</span>
 </span><span id="__span-6-24"><a id="__codelineno-6-24" name="__codelineno-6-24" href="#__codelineno-6-24"></a>            <span class="p">)</span>
@@ -1484,7 +1484,7 @@
 <div class="language-python highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># Major pairs with different characteristics</span>
 </span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="n">pairs</span> <span class="o">=</span> <span class="p">{</span>
 </span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>    <span class="s2">&quot;EURUSD&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;threshold&quot;</span><span class="p">:</span> <span class="mf">0.3</span><span class="p">,</span> <span class="s2">&quot;window&quot;</span><span class="p">:</span> <span class="mi">5</span><span class="p">},</span>   <span class="c1"># Lower volatility</span>
-</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>    <span class="s2">&quot;GBPJPY&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;threshold&quot;</span><span class="p">:</span> <span class="mf">0.8</span><span class="p">,</span> <span class="s2">&quot;window&quot;</span><span class="p">:</span> <span class="mi">4</span><span class="p">},</span>   <span class="c1"># Higher volatility  </span>
+</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>    <span class="s2">&quot;GBPJPY&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;threshold&quot;</span><span class="p">:</span> <span class="mf">0.8</span><span class="p">,</span> <span class="s2">&quot;window&quot;</span><span class="p">:</span> <span class="mi">4</span><span class="p">},</span>   <span class="c1"># Higher volatility</span>
 </span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>    <span class="s2">&quot;AUDUSD&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;threshold&quot;</span><span class="p">:</span> <span class="mf">0.4</span><span class="p">,</span> <span class="s2">&quot;window&quot;</span><span class="p">:</span> <span class="mi">6</span><span class="p">},</span>   <span class="c1"># Commodity currency</span>
 </span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a>    <span class="s2">&quot;USDCAD&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;threshold&quot;</span><span class="p">:</span> <span class="mf">0.5</span><span class="p">,</span> <span class="s2">&quot;window&quot;</span><span class="p">:</span> <span class="mi">5</span><span class="p">}</span>    <span class="c1"># Oil correlation</span>
 </span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="p">}</span>
@@ -1492,8 +1492,8 @@
 </span><span id="__span-7-9"><a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a><span class="k">for</span> <span class="n">pair</span><span class="p">,</span> <span class="n">params</span> <span class="ow">in</span> <span class="n">pairs</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
 </span><span id="__span-7-10"><a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a>    <span class="n">config</span> <span class="o">=</span> <span class="n">FactoryConfig</span><span class="p">(</span>
 </span><span id="__span-7-11"><a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a>        <span class="n">aggregation</span><span class="o">=</span><span class="n">AggregationConfig</span><span class="p">(</span>
-</span><span id="__span-7-12"><a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a>            <span class="n">target_timeframes</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;4h&quot;</span><span class="p">],</span> 
-</span><span id="__span-7-13"><a id="__codelineno-7-13" name="__codelineno-7-13" href="#__codelineno-7-13"></a>            <span class="n">asset_class</span><span class="o">=</span><span class="s2">&quot;fx&quot;</span><span class="p">,</span> 
+</span><span id="__span-7-12"><a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a>            <span class="n">target_timeframes</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;4h&quot;</span><span class="p">],</span>
+</span><span id="__span-7-13"><a id="__codelineno-7-13" name="__codelineno-7-13" href="#__codelineno-7-13"></a>            <span class="n">asset_class</span><span class="o">=</span><span class="s2">&quot;fx&quot;</span><span class="p">,</span>
 </span><span id="__span-7-14"><a id="__codelineno-7-14" name="__codelineno-7-14" href="#__codelineno-7-14"></a>            <span class="n">timezone</span><span class="o">=</span><span class="s2">&quot;UTC&quot;</span>
 </span><span id="__span-7-15"><a id="__codelineno-7-15" name="__codelineno-7-15" href="#__codelineno-7-15"></a>        <span class="p">),</span>
 </span><span id="__span-7-16"><a id="__codelineno-7-16" name="__codelineno-7-16" href="#__codelineno-7-16"></a>        <span class="n">indicators</span><span class="o">=</span><span class="n">IndicatorsConfig</span><span class="p">(</span>
@@ -1617,7 +1617,7 @@
 </span><span id="__span-9-47"><a id="__codelineno-9-47" name="__codelineno-9-47" href="#__codelineno-9-47"></a><span class="c1"># Example usage</span>
 </span><span id="__span-9-48"><a id="__codelineno-9-48" name="__codelineno-9-48" href="#__codelineno-9-48"></a><span class="n">portfolio</span> <span class="o">=</span> <span class="p">{</span>
 </span><span id="__span-9-49"><a id="__codelineno-9-49" name="__codelineno-9-49" href="#__codelineno-9-49"></a>    <span class="s1">&#39;BTC&#39;</span><span class="p">:</span> <span class="p">(</span><span class="n">btc_data</span><span class="p">,</span> <span class="s1">&#39;crypto&#39;</span><span class="p">),</span>
-</span><span id="__span-9-50"><a id="__codelineno-9-50" name="__codelineno-9-50" href="#__codelineno-9-50"></a>    <span class="s1">&#39;AAPL&#39;</span><span class="p">:</span> <span class="p">(</span><span class="n">aapl_data</span><span class="p">,</span> <span class="s1">&#39;equities&#39;</span><span class="p">),</span> 
+</span><span id="__span-9-50"><a id="__codelineno-9-50" name="__codelineno-9-50" href="#__codelineno-9-50"></a>    <span class="s1">&#39;AAPL&#39;</span><span class="p">:</span> <span class="p">(</span><span class="n">aapl_data</span><span class="p">,</span> <span class="s1">&#39;equities&#39;</span><span class="p">),</span>
 </span><span id="__span-9-51"><a id="__codelineno-9-51" name="__codelineno-9-51" href="#__codelineno-9-51"></a>    <span class="s1">&#39;EURUSD&#39;</span><span class="p">:</span> <span class="p">(</span><span class="n">eurusd_data</span><span class="p">,</span> <span class="s1">&#39;fx&#39;</span><span class="p">)</span>
 </span><span id="__span-9-52"><a id="__codelineno-9-52" name="__codelineno-9-52" href="#__codelineno-9-52"></a><span class="p">}</span>
 </span><span id="__span-9-53"><a id="__codelineno-9-53" name="__codelineno-9-53" href="#__codelineno-9-53"></a>

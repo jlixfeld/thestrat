@@ -1325,7 +1325,7 @@
 </span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="c1"># Map Polars types to SQL types</span>
 </span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="n">type_mapping</span> <span class="o">=</span> <span class="p">{</span>
 </span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>    <span class="n">pl</span><span class="o">.</span><span class="n">Datetime</span><span class="p">:</span> <span class="s2">&quot;TIMESTAMP&quot;</span><span class="p">,</span>
-</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>    <span class="n">pl</span><span class="o">.</span><span class="n">Float64</span><span class="p">:</span> <span class="s2">&quot;DOUBLE PRECISION&quot;</span><span class="p">,</span> 
+</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>    <span class="n">pl</span><span class="o">.</span><span class="n">Float64</span><span class="p">:</span> <span class="s2">&quot;DOUBLE PRECISION&quot;</span><span class="p">,</span>
 </span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>    <span class="n">pl</span><span class="o">.</span><span class="n">String</span><span class="p">:</span> <span class="s2">&quot;VARCHAR(50)&quot;</span><span class="p">,</span>
 </span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>    <span class="n">pl</span><span class="o">.</span><span class="n">Boolean</span><span class="p">:</span> <span class="s2">&quot;BOOLEAN&quot;</span><span class="p">,</span>
 </span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>    <span class="n">pl</span><span class="o">.</span><span class="n">Int32</span><span class="p">:</span> <span class="s2">&quot;INTEGER&quot;</span>
@@ -1404,7 +1404,7 @@
 <div class="language-python highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="n">categories</span> <span class="o">=</span> <span class="n">IndicatorSchema</span><span class="o">.</span><span class="n">get_column_categories</span><span class="p">()</span>
 </span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>
 </span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="c1"># Process only price analysis columns</span>
-</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="n">price_cols</span> <span class="o">=</span> <span class="n">categories</span><span class="p">[</span><span class="s1">&#39;price_analysis&#39;</span><span class="p">]</span> 
+</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="n">price_cols</span> <span class="o">=</span> <span class="n">categories</span><span class="p">[</span><span class="s1">&#39;price_analysis&#39;</span><span class="p">]</span>
 </span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="n">df_prices</span> <span class="o">=</span> <span class="n">df</span><span class="o">.</span><span class="n">select</span><span class="p">(</span><span class="n">price_cols</span><span class="p">)</span>
 </span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a>
 </span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="c1"># Extract signal columns for trading system</span>
@@ -1456,7 +1456,7 @@
 <h2 id="best-practices">Best Practices</h2>
 <ul>
 <li><strong>Always validate</strong> input data before processing</li>
-<li><strong>Use column categories</strong> to organize database tables efficiently  </li>
+<li><strong>Use column categories</strong> to organize database tables efficiently</li>
 <li><strong>Leverage auto-conversion</strong> for Pandas compatibility</li>
 <li><strong>Check type_issues</strong> for data quality problems</li>
 <li><strong>Use descriptions</strong> for database comments and API documentation</li>

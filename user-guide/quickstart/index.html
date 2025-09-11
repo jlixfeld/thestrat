@@ -1325,7 +1325,7 @@
 </span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="n">sample_data</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">({</span>
 </span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>    <span class="s1">&#39;timestamp&#39;</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">date_range</span><span class="p">(</span><span class="s1">&#39;2024-01-01 09:30&#39;</span><span class="p">,</span> <span class="n">periods</span><span class="o">=</span><span class="mi">100</span><span class="p">,</span> <span class="n">freq</span><span class="o">=</span><span class="s1">&#39;1min&#39;</span><span class="p">),</span>
 </span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>    <span class="s1">&#39;open&#39;</span><span class="p">:</span> <span class="p">[</span><span class="mf">100.0</span><span class="p">]</span> <span class="o">*</span> <span class="mi">100</span><span class="p">,</span>
-</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>    <span class="s1">&#39;high&#39;</span><span class="p">:</span> <span class="p">[</span><span class="mf">101.0</span><span class="p">]</span> <span class="o">*</span> <span class="mi">100</span><span class="p">,</span> 
+</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>    <span class="s1">&#39;high&#39;</span><span class="p">:</span> <span class="p">[</span><span class="mf">101.0</span><span class="p">]</span> <span class="o">*</span> <span class="mi">100</span><span class="p">,</span>
 </span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>    <span class="s1">&#39;low&#39;</span><span class="p">:</span> <span class="p">[</span><span class="mf">99.0</span><span class="p">]</span> <span class="o">*</span> <span class="mi">100</span><span class="p">,</span>
 </span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>    <span class="s1">&#39;close&#39;</span><span class="p">:</span> <span class="p">[</span><span class="mf">100.5</span><span class="p">]</span> <span class="o">*</span> <span class="mi">100</span><span class="p">,</span>
 </span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>    <span class="s1">&#39;volume&#39;</span><span class="p">:</span> <span class="p">[</span><span class="mi">1000</span><span class="p">]</span> <span class="o">*</span> <span class="mi">100</span>
@@ -1382,7 +1382,7 @@
 </span><span id="__span-1-14"><a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a>    <span class="p">)</span>
 </span><span id="__span-1-15"><a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a><span class="p">)</span>
 </span><span id="__span-1-16"><a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a>
-</span><span id="__span-1-17"><a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a><span class="c1"># Full configuration with all options  </span>
+</span><span id="__span-1-17"><a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a><span class="c1"># Full configuration with all options</span>
 </span><span id="__span-1-18"><a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a><span class="n">full_config</span> <span class="o">=</span> <span class="n">FactoryConfig</span><span class="p">(</span>
 </span><span id="__span-1-19"><a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a>    <span class="n">aggregation</span><span class="o">=</span><span class="n">AggregationConfig</span><span class="p">(</span>
 </span><span id="__span-1-20"><a id="__codelineno-1-20" name="__codelineno-1-20" href="#__codelineno-1-20"></a>        <span class="n">target_timeframes</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;5m&quot;</span><span class="p">,</span> <span class="s2">&quot;15m&quot;</span><span class="p">],</span>  <span class="c1"># Multiple timeframes supported</span>
@@ -1419,7 +1419,7 @@
 </span></code></pre></div>
 <h3 id="step-3-apply-thestrat-indicators">Step 3: Apply TheStrat Indicators</h3>
 <p>Analyze market structure:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Get the indicators component  </span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Get the indicators component</span>
 </span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="n">indicators</span> <span class="o">=</span> <span class="n">components</span><span class="p">[</span><span class="s2">&quot;indicators&quot;</span><span class="p">]</span>
 </span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>
 </span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="c1"># Apply TheStrat analysis</span>
@@ -1471,7 +1471,7 @@
 <h3 id="forex-245-trading">Forex (24/5 Trading)</h3>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="n">fx_config</span> <span class="o">=</span> <span class="n">FactoryConfig</span><span class="p">(</span>
 </span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>    <span class="n">aggregation</span><span class="o">=</span><span class="n">AggregationConfig</span><span class="p">(</span>
-</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>        <span class="n">target_timeframes</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;4h&quot;</span><span class="p">],</span> 
+</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>        <span class="n">target_timeframes</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;4h&quot;</span><span class="p">],</span>
 </span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>        <span class="n">asset_class</span><span class="o">=</span><span class="s2">&quot;fx&quot;</span><span class="p">,</span>
 </span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>        <span class="n">timezone</span><span class="o">=</span><span class="s2">&quot;UTC&quot;</span>  <span class="c1"># Always UTC for FX</span>
 </span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a>    <span class="p">),</span>
@@ -1531,7 +1531,7 @@
 </span><span id="__span-8-8"><a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a>        <span class="n">previous</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="n">i</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
 </span><span id="__span-8-9"><a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a>
 </span><span id="__span-8-10"><a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a>        <span class="c1"># Outside bar followed by continuation</span>
-</span><span id="__span-8-11"><a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a>        <span class="k">if</span> <span class="p">(</span><span class="n">previous</span><span class="p">[</span><span class="s1">&#39;outside_bar&#39;</span><span class="p">]</span> <span class="ow">and</span> 
+</span><span id="__span-8-11"><a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a>        <span class="k">if</span> <span class="p">(</span><span class="n">previous</span><span class="p">[</span><span class="s1">&#39;outside_bar&#39;</span><span class="p">]</span> <span class="ow">and</span>
 </span><span id="__span-8-12"><a id="__codelineno-8-12" name="__codelineno-8-12" href="#__codelineno-8-12"></a>            <span class="n">current</span><span class="p">[</span><span class="s1">&#39;close&#39;</span><span class="p">]</span> <span class="o">&gt;</span> <span class="n">previous</span><span class="p">[</span><span class="s1">&#39;high&#39;</span><span class="p">]):</span>
 </span><span id="__span-8-13"><a id="__codelineno-8-13" name="__codelineno-8-13" href="#__codelineno-8-13"></a>            <span class="n">breakouts</span><span class="o">.</span><span class="n">append</span><span class="p">({</span>
 </span><span id="__span-8-14"><a id="__codelineno-8-14" name="__codelineno-8-14" href="#__codelineno-8-14"></a>                <span class="s1">&#39;timestamp&#39;</span><span class="p">:</span> <span class="n">current</span><span class="p">[</span><span class="s1">&#39;timestamp&#39;</span><span class="p">],</span>
@@ -1549,17 +1549,17 @@
 <p>Now that you understand the basics:</p>
 <ol>
 <li><strong>Explore <a href="../examples/">Examples</a></strong> - More detailed use cases and advanced features</li>
-<li><strong>Review <a href="../asset-classes/">Asset Classes</a></strong> - Understand market-specific behaviors  </li>
+<li><strong>Review <a href="../asset-classes/">Asset Classes</a></strong> - Understand market-specific behaviors</li>
 <li><strong>Check <a href="../../reference/">API Reference</a></strong> - Detailed documentation of all methods and parameters</li>
 </ol>
 <h2 id="common-questions">Common Questions</h2>
-<p><strong>Q: What timeframes are supported?</strong><br />
+<p><strong>Q: What timeframes are supported?</strong>
 A: Standard timeframes: 1m, 5m, 15m, 30m, 1h, 4h, 1d. Custom intervals can be configured.</p>
-<p><strong>Q: Can I use my own data format?</strong><br />
+<p><strong>Q: Can I use my own data format?</strong>
 A: Yes, as long as it has OHLCV columns and a timestamp. The data will be automatically standardized.</p>
-<p><strong>Q: How do I handle missing data?</strong><br />
+<p><strong>Q: How do I handle missing data?</strong>
 A: TheStrat includes built-in handling for gaps and missing bars appropriate to each asset class.</p>
-<p><strong>Q: Can I backtest strategies?</strong><br />
+<p><strong>Q: Can I backtest strategies?</strong>
 A: TheStrat provides the analysis foundation. You'll need to combine it with your backtesting framework.</p>
 
 
