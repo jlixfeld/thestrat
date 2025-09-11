@@ -5,7 +5,6 @@ Tests OHLC timeframe aggregation with timezone handling and boundary alignment.
 """
 
 from datetime import datetime
-from typing import Any, cast
 
 import pandas as pd
 import polars as pl
@@ -15,6 +14,11 @@ from pydantic import ValidationError
 from thestrat.aggregation import Aggregation
 from thestrat.schemas import ASSET_CLASS_CONFIGS, AggregationConfig, TimeframeConfig
 
+from .utils.config_helpers import (
+    create_aggregation_config,
+    create_crypto_aggregation_config,
+    create_equity_aggregation_config,
+)
 from .utils.thestrat_data_utils import (
     create_crypto_data,
     create_dst_transition_data,
@@ -31,7 +35,7 @@ class TestAggregationInit:
 
     def test_init_minimal_parameters(self):
         """Test initialization with minimal parameters."""
-        agg = Aggregation(AggregationConfig(target_timeframes=["1h"]))
+        agg = Aggregation(create_aggregation_config())
 
         assert agg.target_timeframes == ["1h"]
         assert agg.asset_class == "equities"
@@ -189,7 +193,7 @@ class TestAggregationValidation:
     @pytest.fixture
     def aggregation(self):
         """Create aggregation component for testing."""
-        return Aggregation(AggregationConfig(target_timeframes=["1h"], asset_class="equities"))
+        return Aggregation(create_equity_aggregation_config())
 
     def test_validate_input_valid_data(self, aggregation, valid_ohlc_data):
         """Test validation passes for valid OHLC data."""
@@ -251,7 +255,7 @@ class TestAggregationOHLC:
 
     def test_aggregate_to_hourly(self, minute_data):
         """Test aggregation from minutes to hourly."""
-        agg = Aggregation(AggregationConfig(target_timeframes=["1h"], asset_class="equities"))
+        agg = Aggregation(create_equity_aggregation_config())
         result = agg.process(minute_data)
 
         assert isinstance(result, pl.DataFrame)
@@ -385,13 +389,13 @@ class TestTimezoneHandling:
             }
         )
 
-        agg = Aggregation(AggregationConfig(target_timeframes=["1h"], asset_class="crypto"))  # UTC timezone
+        agg = Aggregation(create_crypto_aggregation_config())  # UTC timezone
         result = agg.normalize_timezone(aware_data)
 
         # Should preserve timezone-aware format
-        # Check timezone - cast to Any to avoid Pylance type checking issues
-        timestamp_dtype = cast(Any, result.schema["timestamp"])
-        assert timestamp_dtype.time_zone == "UTC"
+        timestamp_dtype = result.schema["timestamp"]
+        assert str(timestamp_dtype).startswith('Datetime')
+        assert getattr(timestamp_dtype, 'time_zone', None) == "UTC"
 
 
 @pytest.mark.unit
@@ -422,7 +426,7 @@ class TestAllAssetClasses:
         """Test crypto aggregation with 24/7 data."""
         crypto_data = create_crypto_data("BTC-USD")
 
-        agg = Aggregation(AggregationConfig(target_timeframes=["1h"], asset_class="crypto"))
+        agg = Aggregation(create_crypto_aggregation_config())
         result = agg.process(crypto_data)
 
         assert isinstance(result, pl.DataFrame)
@@ -449,7 +453,7 @@ class TestAllAssetClasses:
         """Test equities aggregation with market hours consideration."""
         equities_data = create_market_hours_data("AAPL")
 
-        agg = Aggregation(AggregationConfig(target_timeframes=["1h"], asset_class="equities"))
+        agg = Aggregation(create_equity_aggregation_config())
         result = agg.process(equities_data)
 
         assert isinstance(result, pl.DataFrame)
@@ -1340,7 +1344,7 @@ class TestNewMultiTimeframeFeatures:
         data = create_long_term_data(days=1, freq_minutes=1, symbol="TEST")
         data = data.head(30)  # 30 minutes of data
 
-        agg = Aggregation(AggregationConfig(target_timeframes=["5min"]))  # Single timeframe as string
+        agg = Aggregation(create_aggregation_config(target_timeframes=["5min"]))  # Single timeframe as string
         result = agg.process(data)
 
         # Should still have timeframe column
@@ -1373,7 +1377,7 @@ class TestAggregationEdgeCases:
         data = create_long_term_data(days=1, freq_minutes=1)
         data = data.head(60)  # 1 hour of data
 
-        agg = Aggregation(AggregationConfig(target_timeframes=["5min"]))
+        agg = Aggregation(create_aggregation_config(target_timeframes=["5min"]))
 
         # This should work normally first
         result = agg.process(data)
@@ -1392,7 +1396,7 @@ class TestAggregationEdgeCases:
 
     def test_input_validation_failure_raises_valueerror(self):
         """Test that input validation failure raises ValueError."""
-        agg = Aggregation(AggregationConfig(target_timeframes=["5min"]))
+        agg = Aggregation(create_aggregation_config(target_timeframes=["5min"]))
 
         # Test with invalid data structure (missing required columns)
         invalid_data = pl.DataFrame({"wrong_column": [1, 2, 3], "another_wrong": ["a", "b", "c"]})
@@ -1408,7 +1412,7 @@ class TestAggregationPrivateMethods:
 
     def test_should_use_hour_boundary_supported_timeframes(self):
         """Test _should_use_hour_boundary with supported timeframe strings."""
-        agg = Aggregation(AggregationConfig(target_timeframes=["1h"]))
+        agg = Aggregation(create_aggregation_config())
 
         # Test supported hourly and higher timeframes
         assert agg._should_use_hour_boundary("1h") is True
@@ -1421,7 +1425,7 @@ class TestAggregationPrivateMethods:
 
     def test_should_use_hour_boundary_polars_style_patterns(self):
         """Test _should_use_hour_boundary with polars-style timeframe patterns."""
-        agg = Aggregation(AggregationConfig(target_timeframes=["1h"]))
+        agg = Aggregation(create_aggregation_config())
 
         # Test polars-style patterns (case insensitive)
         assert agg._should_use_hour_boundary("2h") is True
@@ -1441,7 +1445,7 @@ class TestAggregationPrivateMethods:
 
     def test_should_use_hour_boundary_edge_cases(self):
         """Test _should_use_hour_boundary edge cases and invalid patterns."""
-        agg = Aggregation(AggregationConfig(target_timeframes=["1h"]))
+        agg = Aggregation(create_aggregation_config())
 
         # Invalid patterns should return False
         assert agg._should_use_hour_boundary("invalid") is False
@@ -1451,7 +1455,7 @@ class TestAggregationPrivateMethods:
 
     def test_is_hourly_or_higher_various_formats(self):
         """Test _is_hourly_or_higher with various timeframe formats."""
-        agg = Aggregation(AggregationConfig(target_timeframes=["1h"]))
+        agg = Aggregation(create_aggregation_config())
 
         # Test explicit hourly patterns
         assert agg._is_hourly_or_higher("1h") is True

@@ -5,7 +5,6 @@ Tests end-to-end workflows and component interactions.
 """
 
 from datetime import datetime
-from typing import Any, cast
 
 import polars as pl
 import pytest
@@ -18,6 +17,8 @@ from thestrat.schemas import (
     SwingPointsConfig,
     TimeframeItemConfig,
 )
+
+from .utils.config_helpers import create_aggregation_config
 
 
 @pytest.mark.integration
@@ -146,9 +147,10 @@ class TestTheStratIntegration:
 
         assert isinstance(analyzed, pl.DataFrame)
         assert len(analyzed) == 12  # 48 hours / 4 hours per bar
-        # Check timezone - cast to Any to avoid Pylance type checking issues with Polars
-        timestamp_dtype = cast(Any, analyzed.schema["timestamp"])
-        assert timestamp_dtype.time_zone == "UTC"
+        # Check timezone - assert it's a Datetime type first
+        timestamp_dtype = analyzed.schema["timestamp"]
+        assert str(timestamp_dtype).startswith('Datetime')
+        assert getattr(timestamp_dtype, 'time_zone', None) == "UTC"
 
     def test_forex_utc_workflow(self):
         """Test workflow with forex UTC market data."""
@@ -191,7 +193,7 @@ class TestTheStratIntegration:
         # Create pipeline with Pydantic models
         pipeline = Factory.create_all(
             FactoryConfig(
-                aggregation=AggregationConfig(target_timeframes=["1h"]),
+                aggregation=create_aggregation_config(),
                 indicators=IndicatorsConfig(timeframe_configs=[TimeframeItemConfig(timeframes=["all"])]),
             )
         )
@@ -269,7 +271,7 @@ class TestTheStratIntegration:
         # Create pipeline with Pydantic models
         pipeline = Factory.create_all(
             FactoryConfig(
-                aggregation=AggregationConfig(target_timeframes=["1h"]),
+                aggregation=create_aggregation_config(),
                 indicators=IndicatorsConfig(
                     timeframe_configs=[
                         TimeframeItemConfig(
