@@ -45,9 +45,15 @@ class TestAggregationInit:
 
     def test_init_all_parameters(self):
         """Test initialization with all parameters specified."""
-        agg = Aggregation(AggregationConfig(
-            target_timeframes=["5min"], asset_class="crypto", hour_boundary=False, session_start="00:00", timezone="UTC"
-        ))
+        agg = Aggregation(
+            AggregationConfig(
+                target_timeframes=["5min"],
+                asset_class="crypto",
+                hour_boundary=False,
+                session_start="00:00",
+                timezone="UTC",
+            )
+        )
 
         assert agg.target_timeframes == ["5min"]
         assert agg.asset_class == "crypto"
@@ -64,21 +70,25 @@ class TestAggregationInit:
 
     def test_init_crypto_forces_utc(self):
         """Test that crypto asset class forces UTC timezone."""
-        agg = Aggregation(AggregationConfig(
-            target_timeframes=["1h"],
-            asset_class="crypto",
-            timezone="US/Eastern",  # This should be ignored
-        ))
+        agg = Aggregation(
+            AggregationConfig(
+                target_timeframes=["1h"],
+                asset_class="crypto",
+                timezone="US/Eastern",  # This should be ignored
+            )
+        )
 
         assert agg.timezone == "UTC"  # Crypto always uses UTC
 
     def test_init_fx_forces_utc(self):
         """Test that FX asset class forces UTC timezone."""
-        agg = Aggregation(AggregationConfig(
-            target_timeframes=["1h"],
-            asset_class="fx",
-            timezone="US/Central",  # This should be ignored
-        ))
+        agg = Aggregation(
+            AggregationConfig(
+                target_timeframes=["1h"],
+                asset_class="fx",
+                timezone="US/Central",  # This should be ignored
+            )
+        )
 
         assert agg.timezone == "UTC"  # FX always uses UTC
 
@@ -118,7 +128,9 @@ class TestAggregationInit:
         assert fx_agg.hour_boundary is True
 
         # Test explicit override still works
-        explicit_agg = Aggregation(AggregationConfig(target_timeframes=["1h"], asset_class="crypto", hour_boundary=False))
+        explicit_agg = Aggregation(
+            AggregationConfig(target_timeframes=["1h"], asset_class="crypto", hour_boundary=False)
+        )
         assert explicit_agg.hour_boundary is False
 
     def test_timeframe_parsing(self):
@@ -170,11 +182,13 @@ class TestAggregationInit:
 
     def test_timezone_resolution_asset_class_default(self):
         """Test timezone resolution uses asset class default."""
-        agg = Aggregation(AggregationConfig(
-            target_timeframes=["1h"],
-            asset_class="equities",  # Non-UTC asset class
-            timezone=None,  # Should use asset class default
-        ))
+        agg = Aggregation(
+            AggregationConfig(
+                target_timeframes=["1h"],
+                asset_class="equities",  # Non-UTC asset class
+                timezone=None,  # Should use asset class default
+            )
+        )
 
         assert agg.timezone == "US/Eastern"
 
@@ -919,7 +933,9 @@ class TestDSTTimezoneConsistency:
         utc_data = create_dst_transition_data("spring_forward", "UTC")
 
         # Test with equities (timezone-sensitive)
-        agg_eastern = Aggregation(AggregationConfig(target_timeframes=["1h"], asset_class="equities", timezone="US/Eastern"))
+        agg_eastern = Aggregation(
+            AggregationConfig(target_timeframes=["1h"], asset_class="equities", timezone="US/Eastern")
+        )
         agg_utc = Aggregation(AggregationConfig(target_timeframes=["1h"], asset_class="equities", timezone="UTC"))
 
         result_eastern = agg_eastern.process(eastern_data)
@@ -981,7 +997,11 @@ class TestDSTBoundaryAlignment:
         spring_data = create_dst_transition_data("spring_forward", "US/Eastern")
 
         # Explicitly set hour_boundary=True to test hour boundary alignment
-        agg = Aggregation(AggregationConfig(target_timeframes=["1h"], asset_class="equities", timezone="US/Eastern", hour_boundary=True))
+        agg = Aggregation(
+            AggregationConfig(
+                target_timeframes=["1h"], asset_class="equities", timezone="US/Eastern", hour_boundary=True
+            )
+        )
         result = agg.process(spring_data)
 
         # hour_boundary was explicitly set to True
@@ -1250,7 +1270,11 @@ class TestAllTimeframes:
         )
 
         # Test equities with session_start=09:30 and hour_boundary=False
-        agg = Aggregation(AggregationConfig(target_timeframes=["1h"], asset_class="equities", session_start="09:30", hour_boundary=False))
+        agg = Aggregation(
+            AggregationConfig(
+                target_timeframes=["1h"], asset_class="equities", session_start="09:30", hour_boundary=False
+            )
+        )
 
         result = agg.process(test_data)
 
