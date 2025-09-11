@@ -29,16 +29,6 @@ jobs:
       run: |
         uv run ruff check .
         uv run ruff format --check .
-    - name: Debug - List test files
-      run: |
-        echo "=== Current directory ==="
-        pwd
-        echo "=== Contents ==="
-        ls -la
-        echo "=== Tests directory ==="
-        ls -la tests/
-        echo "=== First test file ==="
-        head -5 tests/test_u_base.py || echo "No test_u_base.py found"
     - name: Test with pytest
       run: |
         uv run pytest tests/ --cov=thestrat --cov-report=term-missing

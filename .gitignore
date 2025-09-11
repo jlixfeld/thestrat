@@ -163,6 +163,5 @@ logs/
 site/
 
 # Temporary test files
-test_*.py
 temp_*.py
 scratch_*.py
