@@ -63,19 +63,7 @@ class Factory:
 
         Args:
             config: Validated IndicatorsConfig containing per-timeframe configurations
-                with structure:
-                `timeframe_configs`: List of per-timeframe configurations:
-
-                ```python
-                [
-                    {
-                        "timeframes": ["5m", "15m"],  # List of timeframes, or ["all"] for all data
-                        "swing_points": {"window": int, "threshold": float},
-                        "gap_detection": {"threshold": float}
-                    },
-                    # ... additional configurations
-                ]
-                ```
+                using Pydantic models
 
         Returns:
             Configured Indicators component
@@ -125,11 +113,11 @@ class Factory:
             }
 
         Example:
-            >>> from thestrat.schemas import FactoryConfig, AggregationConfig, IndicatorsConfig
+            >>> from thestrat.schemas import FactoryConfig, AggregationConfig, IndicatorsConfig, TimeframeItemConfig
             >>> config = FactoryConfig(
             ...     aggregation=AggregationConfig(target_timeframes=["5m"]),
             ...     indicators=IndicatorsConfig(
-            ...         timeframe_configs=[{"timeframes": ["all"]}]
+            ...         timeframe_configs=[TimeframeItemConfig(timeframes=["all"])]
             ...     )
             ... )
             >>> components = Factory.create_all(config)

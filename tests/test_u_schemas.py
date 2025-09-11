@@ -6,9 +6,9 @@ This module tests the documentation generation features added to schemas.py.
 from thestrat.schemas import (
     AggregationConfig,
     FactoryConfig,
+    IndicatorSchema,
     SchemaDocGenerator,
     SwingPointsConfig,
-    generate_complete_documentation,
 )
 
 
@@ -121,8 +121,8 @@ class TestSchemaDocGenerator:
         assert any("Config" in name for name in model_names)
 
     def test_generate_complete_documentation_function(self):
-        """Test the standalone generate_complete_documentation function."""
-        docs = generate_complete_documentation()
+        """Test the SchemaDocGenerator.generate_complete_documentation class method."""
+        docs = SchemaDocGenerator.generate_complete_documentation()
 
         assert isinstance(docs, str)
         assert len(docs) > 500  # Should be comprehensive
@@ -199,3 +199,104 @@ class TestSchemaDocHelpers:
         # Should include nested model schemas
         properties = schema["properties"]
         assert len(properties) > 0
+
+
+class TestIndicatorSchemaClassMethods:
+    """Test IndicatorSchema class methods."""
+
+    def test_get_column_descriptions(self):
+        """Test get_column_descriptions returns proper descriptions."""
+        descriptions = IndicatorSchema.get_column_descriptions()
+
+        assert isinstance(descriptions, dict)
+        assert len(descriptions) > 0
+
+        # Check some known descriptions
+        assert "timestamp" in descriptions
+        assert "open" in descriptions
+        assert "swing_high" in descriptions
+        assert isinstance(descriptions["timestamp"], str)
+
+    def test_get_polars_dtypes(self):
+        """Test get_polars_dtypes returns Polars type mappings."""
+        polars_types = IndicatorSchema.get_polars_dtypes()
+
+        assert isinstance(polars_types, dict)
+        assert len(polars_types) > 0
+
+        # Check some expected mappings
+        from polars import Boolean, Datetime, Float64, String
+
+        assert "timestamp" in polars_types
+        assert polars_types["timestamp"] == Datetime
+        assert polars_types["open"] == Float64
+        assert polars_types["gapper"] == Boolean
+        assert polars_types["signal"] == String
+
+    def test_validate_dataframe(self):
+        """Test DataFrame column validation function."""
+        from datetime import datetime
+
+        import polars as pl
+
+        # Create a simple DataFrame with required input columns
+        data = {
+            "timestamp": [datetime.now()],
+            "open": [100.0],
+            "high": [105.0],
+            "low": [95.0],
+            "close": [102.0],
+            "symbol": ["AAPL"],
+            "volume": [1000.0],
+            "timeframe": ["5min"],
+        }
+        df = pl.DataFrame(
+            data,
+            schema={
+                "timestamp": pl.Datetime,
+                "open": pl.Float64,
+                "high": pl.Float64,
+                "low": pl.Float64,
+                "close": pl.Float64,
+                "symbol": pl.String,
+                "volume": pl.Float64,
+                "timeframe": pl.String,
+            },
+        )
+
+        result = IndicatorSchema.validate_dataframe(df)
+
+        assert result["valid"] is True
+        assert len(result["missing_required"]) == 0
+        assert "timestamp" in result["required_fields"]
+        assert result["df_type"] == "polars"
+
+    def test_get_column_categories(self):
+        """Test get_column_categories returns proper categorization."""
+        categories = IndicatorSchema.get_column_categories()
+
+        assert isinstance(categories, dict)
+        assert len(categories) > 0
+
+        # Check expected categories exist
+        expected_categories = [
+            "base_ohlc",
+            "price_analysis",
+            "gap_detection",
+            "swing_points",
+            "thestrat_patterns",
+            "signals",
+            "special_patterns",
+            "mother_bar",
+        ]
+
+        for category in expected_categories:
+            assert category in categories
+            assert isinstance(categories[category], list)
+            assert len(categories[category]) > 0
+
+        # Check some expected column placements
+        assert "timestamp" in categories["base_ohlc"]
+        assert "swing_high" in categories["swing_points"]
+        assert "continuity" in categories["thestrat_patterns"]
+        assert "signal" in categories["signals"]

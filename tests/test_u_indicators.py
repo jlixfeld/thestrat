@@ -19,53 +19,80 @@ class TestIndicatorsInit:
     """Test cases for Indicators initialization."""
 
     def test_init_with_all_timeframe_config(self):
-        """Test initialization with 'all' timeframe configuration."""
-        timeframe_configs = [
-            {
-                "timeframes": ["all"],
-                "swing_points": {"window": 7, "threshold": 3.0},
-                "gap_detection": {"threshold": 0.001},
-            }
-        ]
-        indicators = Indicators(timeframe_configs=timeframe_configs)
+        """Test initialization with 'all' timeframe configuration using Factory."""
+        from thestrat.factory import Factory
+        from thestrat.schemas import GapDetectionConfig, IndicatorsConfig, SwingPointsConfig, TimeframeItemConfig
 
-        assert indicators.timeframe_configs == timeframe_configs
-        # Initial values should be defaults (will be overridden per timeframe)
-        assert indicators.swing_window == 5  # Default
-        assert indicators.swing_threshold == 5.0  # Default
+        config = IndicatorsConfig(
+            timeframe_configs=[
+                TimeframeItemConfig(
+                    timeframes=["all"],
+                    swing_points=SwingPointsConfig(window=7, threshold=3.0),
+                    gap_detection=GapDetectionConfig(threshold=0.001),
+                )
+            ]
+        )
+        indicators = Factory.create_indicators(config)
+
+        assert len(indicators.timeframe_configs) == 1
+        assert indicators.timeframe_configs[0]["timeframes"] == ["all"]
+        # Configuration is properly stored and will be extracted during processing
+        assert "swing_points" in indicators.timeframe_configs[0]
+        assert indicators.timeframe_configs[0]["swing_points"]["window"] == 7
 
     def test_init_with_swing_config(self):
-        """Test initialization with swing point configuration."""
-        timeframe_configs = [
-            {
-                "timeframes": ["all"],
-                "swing_points": {
-                    "window": 7,
-                    "threshold": 3.0,  # 3% threshold
-                },
-            }
-        ]
-        indicators = Indicators(timeframe_configs=timeframe_configs)
+        """Test initialization with swing point configuration using Factory."""
+        from thestrat.factory import Factory
+        from thestrat.schemas import IndicatorsConfig, SwingPointsConfig, TimeframeItemConfig
 
-        assert indicators.timeframe_configs == timeframe_configs
-        assert indicators.swing_window == 5  # Default value (overridden per timeframe)
-        assert indicators.swing_threshold == 5.0  # Default value (overridden per timeframe)
+        config = IndicatorsConfig(
+            timeframe_configs=[
+                TimeframeItemConfig(
+                    timeframes=["all"],
+                    swing_points=SwingPointsConfig(window=7, threshold=3.0),
+                )
+            ]
+        )
+        indicators = Factory.create_indicators(config)
+
+        assert len(indicators.timeframe_configs) == 1
+        assert indicators.timeframe_configs[0]["timeframes"] == ["all"]
+        assert indicators.timeframe_configs[0]["swing_points"]["window"] == 7
+        assert indicators.timeframe_configs[0]["swing_points"]["threshold"] == 3.0
 
     def test_init_partial_swing_config(self):
-        """Test initialization with partial swing configuration."""
-        timeframe_configs = [{"timeframes": ["all"], "swing_points": {"window": 10}}]
-        indicators = Indicators(timeframe_configs=timeframe_configs)
+        """Test initialization with partial swing configuration using Factory."""
+        from thestrat.factory import Factory
+        from thestrat.schemas import IndicatorsConfig, SwingPointsConfig, TimeframeItemConfig
 
-        assert indicators.swing_window == 5  # Default value (overridden per timeframe)
-        assert indicators.swing_threshold == 5.0  # Should use default 5%
+        config = IndicatorsConfig(
+            timeframe_configs=[
+                TimeframeItemConfig(
+                    timeframes=["all"],
+                    swing_points=SwingPointsConfig(window=10),  # threshold will use default 5.0
+                )
+            ]
+        )
+        indicators = Factory.create_indicators(config)
+
+        assert indicators.timeframe_configs[0]["swing_points"]["window"] == 10
+        assert indicators.timeframe_configs[0]["swing_points"]["threshold"] == 5.0  # Uses default
 
     def test_init_empty_swing_config(self):
-        """Test initialization with empty swing points config."""
-        timeframe_configs = [{"timeframes": ["all"], "swing_points": {}}]
-        indicators = Indicators(timeframe_configs=timeframe_configs)
+        """Test initialization with minimal config using Factory (defaults applied)."""
+        from thestrat.factory import Factory
+        from thestrat.schemas import IndicatorsConfig, TimeframeItemConfig
 
-        assert indicators.swing_window == 5  # Should use defaults
-        assert indicators.swing_threshold == 5.0
+        config = IndicatorsConfig(
+            timeframe_configs=[
+                TimeframeItemConfig(timeframes=["all"])  # No swing_points specified - uses defaults when needed
+            ]
+        )
+        indicators = Factory.create_indicators(config)
+
+        assert len(indicators.timeframe_configs) == 1
+        assert indicators.timeframe_configs[0]["timeframes"] == ["all"]
+        # swing_points will be None, defaults will be applied during processing
 
 
 @pytest.mark.unit
@@ -1189,7 +1216,6 @@ class TestMotherbarProblems:
         with_basic = indicators._calculate_strat_patterns(motherbar_data)
         result = indicators._calculate_advanced_patterns(with_basic)
         motherbar_problems = result["motherbar_problems"].to_list()
-        _scenarios = result["scenario"].to_list()
 
         # Expected scenarios based on high/low relationships:
         # Bar 0: No previous bar -> scenario will be None or handled specially
@@ -1229,7 +1255,6 @@ class TestMotherbarProblems:
         with_basic = indicators._calculate_strat_patterns(simple_data)
         result = indicators._calculate_advanced_patterns(with_basic)
         motherbar_problems = result["motherbar_problems"].to_list()
-        _scenarios = result["scenario"].to_list()
 
         # Bar 0: No previous bar -> False
         # Bar 1: Inside bar -> Bar 0 becomes mother bar -> True

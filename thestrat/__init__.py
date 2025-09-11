@@ -13,6 +13,7 @@ from .schemas import (
     AggregationConfig,
     FactoryConfig,
     GapDetectionConfig,
+    IndicatorSchema,
     IndicatorsConfig,
     SwingPointsConfig,
     TimeframeItemConfig,
@@ -37,4 +38,5 @@ __all__ = [
     "SignalStatus",
     "PriceChange",
     "SIGNALS",
+    "IndicatorSchema",
 ]

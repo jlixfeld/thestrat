@@ -82,9 +82,11 @@ class TestCreateIndicators:
         assert isinstance(indicators, Indicators)
         assert len(indicators.timeframe_configs) == 1
         assert indicators.timeframe_configs[0]["timeframes"] == ["all"]
-        # Check defaults from Indicators constructor
-        assert indicators.swing_window == 5
-        assert indicators.swing_threshold == 5.0
+        # Check that config is properly stored (defaults are now handled in processing)
+        assert (
+            "swing_points" not in indicators.timeframe_configs[0]
+            or indicators.timeframe_configs[0]["swing_points"] == {}
+        )
 
     def test_create_indicators_complete_config(self):
         """Test creating indicators with complete Pydantic configuration."""
