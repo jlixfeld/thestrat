@@ -62,7 +62,7 @@ plugins:
             docstring_section_style: table
             docstring_options:
               ignore_init_summary: true
-            # Signature formatting  
+            # Signature formatting
             separate_signature: true
             line_length: 80
             show_signature_annotations: true

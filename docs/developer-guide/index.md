@@ -20,7 +20,7 @@ TheStrat follows a modular design with clear separation of concerns:
 ### Design Patterns
 
 - **Factory Pattern** - Centralized component creation with validation
-- **Abstract Base Classes** - Consistent interfaces across components  
+- **Abstract Base Classes** - Consistent interfaces across components
 - **Configuration-Driven** - Flexible behavior through configuration objects
 - **Functional Programming** - Immutable data transformations where possible
 
@@ -67,7 +67,7 @@ Guidelines for making contributions, code style, and pull request process.
 
 - **Python 3.11+** - Modern Python features
 - **Polars** - High-performance data processing
-- **Pandas** - Legacy support and interoperability  
+- **Pandas** - Legacy support and interoperability
 - **Pytest** - Testing framework
 - **Ruff** - Linting and formatting
 - **MkDocs Material** - Documentation
@@ -82,6 +82,6 @@ For development questions:
 
 ## Project Status
 
-**Version**: 1.0.1 - Production/Stable  
-**Maintenance**: Active development  
+**Version**: 1.0.1 - Production/Stable
+**Maintenance**: Active development
 **License**: Private - All rights reserved

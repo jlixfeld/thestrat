@@ -80,6 +80,7 @@ __pypackages__/
 dmypy.json
 .pyre/
 .pytype/
+.pyright/
 
 # Linting & Formatting
 .ruff_cache/

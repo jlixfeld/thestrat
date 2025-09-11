@@ -40,7 +40,7 @@ I'm sharing this code to contribute back to The Strat community that has given m
 
 This software is provided "as is" without any warranty whatsoever. I provide:
 - ❌ No support or assistance
-- ❌ No bug fixes for external users  
+- ❌ No bug fixes for external users
 - ❌ No feature requests or modifications
 - ❌ No guarantee the code works in any environment other than mine
 

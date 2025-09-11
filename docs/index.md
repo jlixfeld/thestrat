@@ -58,7 +58,7 @@ from thestrat.schemas import (
 config = FactoryConfig(
     aggregation=AggregationConfig(
         target_timeframes=["5m", "15m"],  # Multiple timeframes supported
-        asset_class="equities", 
+        asset_class="equities",
         timezone="US/Eastern"
     ),
     indicators=IndicatorsConfig(
@@ -100,7 +100,7 @@ print(f"Timeframes: {analyzed['timeframe'].unique()}")
     - UTC timezone enforcement
     - Continuous aggregation
 
-=== "Equities" 
+=== "Equities"
     - Market hours (9:30-16:00 ET)
     - Configurable timezones
     - Pre/post market handling
@@ -120,6 +120,6 @@ Ready to implement #TheStrat in your trading system?
 
 ## Project Status
 
-**Version**: 1.0.1 - Production/Stable  
-**Python**: 3.11+  
+**Version**: 1.0.1 - Production/Stable
+**Python**: 3.11+
 **License**: Private - All rights reserved

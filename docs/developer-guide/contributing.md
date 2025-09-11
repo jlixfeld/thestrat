@@ -7,7 +7,7 @@ Thank you for your interest in contributing to TheStrat! This guide outlines the
 This is a private module. Contact the author at `nominal_choroid0y@icloud.com` for:
 
 - Access to the repository
-- Contribution guidelines  
+- Contribution guidelines
 - Development discussions
 - Feature requests
 
@@ -34,7 +34,7 @@ uv run pytest
 # Check formatting
 uv run ruff format --check .
 
-# Check linting  
+# Check linting
 uv run ruff check .
 
 # Test documentation build
@@ -81,7 +81,7 @@ def process_data(data: pd.DataFrame, config: dict) -> pd.DataFrame:
     """Process market data with configuration."""
     return data
 
-# Bad  
+# Bad
 def process_data(data, config):
     return data
 ```
@@ -93,17 +93,17 @@ def process_data(data, config):
 ```python
 def aggregate_timeframe(data: pd.DataFrame, timeframe: str) -> pd.DataFrame:
     """Aggregate OHLCV data to specified timeframe.
-    
+
     Args:
         data: Input OHLCV DataFrame with required columns
         timeframe: Target timeframe (e.g., '5m', '1h', '1d')
-        
+
     Returns:
         Aggregated DataFrame with same schema as input
-        
+
     Raises:
         ValueError: If required columns are missing
-        
+
     Example:
         >>> data = pd.DataFrame(...)
         >>> result = aggregate_timeframe(data, '5m')
@@ -140,7 +140,7 @@ def test_aggregation_logic():
     """Unit test for aggregation logic."""
     pass
 
-@pytest.mark.integration  
+@pytest.mark.integration
 def test_full_pipeline():
     """Integration test for complete pipeline."""
     pass
@@ -152,7 +152,7 @@ Run specific categories:
 # Unit tests only
 uv run pytest -m unit
 
-# Integration tests only  
+# Integration tests only
 uv run pytest -m integration
 
 # All tests
@@ -168,10 +168,10 @@ def test_timeframe_aggregation():
     # Arrange
     input_data = create_sample_ohlcv_data()
     expected_bars = 20
-    
+
     # Act
     result = aggregate_timeframe(input_data, '5m')
-    
+
     # Assert
     assert len(result) == expected_bars
     assert all(col in result.columns for col in REQUIRED_COLUMNS)
@@ -187,7 +187,7 @@ def sample_ohlcv():
         'timestamp': pd.date_range('2024-01-01', periods=100, freq='1min'),
         'open': [100.0] * 100,
         'high': [101.0] * 100,
-        'low': [99.0] * 100, 
+        'low': [99.0] * 100,
         'close': [100.5] * 100,
         'volume': [1000] * 100
     })
@@ -224,7 +224,7 @@ uv run ruff format .
 # Check linting
 uv run ruff check .
 
-# Run full test suite  
+# Run full test suite
 uv run pytest --cov=thestrat
 
 # Test documentation
@@ -266,7 +266,7 @@ Then create a pull request with:
 All contributions go through code review:
 
 1. **Automated Checks**: CI runs tests, linting, coverage
-2. **Manual Review**: Code quality, design, documentation  
+2. **Manual Review**: Code quality, design, documentation
 3. **Testing**: Functionality and edge cases
 4. **Documentation**: API docs and user guides updated
 
@@ -276,7 +276,7 @@ Current focus areas (contact maintainer for details):
 
 - **Performance Optimization**: Polars-first implementations
 - **Additional Indicators**: Extended TheStrat patterns
-- **Asset Class Support**: New market types  
+- **Asset Class Support**: New market types
 - **Testing**: Edge cases and integration scenarios
 - **Documentation**: More examples and tutorials
 
@@ -293,7 +293,7 @@ Releases follow semantic versioning:
 For contribution questions:
 
 1. **Documentation**: Check existing docs and examples
-2. **Issues**: Search existing issues and discussions  
+2. **Issues**: Search existing issues and discussions
 3. **Contact**: Email the maintainer directly
 4. **Code Review**: Learn from existing PR reviews
 

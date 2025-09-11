@@ -35,7 +35,7 @@ polars_types = IndicatorSchema.get_polars_dtypes()
 # Map Polars types to SQL types
 type_mapping = {
     pl.Datetime: "TIMESTAMP",
-    pl.Float64: "DOUBLE PRECISION", 
+    pl.Float64: "DOUBLE PRECISION",
     pl.String: "VARCHAR(50)",
     pl.Boolean: "BOOLEAN",
     pl.Int32: "INTEGER"
@@ -44,12 +44,12 @@ type_mapping = {
 # Generate CREATE TABLE statement
 def generate_sql_schema(table_name: str) -> str:
     lines = [f"CREATE TABLE {table_name} ("]
-    
+
     for col, polars_type in polars_types.items():
         sql_type = type_mapping.get(polars_type, "TEXT")
         description = descriptions.get(col, "").replace("'", "''")
         lines.append(f"  {col} {sql_type}, -- {description}")
-    
+
     lines.append("  PRIMARY KEY (timestamp, symbol, timeframe)")
     lines.append(");")
     return "\n".join(lines)
@@ -85,16 +85,16 @@ for category, columns in categories.items():
 def validate_input_data(df) -> dict:
     """Validate DataFrame before processing."""
     result = IndicatorSchema.validate_dataframe(df)
-    
+
     if not result['valid']:
         errors = []
         if result['missing_required']:
             errors.append(f"Missing: {result['missing_required']}")
         if result['type_issues']:
             errors.append(f"Type errors: {result['type_issues']}")
-        
+
         raise ValueError(f"Invalid DataFrame: {'; '.join(errors)}")
-    
+
     return result['converted_df'] if result['conversion_performed'] else df
 ```
 
@@ -132,7 +132,7 @@ for col in ["swing_high", "continuity", "signal"]:
 categories = IndicatorSchema.get_column_categories()
 
 # Process only price analysis columns
-price_cols = categories['price_analysis'] 
+price_cols = categories['price_analysis']
 df_prices = df.select(price_cols)
 
 # Extract signal columns for trading system
@@ -149,10 +149,10 @@ def insert_thestrat_data(df, connection):
     """Insert validated DataFrame into database."""
     # Validate first
     validated_df = validate_input_data(df)
-    
+
     # Get column info for proper insertion
     polars_types = IndicatorSchema.get_polars_dtypes()
-    
+
     # Insert with proper type handling
     for row in validated_df.iter_rows(named=True):
         insert_row(connection, row, polars_types)
@@ -161,7 +161,7 @@ def insert_row(conn, row_data, type_info):
     """Insert single row with type conversion."""
     columns = list(row_data.keys())
     placeholders = ", ".join(["?" for _ in columns])
-    
+
     # Convert values based on schema
     values = []
     for col, value in row_data.items():
@@ -169,7 +169,7 @@ def insert_row(conn, row_data, type_info):
             values.append(value.isoformat() if value else None)
         else:
             values.append(value)
-    
+
     query = f"INSERT INTO thestrat_indicators ({', '.join(columns)}) VALUES ({placeholders})"
     conn.execute(query, values)
 ```
@@ -180,19 +180,19 @@ def insert_row(conn, row_data, type_info):
 def validate_api_response(json_data: list) -> pl.DataFrame:
     """Convert and validate API data."""
     df = pl.DataFrame(json_data)
-    
+
     # Validate structure
     result = IndicatorSchema.validate_dataframe(df)
     if not result['valid']:
         raise ValueError(f"API data invalid: {result}")
-    
+
     return result.get('converted_df', df)
 ```
 
 ## Best Practices
 
 - **Always validate** input data before processing
-- **Use column categories** to organize database tables efficiently  
+- **Use column categories** to organize database tables efficiently
 - **Leverage auto-conversion** for Pandas compatibility
 - **Check type_issues** for data quality problems
 - **Use descriptions** for database comments and API documentation

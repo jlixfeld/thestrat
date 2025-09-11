@@ -17,7 +17,7 @@ I'm sharing this code to contribute to The Strat community and inspire others to
 
 ### 🎯 For Learning The Strat Methodology
 - **Official Content**: Check out Rob Smith's [YouTube channel](https://www.youtube.com/@smithsintheblack)
-- **Community**: Join the discussion at [#TheStrat on X/Twitter](https://x.com/hashtag/TheStrat) 
+- **Community**: Join the discussion at [#TheStrat on X/Twitter](https://x.com/hashtag/TheStrat)
 - **Facebook Group**: [TheStrat Community](https://m.facebook.com/groups/TheStrat/)
 
 ### 🔨 For Building Your Own Tools
@@ -35,7 +35,7 @@ I'm sharing this code to contribute to The Strat community and inspire others to
 
 The Strat community has excellent resources for learning the methodology:
 - Official educational content from Rob Smith
-- Community forums and discussion groups  
+- Community forums and discussion groups
 - Other traders' perspectives and implementations
 - Study groups and educational sessions
 

@@ -1,0 +1,57 @@
+repos:
+  # Ruff - Python linting and formatting
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.11.13
+    hooks:
+      - id: ruff
+        name: "🐍 Python · Lint with Ruff"
+        args: [--fix]
+      - id: ruff-format
+        name: "🐍 Python · Format with Ruff"
+
+  # Pyright - Python type checking (Pylance equivalent) - Disabled during setup
+  # - repo: https://github.com/RobertCraigie/pyright-python
+  #   rev: v1.1.405
+  #   hooks:
+  #     - id: pyright
+  #       name: "🐍 Python · Type check with Pyright"
+  #       additional_dependencies:
+  #         - polars[timezone]
+  #         - pandas
+  #         - numpy
+  #         - pytz
+  #         - pyarrow
+  #         - pydantic
+
+  # Standard pre-commit hooks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: trailing-whitespace
+        name: "🧹 Text · Remove trailing whitespace"
+      - id: end-of-file-fixer
+        name: "🧹 Text · Fix end of files"
+      - id: check-yaml
+        name: "📋 YAML · Validate syntax"
+        exclude: ^\.github/workflows/auto-close-issues\.yml$|^mkdocs\.yml$
+      - id: check-added-large-files
+        name: "📁 Files · Check for large files"
+        args: [--maxkb=500]
+      - id: check-merge-conflict
+        name: "🔀 Git · Check for merge conflicts"
+      - id: check-case-conflict
+        name: "📁 Files · Check for case conflicts"
+      - id: check-toml
+        name: "📋 TOML · Validate syntax"
+
+  # Local hooks for project-specific checks
+  - repo: local
+    hooks:
+      - id: pytest-check
+        name: "🧪 Python · Run pytest (quick)"
+        entry: uv run pytest
+        language: system
+        pass_filenames: false
+        args: [--tb=short, -x, -q]
+        types: [python]
+        stages: [pre-push]  # Only run on pre-push, not every commit
