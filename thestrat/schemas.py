@@ -7,8 +7,14 @@ type safety, and detailed error reporting.
 """
 
 import re
+import sys
 from datetime import datetime
-from typing import Any, ClassVar, Literal, Self, get_args, get_origin
+from typing import Any, ClassVar, Literal, get_args, get_origin
+
+if sys.version_info >= (3, 11):
+    from typing import Self
+else:
+    from typing_extensions import Self
 
 import pytz
 from polars import Boolean, Datetime, Float64, Int32, String
