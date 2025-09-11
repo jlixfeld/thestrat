@@ -2,7 +2,7 @@
 
 ## Important Notice About Terminology and Community
 
-**"The Strat"** refers to the trading methodology developed by Rob Smith and the broader trading community. I make **NO CLAIMS** to ownership of:
+**"The Strat"** refers to the trading methodology developed by the late Rob Smith and fostered by the broader trading community. I make **NO CLAIMS** to ownership of:
 - The Strat methodology or concepts
 - The terminology "The Strat" 
 - Any trading strategies or techniques discussed in the community

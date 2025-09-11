@@ -16,9 +16,9 @@ I'm sharing this code to contribute to The Strat community and inspire others to
 ## What You Should Do Instead
 
 ### 🎯 For Learning The Strat Methodology
-- **Rob Smith's Official Content:** For learning The Strat concepts, check out Rob Smith's official [content](https://www.youtube.com/@smithsintheblack)
-- **Community Resources:** [#TheStrat](https://x.com), [TheStrat](https://m.facebook.com/groups/TheStrat/)
-- **Educational Materials:** Look for official Strat educational content and community discussions
+- **Official Content**: Check out Rob Smith's [YouTube channel](https://www.youtube.com/@smithsintheblack)
+- **Community**: Join the discussion at [#TheStrat on X/Twitter](https://x.com/hashtag/TheStrat) 
+- **Facebook Group**: [TheStrat Community](https://m.facebook.com/groups/TheStrat/)
 
 ### 🔨 For Building Your Own Tools
 1. **Study the concepts** from official Strat community sources
