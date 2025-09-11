@@ -48,13 +48,7 @@ class Factory:
             ... )
             >>> aggregation = Factory.create_aggregation(config)
         """
-        return Aggregation(
-            target_timeframes=config.target_timeframes,
-            asset_class=config.asset_class,
-            timezone=config.timezone,
-            hour_boundary=config.hour_boundary,
-            session_start=config.session_start,
-        )
+        return Aggregation(config)
 
     @staticmethod
     def create_indicators(config: IndicatorsConfig) -> Indicators:
@@ -80,20 +74,7 @@ class Factory:
             ... )
             >>> indicators = Factory.create_indicators(config)
         """
-        # Convert Pydantic models to dicts for the Indicators constructor
-        timeframe_configs = []
-        for tf_config in config.timeframe_configs:
-            config_dict = {"timeframes": tf_config.timeframes}
-
-            if tf_config.swing_points is not None:
-                config_dict["swing_points"] = tf_config.swing_points.model_dump()
-
-            if tf_config.gap_detection is not None:
-                config_dict["gap_detection"] = tf_config.gap_detection.model_dump()
-
-            timeframe_configs.append(config_dict)
-
-        return Indicators(timeframe_configs=timeframe_configs)
+        return Indicators(config)
 
     @classmethod
     def create_all(cls, config: FactoryConfig) -> dict[str, Component]:

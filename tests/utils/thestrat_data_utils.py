@@ -118,32 +118,32 @@ def create_pattern_data() -> pl.DataFrame:
 
 def create_gap_data() -> pl.DataFrame:
     """Create data with gap patterns."""
-    timestamps = create_timestamp_series("2023-01-01", 5, freq_minutes=1440)  # Daily
+    timestamps = create_timestamp_series("2023-01-01", 8, freq_minutes=1440)  # Daily - increased from 5 to 8
 
     return pl.DataFrame(
         {
             "timestamp": timestamps,
-            "open": [100, 105, 95, 103, 97],  # Gap up, gap down, normal, gap down
-            "high": [102, 107, 97, 105, 99],
-            "low": [98, 103, 93, 101, 95],
-            "close": [101, 106, 96, 104, 98],
-            "volume": [1000] * 5,
+            "open": [100, 105, 95, 103, 97, 102, 92, 105],  # Gap up, gap down, normal, gap down, more patterns
+            "high": [102, 107, 97, 105, 99, 104, 94, 107],
+            "low": [98, 103, 93, 101, 95, 100, 90, 103],
+            "close": [101, 106, 96, 104, 98, 103, 93, 106],
+            "volume": [1000] * 8,
         }
     )
 
 
 def create_price_analysis_data() -> pl.DataFrame:
     """Create data for price analysis testing."""
-    timestamps = create_timestamp_series("2023-01-01", 5, freq_minutes=1440)  # Daily
+    timestamps = create_timestamp_series("2023-01-01", 8, freq_minutes=1440)  # Daily - increased from 5 to 8
 
     return pl.DataFrame(
         {
             "timestamp": timestamps,
-            "open": [100, 102, 104, 106, 108],
-            "high": [102, 104, 106, 108, 110],
-            "low": [98, 100, 102, 104, 106],
-            "close": [99, 103, 105, 107, 109],  # Various positions within range
-            "volume": [1000] * 5,
+            "open": [100, 102, 104, 106, 108, 110, 112, 114],
+            "high": [102, 104, 106, 108, 110, 112, 114, 116],
+            "low": [98, 100, 102, 104, 106, 108, 110, 112],
+            "close": [99, 103, 105, 107, 109, 111, 113, 115],  # Various positions within range
+            "volume": [1000] * 8,
         }
     )
 

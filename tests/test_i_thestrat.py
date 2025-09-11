@@ -254,7 +254,7 @@ class TestTheStratIntegration:
         assert pipeline1["aggregation"].asset_class == pipeline2["aggregation"].asset_class
         assert pipeline1["aggregation"].timezone == pipeline2["aggregation"].timezone
 
-        assert pipeline1["indicators"].timeframe_configs == pipeline2["indicators"].timeframe_configs
+        assert pipeline1["indicators"].config.timeframe_configs == pipeline2["indicators"].config.timeframe_configs
 
     def test_error_propagation_chain(self):
         """Test that errors propagate correctly through the processing chain."""

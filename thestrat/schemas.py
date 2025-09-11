@@ -370,6 +370,7 @@ class AggregationConfig(BaseModel):
         },
     )
     timezone: str | None = Field(
+        default=None,  # Explicit default for static type checkers (Pylance), model validator applies asset class defaults
         description="Override timezone (None uses asset class default)",
         examples=["US/Eastern", "Europe/London", "Asia/Tokyo", "UTC"],
         json_schema_extra={
@@ -379,6 +380,7 @@ class AggregationConfig(BaseModel):
         },
     )
     hour_boundary: bool | None = Field(
+        default=None,  # Explicit default for static type checkers (Pylance), model validator applies asset class defaults
         description="Override hour boundary alignment (None uses asset class default)",
         json_schema_extra={
             "true": "Align to hour boundaries (00:00, 01:00, 02:00...)",
@@ -387,6 +389,7 @@ class AggregationConfig(BaseModel):
         },
     )
     session_start: str | None = Field(
+        default=None,  # Explicit default for static type checkers (Pylance), model validator applies asset class defaults
         description="Override session start time HH:MM (None uses asset class default)",
         pattern=r"^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$",
         examples=["09:30", "14:30", "00:00"],
@@ -423,9 +426,13 @@ class AggregationConfig(BaseModel):
         asset_class = data.get("asset_class", "equities")
         asset_config = AssetClassConfig.get_config(asset_class)
 
-        # Apply defaults only if fields are not provided or are None
-        if "timezone" not in data or data["timezone"] is None:
+        # Force UTC timezone for crypto and fx regardless of input
+        if asset_class in ["crypto", "fx"]:
+            data["timezone"] = "UTC"
+        elif "timezone" not in data or data["timezone"] is None:
             data["timezone"] = asset_config.timezone
+            
+        # Apply other defaults only if fields are not provided or are None
         if "hour_boundary" not in data or data["hour_boundary"] is None:
             data["hour_boundary"] = asset_config.hour_boundary
         if "session_start" not in data or data["session_start"] is None:
