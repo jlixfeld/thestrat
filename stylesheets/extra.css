@@ -1,0 +1,172 @@
+/* Custom styles for TheStrat documentation */
+
+/* Larger icons for feature highlights */
+.md-content .lg {
+  font-size: 1.5em;
+}
+
+/* Center align icons with text */
+.md-content .middle {
+  vertical-align: middle;
+  margin-right: 0.5rem;
+}
+
+/* Better spacing for feature sections */
+.md-content h2 + :is(.material-trending-up, .material-chart-line, .material-finance, .material-cog, .material-lightning-bolt, .material-check-all) {
+  color: var(--md-primary-fg-color);
+  margin-bottom: 0.5rem;
+}
+
+/* Improved code block appearance */
+.md-content pre code {
+  font-size: 0.85em;
+  line-height: 1.4;
+}
+
+/* Better table styling */
+.md-content table {
+  font-size: 0.9em;
+}
+
+.md-content table th {
+  background-color: var(--md-default-fg-color--lightest);
+  font-weight: 600;
+}
+
+/* Code titles styling */
+.md-content .highlight .filename {
+  font-weight: 600;
+  color: var(--md-primary-fg-color);
+}
+
+/* Admonition improvements */
+.md-content .admonition {
+  border-radius: 0.4rem;
+}
+
+/* Button improvements */
+.md-button {
+  border-radius: 0.4rem;
+  font-weight: 500;
+}
+
+.md-button--primary {
+  background-color: var(--md-primary-fg-color);
+  border-color: var(--md-primary-fg-color);
+}
+
+/* Tabbed content improvements */
+.md-content .tabbed-set > input:checked + label {
+  font-weight: 600;
+}
+
+/* Navigation improvements */
+.md-nav__item .md-nav__link--active {
+  font-weight: 600;
+}
+
+/* API Documentation improvements */
+
+/* Function signatures as proper code blocks */
+.doc-signature {
+  background-color: var(--md-code-bg-color);
+  border: 1px solid var(--md-default-fg-color--lightest);
+  border-radius: 0.4rem;
+  padding: 1rem;
+  margin: 1rem 0;
+  font-family: var(--md-code-font-family);
+  font-size: 0.85em;
+  overflow-x: auto;
+}
+
+/* Improve signature display */
+.doc .doc-signature .sig {
+  font-family: var(--md-code-font-family);
+  font-size: 0.9em;
+  background: var(--md-code-bg-color);
+  padding: 0.5rem 1rem;
+  border-radius: 0.3rem;
+  border: 1px solid var(--md-default-fg-color--lightest);
+  display: block;
+  overflow-x: auto;
+  white-space: pre;
+}
+
+/* Better parameter styling */
+.doc .doc-signature .sig-param {
+  color: var(--md-code-fg-color);
+}
+
+/* Docstring content formatting */
+.doc .doc-contents {
+  margin-top: 1rem;
+}
+
+.doc .doc-contents > p:first-child {
+  font-size: 1.05em;
+  font-weight: 500;
+  color: var(--md-default-fg-color);
+  margin-bottom: 1rem;
+}
+
+/* Section headers in docstrings */
+.doc .doc-contents h3,
+.doc .doc-contents h4 {
+  color: var(--md-primary-fg-color);
+  font-weight: 600;
+  margin-top: 1.5rem;
+  margin-bottom: 0.5rem;
+}
+
+/* Parameter tables */
+.doc .doc-contents table {
+  margin: 1rem 0;
+  border-collapse: collapse;
+  width: 100%;
+}
+
+.doc .doc-contents table th,
+.doc .doc-contents table td {
+  padding: 0.5rem;
+  border: 1px solid var(--md-default-fg-color--lightest);
+  text-align: left;
+}
+
+.doc .doc-contents table th {
+  background-color: var(--md-default-fg-color--lightest);
+  font-weight: 600;
+}
+
+/* Code in docstrings */
+.doc .doc-contents code {
+  background-color: var(--md-code-bg-color);
+  color: var(--md-code-fg-color);
+  padding: 0.1rem 0.3rem;
+  border-radius: 0.2rem;
+  font-family: var(--md-code-font-family);
+}
+
+/* Examples in docstrings */
+.doc .doc-contents .highlight {
+  margin: 1rem 0;
+  border-radius: 0.4rem;
+}
+
+/* Class and method organization */
+.doc .doc-heading {
+  border-bottom: 2px solid var(--md-primary-fg-color);
+  padding-bottom: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+/* Source code links */
+.doc .doc-source-link {
+  float: right;
+  font-size: 0.8em;
+  color: var(--md-primary-fg-color);
+  text-decoration: none;
+}
+
+.doc .doc-source-link:hover {
+  text-decoration: underline;
+}
