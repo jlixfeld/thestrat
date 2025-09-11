@@ -6,7 +6,7 @@ This guide covers how to install the TheStrat module in different environments a
 
 Before installing TheStrat, ensure you have:
 
-- **Python 3.10 or higher**
+- **Python 3.11 or higher**
 - **uv** package manager (recommended) or **pip**
 - **Git** (for development installation)
 

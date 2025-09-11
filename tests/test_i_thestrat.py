@@ -18,6 +18,8 @@ from thestrat.schemas import (
     TimeframeItemConfig,
 )
 
+from .utils.config_helpers import create_aggregation_config
+
 
 @pytest.mark.integration
 class TestTheStratIntegration:
@@ -145,7 +147,10 @@ class TestTheStratIntegration:
 
         assert isinstance(analyzed, pl.DataFrame)
         assert len(analyzed) == 12  # 48 hours / 4 hours per bar
-        assert analyzed.schema["timestamp"].time_zone == "UTC"
+        # Check timezone - assert it's a Datetime type first
+        timestamp_dtype = analyzed.schema["timestamp"]
+        assert isinstance(timestamp_dtype, pl.Datetime)
+        assert timestamp_dtype.time_zone == "UTC"
 
     def test_forex_utc_workflow(self):
         """Test workflow with forex UTC market data."""
@@ -188,7 +193,7 @@ class TestTheStratIntegration:
         # Create pipeline with Pydantic models
         pipeline = Factory.create_all(
             FactoryConfig(
-                aggregation=AggregationConfig(target_timeframes=["1h"]),
+                aggregation=create_aggregation_config(),
                 indicators=IndicatorsConfig(timeframe_configs=[TimeframeItemConfig(timeframes=["all"])]),
             )
         )
@@ -254,7 +259,7 @@ class TestTheStratIntegration:
         assert pipeline1["aggregation"].asset_class == pipeline2["aggregation"].asset_class
         assert pipeline1["aggregation"].timezone == pipeline2["aggregation"].timezone
 
-        assert pipeline1["indicators"].timeframe_configs == pipeline2["indicators"].timeframe_configs
+        assert pipeline1["indicators"].config.timeframe_configs == pipeline2["indicators"].config.timeframe_configs
 
     def test_error_propagation_chain(self):
         """Test that errors propagate correctly through the processing chain."""
@@ -266,7 +271,7 @@ class TestTheStratIntegration:
         # Create pipeline with Pydantic models
         pipeline = Factory.create_all(
             FactoryConfig(
-                aggregation=AggregationConfig(target_timeframes=["1h"]),
+                aggregation=create_aggregation_config(),
                 indicators=IndicatorsConfig(
                     timeframe_configs=[
                         TimeframeItemConfig(

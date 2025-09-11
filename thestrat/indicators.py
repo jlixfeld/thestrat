@@ -5,13 +5,12 @@ This module provides comprehensive Strat pattern analysis with high-performance
 vectorized calculations using Polars operations.
 """
 
-from typing import Any
-
 from pandas import DataFrame as PandasDataFrame
 from polars import DataFrame as PolarsDataFrame
 from polars import Int32, col, concat_str, lit, when
 
 from .base import Component
+from .schemas import IndicatorsConfig, TimeframeItemConfig
 from .signals import SIGNALS
 
 
@@ -23,30 +22,22 @@ class Indicators(Component):
     analysis, pattern recognition, and gap detection optimized for TheStrat methodology.
     """
 
-    def __init__(self, timeframe_configs: list[dict[str, Any]]):
+    # Type hints for commonly accessed attributes
+    config: IndicatorsConfig
+
+    def __init__(self, config: IndicatorsConfig):
         """
-        Initialize indicators component with per-timeframe configurations.
+        Initialize indicators component with validated configuration.
 
         Args:
-            timeframe_configs: List of configuration dictionaries for different timeframes.
+            config: Validated IndicatorsConfig containing per-timeframe configurations
         """
         super().__init__()
 
-        # Validate that timeframe_configs is provided
-        if not timeframe_configs:
-            raise ValueError(
-                "timeframe_configs is required. Use [{'timeframes': ['all'], ...}] to apply same config to all data."
-            )
+        # Store the validated Pydantic config
+        self.config = config
 
-        # Store timeframe-specific configurations
-        self.timeframe_configs = timeframe_configs
-
-        # Set default instance variables (will be overridden per timeframe)
-        self.swing_window = 5
-        self.swing_threshold = 5.0
-        self.gap_threshold = 0.001
-
-    def _get_config_for_timeframe(self, timeframe: str) -> dict[str, Any]:
+    def _get_config_for_timeframe(self, timeframe: str) -> TimeframeItemConfig:
         """
         Get configuration for a specific timeframe.
 
@@ -54,21 +45,17 @@ class Indicators(Component):
             timeframe: The timeframe to get configuration for
 
         Returns:
-            Configuration dictionary for the timeframe
+            TimeframeItemConfig for the timeframe
         """
         # First check for "all" timeframe config
-        for tf_config in self.timeframe_configs:
-            if "all" in tf_config.get("timeframes", []):
-                config = tf_config.copy()
-                config.pop("timeframes", None)
-                return config
+        for tf_config in self.config.timeframe_configs:
+            if "all" in tf_config.timeframes:
+                return tf_config
 
         # Then check for specific timeframe config
-        for tf_config in self.timeframe_configs:
-            if timeframe in tf_config.get("timeframes", []):
-                config = tf_config.copy()
-                config.pop("timeframes", None)
-                return config
+        for tf_config in self.config.timeframe_configs:
+            if timeframe in tf_config.timeframes:
+                return tf_config
 
         # No config found - this should not happen with proper validation
         raise ValueError(f"No configuration found for timeframe '{timeframe}'. Check your timeframe_configs.")
@@ -95,7 +82,7 @@ class Indicators(Component):
         # Check if data has timeframe column for per-timeframe processing
         if "timeframe" in df.columns:
             # Check if "all" timeframe is configured
-            has_all_config = any("all" in tf_config.get("timeframes", []) for tf_config in self.timeframe_configs)
+            has_all_config = any("all" in tf_config.timeframes for tf_config in self.config.timeframe_configs)
 
             if has_all_config:
                 # Process all data with the "all" configuration
@@ -130,7 +117,7 @@ class Indicators(Component):
                 df = df.sort(sort_cols)
         else:
             # No timeframe column - must have "all" configuration
-            has_all_config = any("all" in tf_config.get("timeframes", []) for tf_config in self.timeframe_configs)
+            has_all_config = any("all" in tf_config.timeframes for tf_config in self.config.timeframe_configs)
             if not has_all_config:
                 raise ValueError("Data without timeframe column requires an 'all' timeframe configuration.")
 
@@ -139,7 +126,7 @@ class Indicators(Component):
 
         return df
 
-    def _process_single_timeframe(self, data: PolarsDataFrame, config: dict[str, Any]) -> PolarsDataFrame:
+    def _process_single_timeframe(self, data: PolarsDataFrame, config: TimeframeItemConfig) -> PolarsDataFrame:
         """
         Process indicators for a single timeframe using specific configuration.
 
@@ -148,50 +135,30 @@ class Indicators(Component):
 
         Args:
             data: DataFrame for a single timeframe
-            config: Configuration to use for this timeframe
+            config: TimeframeItemConfig to use for this timeframe
 
         Returns:
             DataFrame with indicators calculated using the specified config
         """
-        # Temporarily set instance variables for this timeframe's config
-        original_swing_window = self.swing_window
-        original_swing_threshold = self.swing_threshold
-        original_gap_threshold = self.gap_threshold
+        # Vectorized indicator calculation with dependency grouping
+        df = data.clone()
 
-        try:
-            # Apply timeframe-specific config
-            swing_config = config.get("swing_points", {})
-            self.swing_window = swing_config.get("window", self.swing_window)
-            self.swing_threshold = swing_config.get("threshold", self.swing_threshold)
+        # Group 1: Swing points (no dependencies)
+        df = self._calculate_swing_points(df, config)
 
-            gap_config = config.get("gap_detection", {})
-            self.gap_threshold = gap_config.get("threshold", self.gap_threshold)
+        # Group 2: Market structure (depends on swing points)
+        df = self._calculate_market_structure(df)
 
-            # Vectorized indicator calculation with dependency grouping
-            df = data.clone()
+        # Group 3: Combined independent calculations (price analysis, ATH/ATL, gap analysis)
+        # These have no dependencies and can be calculated in parallel
+        df = self._calculate_independent_indicators(df, config)
 
-            # Group 1: Swing points (no dependencies)
-            df = self._calculate_swing_points(df)
+        # Group 4: Strat patterns (depends on continuity which is calculated first)
+        df = self._calculate_strat_patterns(df, config)
 
-            # Group 2: Market structure (depends on swing points)
-            df = self._calculate_market_structure(df)
+        return df
 
-            # Group 3: Combined independent calculations (price analysis, ATH/ATL, gap analysis)
-            # These have no dependencies and can be calculated in parallel
-            df = self._calculate_independent_indicators(df)
-
-            # Group 4: Strat patterns (depends on continuity which is calculated first)
-            df = self._calculate_strat_patterns(df)
-
-            return df
-
-        finally:
-            # Restore original instance variables
-            self.swing_window = original_swing_window
-            self.swing_threshold = original_swing_threshold
-            self.gap_threshold = original_gap_threshold
-
-    def _calculate_independent_indicators(self, data: PolarsDataFrame) -> PolarsDataFrame:
+    def _calculate_independent_indicators(self, data: PolarsDataFrame, config: TimeframeItemConfig) -> PolarsDataFrame:
         """
         Calculate all independent indicators in a single vectorized operation.
 
@@ -200,10 +167,18 @@ class Indicators(Component):
 
         Args:
             data: Input DataFrame with OHLC data
+            config: TimeframeItemConfig containing configuration
 
         Returns:
             DataFrame with independent indicators added
         """
+        # Get gap detection configuration from the passed config
+        gap_detection_config = config.gap_detection
+        if gap_detection_config is None:
+            from .schemas import GapDetectionConfig
+
+            gap_detection_config = GapDetectionConfig()  # Use defaults
+
         df = data.clone()
 
         # Combine all independent calculations in a single with_columns operation
@@ -234,7 +209,7 @@ class Indicators(Component):
 
         return df
 
-    def _calculate_swing_points(self, data: PolarsDataFrame) -> PolarsDataFrame:
+    def _calculate_swing_points(self, data: PolarsDataFrame, config: TimeframeItemConfig) -> PolarsDataFrame:
         """
         Detect swing highs and lows using vectorized operations.
 
@@ -242,19 +217,26 @@ class Indicators(Component):
         Swing points are detected when price moves beyond the percentage threshold
         (e.g., 5% = 5.0) compared to the previous rolling extreme.
         """
+        # Get swing points configuration from the passed config
+        swing_points_config = config.swing_points
+        if swing_points_config is None:
+            from .schemas import SwingPointsConfig
+
+            swing_points_config = SwingPointsConfig()  # Use defaults
+
+        swing_window = swing_points_config.window
+        swing_threshold = swing_points_config.threshold
+
         df = data.clone()
 
         # Calculate rolling min/max for swing detection
         df = df.with_columns(
             [
                 # Rolling highs and lows for swing detection
-                col("high").rolling_max(window_size=self.swing_window, center=True).alias("roll_high_max"),
-                col("high")
-                .rolling_max(window_size=self.swing_window, center=False)
-                .shift(1)
-                .alias("roll_high_max_prev"),
-                col("low").rolling_min(window_size=self.swing_window, center=True).alias("roll_low_min"),
-                col("low").rolling_min(window_size=self.swing_window, center=False).shift(1).alias("roll_low_min_prev"),
+                col("high").rolling_max(window_size=swing_window, center=True).alias("roll_high_max"),
+                col("high").rolling_max(window_size=swing_window, center=False).shift(1).alias("roll_high_max_prev"),
+                col("low").rolling_min(window_size=swing_window, center=True).alias("roll_low_min"),
+                col("low").rolling_min(window_size=swing_window, center=False).shift(1).alias("roll_low_min_prev"),
             ]
         )
 
@@ -264,13 +246,13 @@ class Indicators(Component):
                 # Boolean indicators for new swing points (fill nulls with False)
                 (
                     (col("high") == col("roll_high_max"))
-                    & (col("high") > col("roll_high_max_prev") * (1 + self.swing_threshold / 100))
+                    & (col("high") > col("roll_high_max_prev") * (1 + swing_threshold / 100))
                 )
                 .fill_null(False)
                 .alias("new_swing_high"),
                 (
                     (col("low") == col("roll_low_min"))
-                    & (col("low") < col("roll_low_min_prev") * (1 - self.swing_threshold / 100))
+                    & (col("low") < col("roll_low_min_prev") * (1 - swing_threshold / 100))
                 )
                 .fill_null(False)
                 .alias("new_swing_low"),
@@ -399,11 +381,18 @@ class Indicators(Component):
 
         return df
 
-    def _calculate_strat_patterns(self, data: PolarsDataFrame) -> PolarsDataFrame:
+    def _calculate_strat_patterns(self, data: PolarsDataFrame, config: TimeframeItemConfig) -> PolarsDataFrame:
         """
         Calculate Strat-specific patterns: continuity, in_force, scenario, signal,
         hammer, shooter, kicker, f23, pmg, motherbar_problems.
         """
+        # Get gap detection configuration from the passed config
+        gap_detection_config = config.gap_detection
+        if gap_detection_config is None:
+            from .schemas import GapDetectionConfig
+
+            gap_detection_config = GapDetectionConfig()  # Use defaults
+
         df = data.clone()
 
         # Calculate basic Strat patterns - step 1: continuity first
@@ -462,7 +451,7 @@ class Indicators(Component):
         )
 
         # Add advanced Strat patterns
-        df = self._calculate_advanced_patterns(df)
+        df = self._calculate_advanced_patterns(df, config)
 
         # Add signal pattern detection
         df = self._calculate_signals(df)
@@ -574,10 +563,9 @@ class Indicators(Component):
         def get_signal_object(row_index: int):
             return signal_obj_map.get(row_index)
 
-        # Store the mapping as metadata (this is a workaround for Polars limitations)
-        df.attrs = getattr(df, "attrs", {})
-        df.attrs["signal_objects"] = signal_obj_map
-        df.attrs["get_signal_object"] = get_signal_object
+        # Note: Polars DataFrames don't support attrs like pandas
+        # Signal objects would need to be stored externally if needed
+        # df.attrs = {"signal_objects": signal_obj_map, "get_signal_object": get_signal_object}
 
         # Remove temporary index
         df = df.drop("__temp_idx")
@@ -680,18 +668,27 @@ class Indicators(Component):
             timeframe=getattr(self, "timeframe", None),
         )
 
-    def _calculate_advanced_patterns(self, data: PolarsDataFrame) -> PolarsDataFrame:
+    def _calculate_advanced_patterns(self, data: PolarsDataFrame, config: TimeframeItemConfig) -> PolarsDataFrame:
         """Calculate advanced Strat patterns: kicker, f23, pmg, motherbar_problems."""
+        # Get gap detection configuration from the passed config
+        gap_detection_config = config.gap_detection
+        if gap_detection_config is None:
+            from .schemas import GapDetectionConfig
+
+            gap_detection_config = GapDetectionConfig()  # Use defaults
+
+        gap_threshold = gap_detection_config.threshold
+
         df = data.clone()
 
         # Advanced gapper: Gap detection using percentage-based thresholds for all asset classes
         df = df.with_columns(
             [
                 # Gap up = 1: Opening above previous high by gap_threshold percentage
-                when(col("open") > (col("high").shift(1) * (1 + self.gap_threshold)))
+                when(col("open") > (col("high").shift(1) * (1 + gap_threshold)))
                 .then(1)
                 # Gap down = 0: Opening below previous low by gap_threshold percentage
-                .when(col("open") < (col("low").shift(1) * (1 - self.gap_threshold)))
+                .when(col("open") < (col("low").shift(1) * (1 - gap_threshold)))
                 .then(0)
                 .otherwise(None)
                 .alias("advanced_gapper")
@@ -963,10 +960,11 @@ class Indicators(Component):
 
         # Get minimum swing window from any configuration
         min_swing_window = 5  # default
-        for tf_config in self.timeframe_configs:
-            swing_config = tf_config.get("swing_points", {})
-            window = swing_config.get("window", 5)
-            min_swing_window = min(min_swing_window, window)
+        for tf_config in self.config.timeframe_configs:
+            swing_config = tf_config.swing_points
+            if swing_config is not None:
+                window = swing_config.window
+                min_swing_window = min(min_swing_window, window)
 
         # Check for minimum data points for swing analysis
         if len(df) < min_swing_window * 2:

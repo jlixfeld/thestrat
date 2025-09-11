@@ -21,7 +21,7 @@ from polars import (
 )
 
 from .base import Component
-from .schemas import AssetClassConfig
+from .schemas import AggregationConfig
 
 
 class Aggregation(Component):
@@ -35,48 +35,38 @@ class Aggregation(Component):
         - **Vectorized Processing**: Pure Polars operations for maximum performance
     """
 
-    def __init__(
-        self,
-        target_timeframes: list[str],
-        asset_class: str = "equities",
-        hour_boundary: bool | None = None,
-        session_start: str | None = None,
-        timezone: str | None = None,
-    ):
+    # Type hints for commonly accessed attributes
+    # Note: These fields are guaranteed to be non-None after config validation
+    timezone: str  # Resolved from config.timezone after asset class defaults applied
+    asset_class: str  # Always set from config.asset_class
+    target_timeframes: list[str]  # Always set from config.target_timeframes
+    session_start: str  # Resolved from config.session_start after asset class defaults applied
+    hour_boundary: bool  # Resolved from config.hour_boundary after asset class defaults applied
+
+    def __init__(self, config: AggregationConfig):
         """
-        Initialize aggregation component.
+        Initialize aggregation component with validated configuration.
 
         Args:
-            target_timeframes: Target timeframes list (e.g., ["5m", "1H", "1D"])
-            asset_class: Asset class type (crypto, equities, fx, futures)
-            hour_boundary: Align to hour boundaries (auto-determined if None)
-            session_start: Session start time (asset class default if None)
-            timezone: Timezone (asset class default -> system -> UTC if None)
+            config: Validated AggregationConfig containing all configuration settings
         """
         super().__init__()
 
-        # Validate that target_timeframes is a list
-        if not isinstance(target_timeframes, list):
-            raise TypeError("target_timeframes must be a list")
+        # Store the validated Pydantic config
+        self.config = config
 
-        if not target_timeframes:
-            raise ValueError("target_timeframes cannot be empty")
+        # Extract commonly used values for convenience
+        self.target_timeframes = config.target_timeframes.copy()
+        self.asset_class = config.asset_class
 
-        self.target_timeframes = list(target_timeframes)
+        # These fields are guaranteed to be non-None after model validation
+        assert config.timezone is not None
+        assert config.session_start is not None
+        assert config.hour_boundary is not None
 
-        self.asset_class = asset_class
-
-        # Get asset class defaults from registry
-        asset_config = AssetClassConfig.REGISTRY.get(asset_class, AssetClassConfig.REGISTRY["equities"])
-
-        # Set timezone with priority: specified > system > asset_class default
-        self.timezone = self._resolve_timezone(timezone, asset_class, asset_config)
-
-        # Set session start with asset class default
-        self.session_start = session_start or asset_config.session_start
-
-        # Set hour_boundary with priority: specified > asset_class default
-        self.hour_boundary = hour_boundary if hour_boundary is not None else asset_config.hour_boundary
+        self.timezone = config.timezone
+        self.session_start = config.session_start
+        self.hour_boundary = config.hour_boundary
 
         # Validate all timeframes
         for tf in self.target_timeframes:
@@ -238,20 +228,6 @@ class Aggregation(Component):
             return False
 
         return True
-
-    def _resolve_timezone(self, timezone: str | None, asset_class: str, asset_config) -> str:
-        """Resolve timezone with priority: specified > asset_class default > system."""
-
-        # UTC asset classes always use UTC
-        if asset_class in ["crypto", "fx"]:
-            return "UTC"
-
-        # For non-UTC asset classes, use specified timezone if provided
-        if timezone:
-            return timezone
-
-        # Use asset class default for non-UTC asset classes (equities)
-        return asset_config.timezone
 
     def _should_use_hour_boundary(self, timeframe: str) -> bool:
         """Determine if timeframe should use hour boundary alignment."""

@@ -7,12 +7,13 @@ type safety, and detailed error reporting.
 """
 
 import re
-from typing import Any, ClassVar, Literal, get_args, get_origin
+from datetime import datetime
+from typing import Any, ClassVar, Literal, Self, get_args, get_origin
 
 import pytz
+from polars import Boolean, Datetime, Float64, Int32, String
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from pydantic.fields import FieldInfo
-from typing_extensions import Self
 
 
 class AssetClassConfig(BaseModel):
@@ -64,6 +65,11 @@ class AssetClassConfig(BaseModel):
 
     # Registry pattern - similar to TimeframeConfig.TIMEFRAME_TO_POLARS
     REGISTRY: ClassVar[dict[str, "AssetClassConfig"]] = {}
+
+    @classmethod
+    def get_config(cls, asset_class: str) -> "AssetClassConfig":
+        """Get configuration for specific asset class."""
+        return cls.REGISTRY.get(asset_class, cls.REGISTRY["equities"])
 
 
 # Populate the registry after class definition
@@ -225,11 +231,6 @@ class TimeframeConfig(BaseModel):
         return cls.TIMEFRAME_TO_POLARS.get(timeframe, timeframe)
 
 
-def get_asset_class_config(asset_class: str) -> AssetClassConfig:
-    """Get configuration for specific asset class."""
-    return ASSET_CLASS_CONFIGS.get(asset_class, ASSET_CLASS_CONFIGS["equities"])
-
-
 class SwingPointsConfig(BaseModel):
     """Configuration for swing point detection with comprehensive parameter documentation."""
 
@@ -336,13 +337,6 @@ class IndicatorsConfig(BaseModel):
     timeframe_configs: list[TimeframeItemConfig] = Field(
         description="List of timeframe-specific indicator configurations",
         min_length=1,
-        examples=[
-            [{"timeframes": ["all"], "swing_points": {"window": 5, "threshold": 2.0}}],
-            [
-                {"timeframes": ["5m"], "swing_points": {"window": 3, "threshold": 1.5}},
-                {"timeframes": ["1h", "4h"], "swing_points": {"window": 7, "threshold": 3.0}},
-            ],
-        ],
         json_schema_extra={
             "pattern": "Each config applies to specific timeframes",
             "flexibility": "Different parameters for different timeframe groups",
@@ -375,7 +369,7 @@ class AggregationConfig(BaseModel):
         },
     )
     timezone: str | None = Field(
-        default=None,
+        default=None,  # Explicit default for static type checkers (Pylance), model validator applies asset class defaults
         description="Override timezone (None uses asset class default)",
         examples=["US/Eastern", "Europe/London", "Asia/Tokyo", "UTC"],
         json_schema_extra={
@@ -385,7 +379,7 @@ class AggregationConfig(BaseModel):
         },
     )
     hour_boundary: bool | None = Field(
-        default=None,
+        default=None,  # Explicit default for static type checkers (Pylance), model validator applies asset class defaults
         description="Override hour boundary alignment (None uses asset class default)",
         json_schema_extra={
             "true": "Align to hour boundaries (00:00, 01:00, 02:00...)",
@@ -394,7 +388,7 @@ class AggregationConfig(BaseModel):
         },
     )
     session_start: str | None = Field(
-        default=None,
+        default=None,  # Explicit default for static type checkers (Pylance), model validator applies asset class defaults
         description="Override session start time HH:MM (None uses asset class default)",
         pattern=r"^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$",
         examples=["09:30", "14:30", "00:00"],
@@ -419,6 +413,31 @@ class AggregationConfig(BaseModel):
                 raise ValueError(f"Invalid timeframe '{tf}'")
 
         return v
+
+    @model_validator(mode="before")
+    @classmethod
+    def apply_asset_class_defaults(cls, data: Any) -> Any:
+        """Apply AssetClassConfig defaults for timezone, hour_boundary, and session_start."""
+        if not isinstance(data, dict):
+            return data
+
+        # Get asset class, default to "equities"
+        asset_class = data.get("asset_class", "equities")
+        asset_config = AssetClassConfig.get_config(asset_class)
+
+        # Force UTC timezone for crypto and fx regardless of input
+        if asset_class in ["crypto", "fx"]:
+            data["timezone"] = "UTC"
+        elif "timezone" not in data or data["timezone"] is None:
+            data["timezone"] = asset_config.timezone
+
+        # Apply other defaults only if fields are not provided or are None
+        if "hour_boundary" not in data or data["hour_boundary"] is None:
+            data["hour_boundary"] = asset_config.hour_boundary
+        if "session_start" not in data or data["session_start"] is None:
+            data["session_start"] = asset_config.session_start
+
+        return data
 
     @field_validator("timezone")
     @classmethod
@@ -522,9 +541,18 @@ class SchemaDocGenerator:
             if constraints:
                 field_doc["constraints"] = constraints
 
-            # Add json_schema_extra information
+            # Add json_schema_extra information (convert Polars types to strings)
             if hasattr(field_info, "json_schema_extra") and field_info.json_schema_extra:
-                field_doc["metadata"] = field_info.json_schema_extra
+                metadata = field_info.json_schema_extra.copy()
+                # Convert Polars data types to string representations for serialization
+                if "polars_dtype" in metadata:
+                    polars_type = metadata["polars_dtype"]
+                    # Convert Polars type to string representation for JSON serialization
+                    try:
+                        metadata["polars_dtype"] = getattr(polars_type, "__name__", str(polars_type))
+                    except (AttributeError, TypeError):
+                        metadata["polars_dtype"] = str(polars_type)
+                field_doc["metadata"] = metadata
 
             field_docs[field_name] = field_doc
 
@@ -633,25 +661,62 @@ class SchemaDocGenerator:
         Returns:
             JSON Schema dictionary with enhanced metadata
         """
-        schema = model.model_json_schema()
+        # Special handling for IndicatorSchema which contains non-serializable Polars types
+        if hasattr(model, "__name__") and model.__name__ == "IndicatorSchema":
+            # Generate a basic JSON schema structure manually for IndicatorSchema
+            schema = {
+                "type": "object",
+                "title": model.__name__,
+                "description": model.__doc__ or f"Schema for {model.__name__}",
+                "properties": {},
+                "required": [],
+            }
 
-        # Enhance with field documentation
-        field_docs = SchemaDocGenerator.generate_field_docs(model)
+            # Add properties from field documentation (which has serializable metadata)
+            field_docs = SchemaDocGenerator.generate_field_docs(model)
 
-        if "properties" in schema:
-            for field_name, field_schema in schema["properties"].items():
-                if field_name in field_docs:
-                    field_doc = field_docs[field_name]
+            for field_name, field_doc in field_docs.items():
+                prop_schema = {
+                    "type": SchemaDocGenerator._pydantic_type_to_json_type(field_doc["type"]),
+                    "description": field_doc["description"],
+                }
 
-                    # Add examples if available
-                    if field_doc["examples"]:
-                        field_schema["examples"] = field_doc["examples"]
+                # Add metadata (already converted to strings)
+                if "metadata" in field_doc:
+                    prop_schema.update(field_doc["metadata"])
 
-                    # Add metadata
-                    if "metadata" in field_doc:
-                        field_schema.update(field_doc["metadata"])
+                # Add examples if available
+                if field_doc["examples"]:
+                    prop_schema["examples"] = field_doc["examples"]
 
-        return schema
+                schema["properties"][field_name] = prop_schema
+
+                # Add to required if field is required
+                if field_doc["required"]:
+                    schema["required"].append(field_name)
+
+            return schema
+        else:
+            # Use standard Pydantic JSON schema generation for other models
+            schema = model.model_json_schema()
+
+            # Enhance with field documentation
+            field_docs = SchemaDocGenerator.generate_field_docs(model)
+
+            if "properties" in schema:
+                for field_name, field_schema in schema["properties"].items():
+                    if field_name in field_docs:
+                        field_doc = field_docs[field_name]
+
+                        # Add examples if available
+                        if field_doc["examples"]:
+                            field_schema["examples"] = field_doc["examples"]
+
+                        # Add metadata (already converted to strings in generate_field_docs)
+                        if "metadata" in field_doc:
+                            field_schema.update(field_doc["metadata"])
+
+            return schema
 
     @staticmethod
     def generate_all_model_docs() -> dict[str, dict[str, Any]]:
@@ -670,6 +735,7 @@ class SchemaDocGenerator:
             IndicatorsConfig,
             AggregationConfig,
             FactoryConfig,
+            IndicatorSchema,
         ]
 
         all_docs = {}
@@ -793,32 +859,524 @@ class SchemaDocGenerator:
 
         return classvars
 
+    @staticmethod
+    def _pydantic_type_to_json_type(pydantic_type: str) -> str:
+        """Convert Pydantic type to JSON Schema type."""
+        type_mapping = {
+            "datetime": "string",
+            "int": "integer",
+            "float": "number",
+            "str": "string",
+            "bool": "boolean",
+            "list": "array",
+            "dict": "object",
+        }
+        return type_mapping.get(pydantic_type, "string")
 
-def generate_complete_documentation() -> str:
+    @staticmethod
+    def generate_complete_documentation() -> str:
+        """
+        Generate complete markdown documentation for all schema models.
+
+        Returns:
+            Complete markdown documentation string
+        """
+        docs = SchemaDocGenerator.generate_all_model_docs()
+
+        markdown = "# TheStrat Schema Documentation\n\n"
+        markdown += "Auto-generated documentation for all Pydantic configuration models.\n\n"
+        markdown += "---\n\n"
+
+        for model_docs in docs.values():
+            markdown += model_docs["markdown"] + "\n\n"
+
+        return markdown
+
+    @staticmethod
+    def export_json_schemas() -> dict[str, dict[str, Any]]:
+        """
+        Export JSON schemas for all models (useful for OpenAPI/AsyncAPI generation).
+
+        Returns:
+            Dictionary mapping model names to their JSON schemas
+        """
+        docs = SchemaDocGenerator.generate_all_model_docs()
+        return {name: doc_info["json_schema"] for name, doc_info in docs.items()}
+
+
+# =============================================================================
+# DataFrame Schema Models
+# =============================================================================
+
+
+class IndicatorSchema(BaseModel):
     """
-    Generate complete markdown documentation for all schema models.
+    **Complete Indicator Schema**
 
-    Returns:
-        Complete markdown documentation string
+    Defines all columns that are created by TheStrat processing pipeline.
+    All columns are required as the indicators component creates them all.
     """
-    docs = SchemaDocGenerator.generate_all_model_docs()
 
-    markdown = "# TheStrat Schema Documentation\n\n"
-    markdown += "Auto-generated documentation for all Pydantic configuration models.\n\n"
-    markdown += "---\n\n"
+    model_config = ConfigDict(str_strip_whitespace=True, validate_default=True, extra="forbid")
 
-    for model_docs in docs.values():
-        markdown += model_docs["markdown"] + "\n\n"
+    # Base OHLCV+Symbol columns (input data)
+    timestamp: datetime = Field(
+        description="Timestamp for each bar/candle",
+        json_schema_extra={"polars_dtype": Datetime, "input": True, "category": "base_ohlc"},
+    )
+    open: float = Field(
+        description="Opening price for the time period",
+        gt=0,
+        json_schema_extra={"polars_dtype": Float64, "input": True, "category": "base_ohlc"},
+    )
+    high: float = Field(
+        description="Highest price during the time period",
+        gt=0,
+        json_schema_extra={"polars_dtype": Float64, "input": True, "category": "base_ohlc"},
+    )
+    low: float = Field(
+        description="Lowest price during the time period",
+        gt=0,
+        json_schema_extra={"polars_dtype": Float64, "input": True, "category": "base_ohlc"},
+    )
+    close: float = Field(
+        description="Closing price for the time period",
+        gt=0,
+        json_schema_extra={"polars_dtype": Float64, "input": True, "category": "base_ohlc"},
+    )
+    symbol: str = Field(
+        description="Trading symbol or ticker (e.g., 'AAPL', 'BTC-USD')",
+        json_schema_extra={"polars_dtype": String, "input": True, "category": "base_ohlc"},
+    )
+    volume: float = Field(
+        description="Trading volume for the time period",
+        ge=0,
+        json_schema_extra={"polars_dtype": Float64, "input": True, "category": "base_ohlc"},
+    )
+    timeframe: str = Field(
+        description="Timeframe identifier (e.g., '5min', '1h', '1d')",
+        json_schema_extra={
+            "polars_dtype": String,
+            "input": True,
+            "category": "base_ohlc",
+            "note": "Added by Aggregation component for multi-timeframe data",
+        },
+    )
 
-    return markdown
+    # Price Analysis Columns (output)
+    percent_close_from_high: float = Field(
+        description="Percentage of close price from bar high (0-100%)",
+        ge=0,
+        le=100,
+        json_schema_extra={
+            "polars_dtype": Float64,
+            "output": True,
+            "category": "price_analysis",
+            "calculation": "((high - close) / (high - low)) * 100",
+        },
+    )
+    percent_close_from_low: float = Field(
+        description="Percentage of close price from bar low (0-100%)",
+        ge=0,
+        le=100,
+        json_schema_extra={
+            "polars_dtype": Float64,
+            "output": True,
+            "category": "price_analysis",
+            "calculation": "((close - low) / (high - low)) * 100",
+        },
+    )
+    ath: float = Field(
+        description="All-time high (cumulative maximum of high prices)",
+        gt=0,
+        json_schema_extra={"polars_dtype": Float64, "output": True, "category": "price_analysis"},
+    )
+    atl: float = Field(
+        description="All-time low (cumulative minimum of low prices)",
+        gt=0,
+        json_schema_extra={"polars_dtype": Float64, "output": True, "category": "price_analysis"},
+    )
+    new_ath: bool = Field(
+        description="True when current high equals all-time high",
+        json_schema_extra={"polars_dtype": Boolean, "output": True, "category": "price_analysis"},
+    )
+    new_atl: bool = Field(
+        description="True when current low equals all-time low",
+        json_schema_extra={"polars_dtype": Boolean, "output": True, "category": "price_analysis"},
+    )
 
+    # Gap Detection Columns
+    gap_up: bool = Field(
+        description="True when open is above previous bar's high",
+        json_schema_extra={"polars_dtype": Boolean, "output": True, "category": "gap_detection"},
+    )
+    gap_down: bool = Field(
+        description="True when open is below previous bar's low",
+        json_schema_extra={"polars_dtype": Boolean, "output": True, "category": "gap_detection"},
+    )
+    gapper: bool = Field(
+        description="True when gap_up OR gap_down is true",
+        json_schema_extra={"polars_dtype": Boolean, "output": True, "category": "gap_detection"},
+    )
+    advanced_gapper: bool = Field(
+        description="Enhanced gap detection with threshold requirements",
+        json_schema_extra={"polars_dtype": Boolean, "output": True, "category": "gap_detection"},
+    )
 
-def export_json_schemas() -> dict[str, dict[str, Any]]:
-    """
-    Export JSON schemas for all models (useful for OpenAPI/AsyncAPI generation).
+    # Swing Point Detection Columns
+    swing_high: float = Field(
+        description="Confirmed swing high price point",
+        gt=0,
+        json_schema_extra={"polars_dtype": Float64, "output": True, "category": "swing_points"},
+    )
+    swing_low: float = Field(
+        description="Confirmed swing low price point",
+        gt=0,
+        json_schema_extra={"polars_dtype": Float64, "output": True, "category": "swing_points"},
+    )
+    new_swing_high: bool = Field(
+        description="True when a new swing high is detected",
+        json_schema_extra={"polars_dtype": Boolean, "output": True, "category": "swing_points"},
+    )
+    new_swing_low: bool = Field(
+        description="True when a new swing low is detected",
+        json_schema_extra={"polars_dtype": Boolean, "output": True, "category": "swing_points"},
+    )
+    pivot_high: float = Field(
+        description="Pivot high price (same as swing_high, alternative name)",
+        gt=0,
+        json_schema_extra={"polars_dtype": Float64, "output": True, "category": "swing_points"},
+    )
+    pivot_low: float = Field(
+        description="Pivot low price (same as swing_low, alternative name)",
+        gt=0,
+        json_schema_extra={"polars_dtype": Float64, "output": True, "category": "swing_points"},
+    )
+    new_pivot_high: bool = Field(
+        description="True when new pivot high detected (same as new_swing_high)",
+        json_schema_extra={"polars_dtype": Boolean, "output": True, "category": "swing_points"},
+    )
+    new_pivot_low: bool = Field(
+        description="True when new pivot low detected (same as new_swing_low)",
+        json_schema_extra={"polars_dtype": Boolean, "output": True, "category": "swing_points"},
+    )
 
-    Returns:
-        Dictionary mapping model names to their JSON schemas
-    """
-    docs = SchemaDocGenerator.generate_all_model_docs()
-    return {name: doc_info["json_schema"] for name, doc_info in docs.items()}
+    # Market Structure Analysis Columns
+    higher_high: float = Field(
+        description="Higher high price in uptrend structure",
+        gt=0,
+        json_schema_extra={"polars_dtype": Float64, "output": True, "category": "swing_points"},
+    )
+    lower_high: float = Field(
+        description="Lower high price in downtrend structure",
+        gt=0,
+        json_schema_extra={"polars_dtype": Float64, "output": True, "category": "swing_points"},
+    )
+    higher_low: float = Field(
+        description="Higher low price in uptrend structure",
+        gt=0,
+        json_schema_extra={"polars_dtype": Float64, "output": True, "category": "swing_points"},
+    )
+    lower_low: float = Field(
+        description="Lower low price in downtrend structure",
+        gt=0,
+        json_schema_extra={"polars_dtype": Float64, "output": True, "category": "swing_points"},
+    )
+    new_higher_high: bool = Field(
+        description="True when new higher high is detected", json_schema_extra={"polars_dtype": Boolean, "output": True}
+    )
+    new_lower_high: bool = Field(
+        description="True when new lower high is detected", json_schema_extra={"polars_dtype": Boolean, "output": True}
+    )
+    new_higher_low: bool = Field(
+        description="True when new higher low is detected", json_schema_extra={"polars_dtype": Boolean, "output": True}
+    )
+    new_lower_low: bool = Field(
+        description="True when new lower low is detected", json_schema_extra={"polars_dtype": Boolean, "output": True}
+    )
+
+    # TheStrat Pattern Columns
+    continuity: int = Field(
+        description="TheStrat continuity pattern (1, 2, or 3)",
+        ge=1,
+        le=3,
+        json_schema_extra={
+            "polars_dtype": Int32,
+            "output": True,
+            "category": "thestrat_patterns",
+            "values": {
+                1: "Inside bar (high < prev_high AND low > prev_low)",
+                2: "Directional bar (2U: high > prev_high, low > prev_low OR 2D: high < prev_high, low < prev_low)",
+                3: "Outside bar (high > prev_high AND low < prev_low)",
+            },
+        },
+    )
+    in_force: bool = Field(
+        description="True when price action confirms directional bias",
+        json_schema_extra={"polars_dtype": Boolean, "output": True, "category": "thestrat_patterns"},
+    )
+    in_force_base: bool = Field(
+        description="Base calculation for in_force determination",
+        json_schema_extra={"polars_dtype": Boolean, "output": True, "category": "thestrat_patterns"},
+    )
+    scenario: str = Field(
+        description="TheStrat scenario classification (1, 2U, 2D, 3)",
+        json_schema_extra={
+            "polars_dtype": String,
+            "output": True,
+            "category": "thestrat_patterns",
+            "values": ["1", "2U", "2D", "3"],
+        },
+    )
+    pattern_2bar: str = Field(
+        description="Two-bar TheStrat pattern (e.g., '1-2U', '2D-3')",
+        json_schema_extra={"polars_dtype": String, "output": True, "category": "thestrat_patterns"},
+    )
+    pattern_3bar: str = Field(
+        description="Three-bar TheStrat pattern (e.g., '1-2U-2D', '3-1-2U')",
+        json_schema_extra={"polars_dtype": String, "output": True, "category": "thestrat_patterns"},
+    )
+
+    # Signal Columns
+    signal: str = Field(
+        description="Detected TheStrat signal pattern",
+        json_schema_extra={"polars_dtype": String, "output": True, "category": "signals"},
+    )
+    type: str = Field(
+        description="Signal type/category (e.g., 'reversal', 'continuation')",
+        json_schema_extra={"polars_dtype": String, "output": True, "category": "signals"},
+    )
+    bias: str = Field(
+        description="Signal directional bias ('long' or 'short')",
+        json_schema_extra={"polars_dtype": String, "output": True, "category": "signals", "values": ["long", "short"]},
+    )
+    signal_json: str = Field(
+        description="Complete signal metadata as JSON string",
+        json_schema_extra={"polars_dtype": String, "output": True, "category": "signals"},
+    )
+
+    # Special Pattern Columns
+    hammer: bool = Field(
+        description="True when hammer/doji pattern detected",
+        json_schema_extra={"polars_dtype": Boolean, "output": True, "category": "special_patterns"},
+    )
+    shooter: bool = Field(
+        description="True when shooting star pattern detected",
+        json_schema_extra={"polars_dtype": Boolean, "output": True, "category": "special_patterns"},
+    )
+    kicker: bool = Field(
+        description="True when kicker pattern detected",
+        json_schema_extra={"polars_dtype": Boolean, "output": True, "category": "special_patterns"},
+    )
+    f23: bool = Field(
+        description="True when F23 pattern detected",
+        json_schema_extra={"polars_dtype": Boolean, "output": True, "category": "special_patterns"},
+    )
+    f23x: str = Field(
+        description="F23 pattern variant (F23U, F23D)",
+        json_schema_extra={
+            "polars_dtype": String,
+            "output": True,
+            "category": "special_patterns",
+            "values": ["F23U", "F23D"],
+        },
+    )
+    f23_trigger: float = Field(
+        description="F23 trigger price level",
+        gt=0,
+        json_schema_extra={"polars_dtype": Float64, "output": True, "category": "special_patterns"},
+    )
+    pmg: str = Field(
+        description="Price Magnitude Gap pattern result",
+        json_schema_extra={"polars_dtype": String, "output": True, "category": "special_patterns"},
+    )
+
+    # Mother Bar Analysis Columns
+    is_mother_bar: bool = Field(
+        description="True when bar qualifies as mother bar (scenario = 1)",
+        json_schema_extra={"polars_dtype": Boolean, "output": True, "category": "mother_bar"},
+    )
+    active_mother_high: float = Field(
+        description="Current active mother bar high level",
+        gt=0,
+        json_schema_extra={"polars_dtype": Float64, "output": True, "category": "swing_points"},
+    )
+    active_mother_low: float = Field(
+        description="Current active mother bar low level",
+        gt=0,
+        json_schema_extra={"polars_dtype": Float64, "output": True, "category": "swing_points"},
+    )
+    motherbar_problems: bool = Field(
+        description="True when mother bar analysis has issues/conflicts",
+        json_schema_extra={"polars_dtype": Boolean, "output": True, "category": "mother_bar"},
+    )
+
+    @classmethod
+    def get_column_descriptions(cls) -> dict[str, str]:
+        """
+        Get descriptions for all possible DataFrame columns.
+
+        Returns:
+            Dictionary mapping column names to their descriptions
+        """
+        descriptions = {}
+
+        # Get descriptions from the schema
+        for field_name, field_info in cls.model_fields.items():
+            if field_info.description:
+                descriptions[field_name] = field_info.description
+
+        return descriptions
+
+    @classmethod
+    def get_polars_dtypes(cls) -> dict[str, Any]:
+        """
+        Get Polars data types for all DataFrame columns.
+
+        Returns:
+            Dictionary mapping column names to their Polars data types
+        """
+        types = {}
+
+        for field_name, field_info in cls.model_fields.items():
+            json_extra = getattr(field_info, "json_schema_extra", {})
+            if isinstance(json_extra, dict) and "polars_dtype" in json_extra:
+                types[field_name] = json_extra["polars_dtype"]
+
+        return types
+
+    @classmethod
+    def validate_dataframe(cls, df) -> dict[str, Any]:
+        """
+        Validate input DataFrame columns and data types against IndicatorSchema input requirements.
+
+        Automatically converts Pandas DataFrames to Polars for consistent validation.
+
+        Args:
+            df: Polars or Pandas DataFrame to validate
+
+        Returns:
+            Dictionary with validation results including missing/extra columns, type issues,
+            and the converted Polars DataFrame if conversion occurred
+        """
+        import polars as pl
+
+        # Detect DataFrame type and convert if necessary
+        df_type = "unknown"
+        converted_df = None
+        conversion_errors = []
+
+        if hasattr(df, "columns"):
+            # Check if it's a Pandas DataFrame
+            if hasattr(df, "dtypes") and not hasattr(df, "schema"):
+                df_type = "pandas"
+                try:
+                    # Convert Pandas to Polars
+                    converted_df = pl.from_pandas(df)
+                    df = converted_df  # Use converted DataFrame for validation
+                except Exception as e:
+                    conversion_errors.append(f"Failed to convert Pandas to Polars: {str(e)}")
+                    # Fall back to column-only validation
+                    df_columns = list(df.columns)
+                    return {
+                        "valid": False,
+                        "conversion_error": conversion_errors[0],
+                        "df_type": df_type,
+                        "columns": df_columns,
+                        "message": "Could not convert Pandas DataFrame to Polars for full validation",
+                    }
+            # Check if it's already a Polars DataFrame
+            elif hasattr(df, "schema"):
+                df_type = "polars"
+            else:
+                raise ValueError("Unknown DataFrame type - must be Pandas or Polars DataFrame")
+
+            df_columns = list(df.columns)
+        else:
+            raise ValueError("Input must be a DataFrame with .columns attribute")
+
+        required_fields = []
+        optional_fields = []
+        expected_types = {}
+
+        # Extract input field requirements from schema
+        for field_name, field_info in cls.model_fields.items():
+            json_extra = getattr(field_info, "json_schema_extra", {})
+            if isinstance(json_extra, dict) and json_extra.get("input"):
+                if field_info.is_required():
+                    required_fields.append(field_name)
+                else:
+                    optional_fields.append(field_name)
+
+                # Store expected Polars type for validation
+                if "polars_dtype" in json_extra:
+                    expected_types[field_name] = json_extra["polars_dtype"]
+
+        # Check for missing and extra columns
+        missing_required = [col for col in required_fields if col not in df_columns]
+        missing_optional = [col for col in optional_fields if col not in df_columns]
+        extra_columns = [col for col in df_columns if col not in required_fields + optional_fields]
+
+        # Check data types for present columns (now guaranteed to be Polars)
+        type_issues = []
+        if hasattr(df, "schema"):  # Polars DataFrame
+            for col_name, expected_type in expected_types.items():
+                if col_name in df_columns:
+                    actual_type = df.schema[col_name]
+                    if actual_type != expected_type:
+                        type_issues.append(
+                            {
+                                "column": col_name,
+                                "expected": expected_type.__name__
+                                if hasattr(expected_type, "__name__")
+                                else str(expected_type),
+                                "actual": str(actual_type),
+                            }
+                        )
+
+        result = {
+            "valid": len(missing_required) == 0 and len(type_issues) == 0,
+            "missing_required": missing_required,
+            "missing_optional": missing_optional,
+            "extra_columns": extra_columns,
+            "type_issues": type_issues,
+            "required_fields": required_fields,
+            "optional_fields": optional_fields,
+            "expected_types": {k: v.__name__ if hasattr(v, "__name__") else str(v) for k, v in expected_types.items()},
+            "df_type": df_type,
+        }
+
+        # Include converted DataFrame if conversion occurred
+        if converted_df is not None:
+            result["converted_df"] = converted_df
+            result["conversion_performed"] = True
+        else:
+            result["conversion_performed"] = False
+
+        return result
+
+    @classmethod
+    def get_column_categories(cls) -> dict[str, list[str]]:
+        """
+        Get columns organized by functional categories.
+
+        Dynamically extracts categories from the IndicatorSchema metadata.
+
+        Returns:
+            Dictionary mapping category names to lists of column names
+        """
+        categories: dict[str, list[str]] = {}
+
+        for field_name, field_info in cls.model_fields.items():
+            json_extra = getattr(field_info, "json_schema_extra", {})
+            if isinstance(json_extra, dict) and "category" in json_extra:
+                category = json_extra["category"]
+                if category not in categories:
+                    categories[category] = []
+                categories[category].append(field_name)
+
+        # Sort columns within each category for consistent output
+        for category in categories:
+            categories[category].sort()
+
+        return categories

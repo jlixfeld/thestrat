@@ -9,10 +9,16 @@ from datetime import datetime
 import pandas as pd
 import polars as pl
 import pytest
+from pydantic import ValidationError
 
 from thestrat.aggregation import Aggregation
-from thestrat.schemas import ASSET_CLASS_CONFIGS, TimeframeConfig
+from thestrat.schemas import ASSET_CLASS_CONFIGS, AggregationConfig, TimeframeConfig
 
+from .utils.config_helpers import (
+    create_aggregation_config,
+    create_crypto_aggregation_config,
+    create_equity_aggregation_config,
+)
 from .utils.thestrat_data_utils import (
     create_crypto_data,
     create_dst_transition_data,
@@ -29,7 +35,7 @@ class TestAggregationInit:
 
     def test_init_minimal_parameters(self):
         """Test initialization with minimal parameters."""
-        agg = Aggregation(target_timeframes=["1h"])
+        agg = Aggregation(create_aggregation_config())
 
         assert agg.target_timeframes == ["1h"]
         assert agg.asset_class == "equities"
@@ -40,7 +46,13 @@ class TestAggregationInit:
     def test_init_all_parameters(self):
         """Test initialization with all parameters specified."""
         agg = Aggregation(
-            target_timeframes=["5min"], asset_class="crypto", hour_boundary=False, session_start="00:00", timezone="UTC"
+            AggregationConfig(
+                target_timeframes=["5min"],
+                asset_class="crypto",
+                hour_boundary=False,
+                session_start="00:00",
+                timezone="UTC",
+            )
         )
 
         assert agg.target_timeframes == ["5min"]
@@ -51,7 +63,7 @@ class TestAggregationInit:
 
     def test_init_multiple_timeframes(self):
         """Test initialization with multiple timeframes."""
-        agg = Aggregation(target_timeframes=["5min", "15min", "1h"])
+        agg = Aggregation(AggregationConfig(target_timeframes=["5min", "15min", "1h"]))
 
         assert agg.target_timeframes == ["5min", "15min", "1h"]
         assert agg.asset_class == "equities"
@@ -59,9 +71,11 @@ class TestAggregationInit:
     def test_init_crypto_forces_utc(self):
         """Test that crypto asset class forces UTC timezone."""
         agg = Aggregation(
-            target_timeframes=["1h"],
-            asset_class="crypto",
-            timezone="US/Eastern",  # This should be ignored
+            AggregationConfig(
+                target_timeframes=["1h"],
+                asset_class="crypto",
+                timezone="US/Eastern",  # This should be ignored
+            )
         )
 
         assert agg.timezone == "UTC"  # Crypto always uses UTC
@@ -69,62 +83,66 @@ class TestAggregationInit:
     def test_init_fx_forces_utc(self):
         """Test that FX asset class forces UTC timezone."""
         agg = Aggregation(
-            target_timeframes=["1h"],
-            asset_class="fx",
-            timezone="US/Central",  # This should be ignored
+            AggregationConfig(
+                target_timeframes=["1h"],
+                asset_class="fx",
+                timezone="US/Central",  # This should be ignored
+            )
         )
 
         assert agg.timezone == "UTC"  # FX always uses UTC
 
     def test_init_equities_respects_timezone(self):
         """Test that equities respects specified timezone."""
-        agg = Aggregation(target_timeframes=["1h"], asset_class="equities", timezone="US/Pacific")
+        agg = Aggregation(AggregationConfig(target_timeframes=["1h"], asset_class="equities", timezone="US/Pacific"))
 
         assert agg.timezone == "US/Pacific"
 
     def test_auto_hour_boundary_detection(self):
         """Test automatic hour boundary detection based on timeframe."""
         # Hourly and above should use asset class defaults
-        hourly_agg = Aggregation(target_timeframes=["1h"])
-        daily_agg = Aggregation(target_timeframes=["1d"])
-        weekly_agg = Aggregation(target_timeframes=["1w"])
+        hourly_agg = Aggregation(AggregationConfig(target_timeframes=["1h"]))
+        daily_agg = Aggregation(AggregationConfig(target_timeframes=["1d"]))
+        weekly_agg = Aggregation(AggregationConfig(target_timeframes=["1w"]))
 
         assert hourly_agg.hour_boundary is False  # Equities default
         assert daily_agg.hour_boundary is False  # Equities default
         assert weekly_agg.hour_boundary is False  # Equities default
 
         # Sub-hourly should use asset class defaults
-        minute_agg = Aggregation(target_timeframes=["5min"])
+        minute_agg = Aggregation(AggregationConfig(target_timeframes=["5min"]))
         assert minute_agg.hour_boundary is False  # Equities default
 
     def test_hour_boundary_asset_class_defaults(self):
         """Test that hour_boundary defaults are applied correctly per asset class."""
         # Test crypto default (True)
-        crypto_agg = Aggregation(target_timeframes=["1h"], asset_class="crypto")
+        crypto_agg = Aggregation(AggregationConfig(target_timeframes=["1h"], asset_class="crypto"))
         assert crypto_agg.hour_boundary is True
 
         # Test equities default (False)
-        equities_agg = Aggregation(target_timeframes=["1h"], asset_class="equities")
+        equities_agg = Aggregation(AggregationConfig(target_timeframes=["1h"], asset_class="equities"))
         assert equities_agg.hour_boundary is False
 
         # Test fx default (True)
-        fx_agg = Aggregation(target_timeframes=["1h"], asset_class="fx")
+        fx_agg = Aggregation(AggregationConfig(target_timeframes=["1h"], asset_class="fx"))
         assert fx_agg.hour_boundary is True
 
         # Test explicit override still works
-        explicit_agg = Aggregation(target_timeframes=["1h"], asset_class="crypto", hour_boundary=False)
+        explicit_agg = Aggregation(
+            AggregationConfig(target_timeframes=["1h"], asset_class="crypto", hour_boundary=False)
+        )
         assert explicit_agg.hour_boundary is False
 
     def test_timeframe_parsing(self):
         """Test that timeframe parsing works correctly."""
-        agg = Aggregation(target_timeframes=["15min"])
+        agg = Aggregation(AggregationConfig(target_timeframes=["15min"]))
 
         assert agg.target_timeframes == ["15min"]
 
     def test_invalid_timeframe_raises_error(self):
         """Test that invalid timeframe format raises ValueError."""
         with pytest.raises(ValueError, match="Invalid timeframe 'invalid'"):
-            Aggregation(target_timeframes=["invalid"])
+            Aggregation(AggregationConfig(target_timeframes=["invalid"]))
 
     def test_timeframe_validation_standard_formats(self):
         """Test that all expected standard timeframes are accepted."""
@@ -132,7 +150,7 @@ class TestAggregationInit:
 
         for tf in valid_timeframes:
             # Should not raise any exception
-            agg = Aggregation(target_timeframes=[tf])
+            agg = Aggregation(AggregationConfig(target_timeframes=[tf]))
             assert agg.target_timeframes[0] == tf
 
     def test_timeframe_validation_polars_formats(self):
@@ -141,18 +159,18 @@ class TestAggregationInit:
         # Test all supported timeframes from the mapping
         for tf in TimeframeConfig.TIMEFRAME_TO_POLARS.keys():
             # Should not raise any exception
-            agg = Aggregation(target_timeframes=[tf])
+            agg = Aggregation(AggregationConfig(target_timeframes=[tf]))
             assert agg.target_timeframes[0] == tf
 
     def test_timeframe_validation_empty_string(self):
-        """Test that empty timeframe raises ValueError."""
-        with pytest.raises(ValueError, match="Timeframe cannot be empty"):
-            Aggregation(target_timeframes=[""])
+        """Test that empty timeframe raises ValidationError."""
+        with pytest.raises(ValidationError, match=r"target_timeframes\[0\] must be a non-empty string"):
+            Aggregation(AggregationConfig(target_timeframes=[""]))
 
     def test_timeframe_validation_non_string(self):
-        """Test that non-string timeframe raises TypeError."""
-        with pytest.raises(TypeError, match="Timeframe must be a string"):
-            Aggregation(target_timeframes=[123])
+        """Test that non-string timeframe raises ValidationError."""
+        with pytest.raises(ValidationError, match="Input should be a valid string"):
+            Aggregation(AggregationConfig(target_timeframes=[123]))
 
     def test_timeframe_validation_unsupported_format(self):
         """Test that unsupported timeframe formats raise ValueError."""
@@ -160,14 +178,16 @@ class TestAggregationInit:
 
         for tf in invalid_timeframes:
             with pytest.raises(ValueError, match=f"Invalid timeframe '{tf}'"):
-                Aggregation(target_timeframes=[tf])
+                Aggregation(AggregationConfig(target_timeframes=[tf]))
 
     def test_timezone_resolution_asset_class_default(self):
         """Test timezone resolution uses asset class default."""
         agg = Aggregation(
-            target_timeframes=["1h"],
-            asset_class="equities",  # Non-UTC asset class
-            timezone=None,  # Should use asset class default
+            AggregationConfig(
+                target_timeframes=["1h"],
+                asset_class="equities",  # Non-UTC asset class
+                timezone=None,  # Should use asset class default
+            )
         )
 
         assert agg.timezone == "US/Eastern"
@@ -187,7 +207,7 @@ class TestAggregationValidation:
     @pytest.fixture
     def aggregation(self):
         """Create aggregation component for testing."""
-        return Aggregation(target_timeframes=["1h"], asset_class="equities")
+        return Aggregation(create_equity_aggregation_config())
 
     def test_validate_input_valid_data(self, aggregation, valid_ohlc_data):
         """Test validation passes for valid OHLC data."""
@@ -249,7 +269,7 @@ class TestAggregationOHLC:
 
     def test_aggregate_to_hourly(self, minute_data):
         """Test aggregation from minutes to hourly."""
-        agg = Aggregation(target_timeframes=["1h"], asset_class="equities")
+        agg = Aggregation(create_equity_aggregation_config())
         result = agg.process(minute_data)
 
         assert isinstance(result, pl.DataFrame)
@@ -278,7 +298,7 @@ class TestAggregationOHLC:
             }
         )
 
-        agg = Aggregation(target_timeframes=["5min"], asset_class="equities")
+        agg = Aggregation(AggregationConfig(target_timeframes=["5min"], asset_class="equities"))
         result = agg.process(data_with_symbol)
 
         assert "symbol" in result.columns
@@ -300,7 +320,7 @@ class TestAggregationOHLC:
             }
         )
 
-        agg = Aggregation(target_timeframes=["5min"], asset_class="equities")
+        agg = Aggregation(AggregationConfig(target_timeframes=["5min"], asset_class="equities"))
         result = agg.process(data_with_volume)
 
         assert "volume" in result.columns
@@ -323,7 +343,7 @@ class TestAggregationOHLC:
             }
         )
 
-        agg = Aggregation(target_timeframes=["5min"], asset_class="equities")
+        agg = Aggregation(AggregationConfig(target_timeframes=["5min"], asset_class="equities"))
         result = agg.process(data_without_volume)
 
         # Should not have volume column since it wasn't provided
@@ -336,7 +356,7 @@ class TestAggregationOHLC:
         # Create data in random order
         shuffled_data = minute_data.sample(fraction=1.0, shuffle=True, seed=42)
 
-        agg = Aggregation(target_timeframes=["30min"], asset_class="equities")
+        agg = Aggregation(AggregationConfig(target_timeframes=["30min"], asset_class="equities"))
         result = agg.process(shuffled_data)
 
         # Result should be sorted by timestamp
@@ -361,7 +381,7 @@ class TestTimezoneHandling:
             }
         )
 
-        agg = Aggregation(target_timeframes=["1h"], asset_class="equities", timezone="US/Eastern")
+        agg = Aggregation(AggregationConfig(target_timeframes=["1h"], asset_class="equities", timezone="US/Eastern"))
         result = agg.normalize_timezone(naive_data)
 
         # Should have timezone-aware timestamps
@@ -383,11 +403,13 @@ class TestTimezoneHandling:
             }
         )
 
-        agg = Aggregation(target_timeframes=["1h"], asset_class="crypto")  # UTC timezone
+        agg = Aggregation(create_crypto_aggregation_config())  # UTC timezone
         result = agg.normalize_timezone(aware_data)
 
         # Should preserve timezone-aware format
-        assert result.schema["timestamp"].time_zone == "UTC"
+        timestamp_dtype = result.schema["timestamp"]
+        assert isinstance(timestamp_dtype, pl.Datetime)
+        assert timestamp_dtype.time_zone == "UTC"
 
 
 @pytest.mark.unit
@@ -409,7 +431,7 @@ class TestAllAssetClasses:
     def test_all_asset_classes_supported(self):
         """Test that all asset classes in ASSET_CLASS_CONFIGS work."""
         for asset_class in ASSET_CLASS_CONFIGS.keys():
-            agg = Aggregation(target_timeframes=["1h"], asset_class=asset_class)
+            agg = Aggregation(AggregationConfig(target_timeframes=["1h"], asset_class=asset_class))
             assert agg.asset_class == asset_class
             assert agg.timezone is not None
             assert agg.session_start is not None
@@ -418,7 +440,7 @@ class TestAllAssetClasses:
         """Test crypto aggregation with 24/7 data."""
         crypto_data = create_crypto_data("BTC-USD")
 
-        agg = Aggregation(target_timeframes=["1h"], asset_class="crypto")
+        agg = Aggregation(create_crypto_aggregation_config())
         result = agg.process(crypto_data)
 
         assert isinstance(result, pl.DataFrame)
@@ -445,7 +467,7 @@ class TestAllAssetClasses:
         """Test equities aggregation with market hours consideration."""
         equities_data = create_market_hours_data("AAPL")
 
-        agg = Aggregation(target_timeframes=["1h"], asset_class="equities")
+        agg = Aggregation(create_equity_aggregation_config())
         result = agg.process(equities_data)
 
         assert isinstance(result, pl.DataFrame)
@@ -464,7 +486,7 @@ class TestAllAssetClasses:
         fx_data = create_forex_data("EUR/USD")
 
         # Try to set different timezone - should be overridden to UTC
-        agg = Aggregation(target_timeframes=["30min"], asset_class="fx", timezone="US/Eastern")
+        agg = Aggregation(AggregationConfig(target_timeframes=["30min"], asset_class="fx", timezone="US/Eastern"))
         result = agg.process(fx_data)
 
         assert isinstance(result, pl.DataFrame)
@@ -492,7 +514,7 @@ class TestAssetClassTimezoneHandling:
             timezones_to_try = ["US/Eastern", "US/Pacific", "Asia/Tokyo", "Europe/London"]
 
             for tz in timezones_to_try:
-                agg = Aggregation(target_timeframes=["1h"], asset_class=asset_class, timezone=tz)
+                agg = Aggregation(AggregationConfig(target_timeframes=["1h"], asset_class=asset_class, timezone=tz))
                 assert agg.timezone == "UTC", f"{asset_class} should force UTC, got {agg.timezone}"
 
     def test_timezone_flexibility_equities(self):
@@ -500,7 +522,7 @@ class TestAssetClassTimezoneHandling:
         timezones_to_test = ["US/Eastern", "US/Pacific", "US/Central"]
 
         for tz in timezones_to_test:
-            agg = Aggregation(target_timeframes=["1h"], asset_class="equities", timezone=tz)
+            agg = Aggregation(AggregationConfig(target_timeframes=["1h"], asset_class="equities", timezone=tz))
             assert agg.timezone == tz, f"Equities should use specified timezone {tz}"
 
     def test_session_start_consistency(self):
@@ -512,7 +534,7 @@ class TestAssetClassTimezoneHandling:
         }
 
         for asset_class, expected_start in expected_sessions.items():
-            agg = Aggregation(target_timeframes=["1h"], asset_class=asset_class)
+            agg = Aggregation(AggregationConfig(target_timeframes=["1h"], asset_class=asset_class))
             assert agg.session_start == expected_start
 
 
@@ -527,7 +549,7 @@ class TestMultiTimezoneConsistency:
         results = {}
         for tz, data in timezone_data.items():
             # Use equities so timezone is respected
-            agg = Aggregation(target_timeframes=["1h"], asset_class="equities", timezone=tz)
+            agg = Aggregation(AggregationConfig(target_timeframes=["1h"], asset_class="equities", timezone=tz))
             results[tz] = agg.process(data)
 
         # All results should have same structure
@@ -567,7 +589,7 @@ class TestMultiTimezoneConsistency:
             }
         )
 
-        agg = Aggregation(target_timeframes=["1h"], asset_class="equities", timezone="US/Eastern")
+        agg = Aggregation(AggregationConfig(target_timeframes=["1h"], asset_class="equities", timezone="US/Eastern"))
 
         naive_result = agg.process(naive_data)
         aware_result = agg.process(aware_data)
@@ -588,7 +610,7 @@ class TestAssetClassSpecificFeatures:
         # Create 3 days of continuous hourly data
         crypto_data = create_crypto_data("ETH-USD")
 
-        agg = Aggregation(target_timeframes=["1d"], asset_class="crypto")
+        agg = Aggregation(AggregationConfig(target_timeframes=["1d"], asset_class="crypto"))
         result = agg.process(crypto_data)
 
         assert len(result) >= 2  # Should get at least 2 daily bars
@@ -603,7 +625,7 @@ class TestAssetClassSpecificFeatures:
         # Create market hours data that spans multiple days
         market_data = create_market_hours_data("SPY")
 
-        agg = Aggregation(target_timeframes=["1d"], asset_class="equities")
+        agg = Aggregation(AggregationConfig(target_timeframes=["1d"], asset_class="equities"))
         result = agg.process(market_data)
 
         assert len(result) >= 1
@@ -619,7 +641,7 @@ class TestAssetClassSpecificFeatures:
         # Create 7 days of forex data (should have weekend gap)
         fx_data = create_forex_data("GBP/USD")
 
-        agg = Aggregation(target_timeframes=["1d"], asset_class="fx")
+        agg = Aggregation(AggregationConfig(target_timeframes=["1d"], asset_class="fx"))
         result = agg.process(fx_data)
 
         # Should handle weekend gaps gracefully
@@ -633,7 +655,7 @@ class TestAssetClassSpecificFeatures:
         asset_classes = ["crypto", "equities", "fx"]
 
         for asset_class in asset_classes:
-            agg = Aggregation(target_timeframes=["1d"], asset_class=asset_class)
+            agg = Aggregation(AggregationConfig(target_timeframes=["1d"], asset_class=asset_class))
             result = agg.process(test_data)
 
             assert "volume" in result.columns
@@ -660,7 +682,7 @@ class TestDSTSpringForward:
         # Create data spanning spring forward transition
         spring_data = create_dst_transition_data("spring_forward", "US/Eastern")
 
-        agg = Aggregation(target_timeframes=["1h"], asset_class="equities", timezone="US/Eastern")
+        agg = Aggregation(AggregationConfig(target_timeframes=["1h"], asset_class="equities", timezone="US/Eastern"))
         result = agg.process(spring_data)
 
         assert isinstance(result, pl.DataFrame)
@@ -690,7 +712,7 @@ class TestDSTSpringForward:
         """Test daily aggregation spanning spring forward transition."""
         spring_data = create_dst_transition_data("spring_forward", "US/Eastern")
 
-        agg = Aggregation(target_timeframes=["1d"], asset_class="equities", timezone="US/Eastern")
+        agg = Aggregation(AggregationConfig(target_timeframes=["1d"], asset_class="equities", timezone="US/Eastern"))
         result = agg.process(spring_data)
 
         assert isinstance(result, pl.DataFrame)
@@ -712,7 +734,7 @@ class TestDSTSpringForward:
         """Test 30-minute aggregation during spring forward."""
         spring_data = create_dst_transition_data("spring_forward", "US/Eastern")
 
-        agg = Aggregation(target_timeframes=["30min"], asset_class="equities", timezone="US/Eastern")
+        agg = Aggregation(AggregationConfig(target_timeframes=["30min"], asset_class="equities", timezone="US/Eastern"))
         result = agg.process(spring_data)
 
         assert isinstance(result, pl.DataFrame)
@@ -771,7 +793,7 @@ class TestDSTFallBack:
         """
         fall_data = create_dst_transition_data("fall_back", "US/Eastern")
 
-        agg = Aggregation(target_timeframes=["1h"], asset_class="equities", timezone="US/Eastern")
+        agg = Aggregation(AggregationConfig(target_timeframes=["1h"], asset_class="equities", timezone="US/Eastern"))
         result = agg.process(fall_data)
 
         assert isinstance(result, pl.DataFrame)
@@ -828,7 +850,7 @@ class TestDSTFallBack:
         """
         fall_data = create_dst_transition_data("fall_back", "US/Eastern")
 
-        agg = Aggregation(target_timeframes=["1d"], asset_class="equities", timezone="US/Eastern")
+        agg = Aggregation(AggregationConfig(target_timeframes=["1d"], asset_class="equities", timezone="US/Eastern"))
         result = agg.process(fall_data)
 
         assert isinstance(result, pl.DataFrame)
@@ -885,7 +907,7 @@ class TestDSTFallBack:
         """
         fall_data = create_dst_transition_data("fall_back", "US/Eastern")
 
-        agg = Aggregation(target_timeframes=["15min"], asset_class="equities", timezone="US/Eastern")
+        agg = Aggregation(AggregationConfig(target_timeframes=["15min"], asset_class="equities", timezone="US/Eastern"))
         result = agg.process(fall_data)
 
         assert isinstance(result, pl.DataFrame)
@@ -911,8 +933,10 @@ class TestDSTTimezoneConsistency:
         utc_data = create_dst_transition_data("spring_forward", "UTC")
 
         # Test with equities (timezone-sensitive)
-        agg_eastern = Aggregation(target_timeframes=["1h"], asset_class="equities", timezone="US/Eastern")
-        agg_utc = Aggregation(target_timeframes=["1h"], asset_class="equities", timezone="UTC")
+        agg_eastern = Aggregation(
+            AggregationConfig(target_timeframes=["1h"], asset_class="equities", timezone="US/Eastern")
+        )
+        agg_utc = Aggregation(AggregationConfig(target_timeframes=["1h"], asset_class="equities", timezone="UTC"))
 
         result_eastern = agg_eastern.process(eastern_data)
         result_utc = agg_utc.process(utc_data)
@@ -939,7 +963,7 @@ class TestDSTTimezoneConsistency:
         # Try to use Eastern timezone with crypto during DST
         dst_data = create_dst_transition_data("spring_forward", "US/Eastern")
 
-        agg = Aggregation(target_timeframes=["1h"], asset_class="crypto", timezone="US/Eastern")
+        agg = Aggregation(AggregationConfig(target_timeframes=["1h"], asset_class="crypto", timezone="US/Eastern"))
         result = agg.process(dst_data)
 
         # Should force UTC timezone regardless of input
@@ -953,7 +977,7 @@ class TestDSTTimezoneConsistency:
         """Test that FX forces UTC timezone even during DST periods."""
         dst_data = create_dst_transition_data("fall_back", "US/Eastern")
 
-        agg = Aggregation(target_timeframes=["30min"], asset_class="fx", timezone="US/Eastern")
+        agg = Aggregation(AggregationConfig(target_timeframes=["30min"], asset_class="fx", timezone="US/Eastern"))
         result = agg.process(dst_data)
 
         # Should force UTC timezone
@@ -973,7 +997,11 @@ class TestDSTBoundaryAlignment:
         spring_data = create_dst_transition_data("spring_forward", "US/Eastern")
 
         # Explicitly set hour_boundary=True to test hour boundary alignment
-        agg = Aggregation(target_timeframes=["1h"], asset_class="equities", timezone="US/Eastern", hour_boundary=True)
+        agg = Aggregation(
+            AggregationConfig(
+                target_timeframes=["1h"], asset_class="equities", timezone="US/Eastern", hour_boundary=True
+            )
+        )
         result = agg.process(spring_data)
 
         # hour_boundary was explicitly set to True
@@ -1027,7 +1055,7 @@ class TestDSTBoundaryAlignment:
         """
         fall_data = create_dst_transition_data("fall_back", "US/Eastern")
 
-        agg = Aggregation(target_timeframes=["1d"], asset_class="equities", timezone="US/Eastern")
+        agg = Aggregation(AggregationConfig(target_timeframes=["1d"], asset_class="equities", timezone="US/Eastern"))
         result = agg.process(fall_data)
 
         # hour_boundary uses equities default (False)
@@ -1048,7 +1076,7 @@ class TestDSTBoundaryAlignment:
         timeframes = ["5min", "15min", "30min"]
 
         for tf in timeframes:
-            agg = Aggregation(target_timeframes=[tf], asset_class="equities", timezone="US/Eastern")
+            agg = Aggregation(AggregationConfig(target_timeframes=[tf], asset_class="equities", timezone="US/Eastern"))
             result = agg.process(spring_data)
 
             # hour_boundary uses equities default (False)
@@ -1082,7 +1110,7 @@ class TestDSTEdgeCases:
         # Take only a few rows around the transition
         minimal_data = spring_data.head(10)
 
-        agg = Aggregation(target_timeframes=["1h"], asset_class="equities", timezone="US/Eastern")
+        agg = Aggregation(AggregationConfig(target_timeframes=["1h"], asset_class="equities", timezone="US/Eastern"))
         result = agg.process(minimal_data)
 
         # Should handle gracefully even with minimal data
@@ -1133,7 +1161,7 @@ class TestDSTEdgeCases:
         # Create year-long data that includes both spring forward and fall back
         year_data = create_long_term_data(days=365, freq_minutes=60, symbol="TEST")
 
-        agg = Aggregation(target_timeframes=["1d"], asset_class="equities", timezone="US/Eastern")
+        agg = Aggregation(AggregationConfig(target_timeframes=["1d"], asset_class="equities", timezone="US/Eastern"))
         result = agg.process(year_data)
 
         assert isinstance(result, pl.DataFrame)
@@ -1151,7 +1179,7 @@ class TestDSTEdgeCases:
         asset_classes = ["crypto", "equities", "fx"]
 
         for asset_class in asset_classes:
-            agg = Aggregation(target_timeframes=["1h"], asset_class=asset_class)
+            agg = Aggregation(AggregationConfig(target_timeframes=["1h"], asset_class=asset_class))
             result = agg.process(spring_data)
 
             assert isinstance(result, pl.DataFrame)
@@ -1179,14 +1207,14 @@ class TestAllTimeframes:
     def test_all_timeframe_mappings_exist(self):
         """Test that all timeframes in TIMEFRAME_TO_POLARS are valid."""
         # Test that we can create Aggregation objects for all timeframes
-        for input_tf, _polars_tf in TimeframeConfig.TIMEFRAME_TO_POLARS.items():
-            agg = Aggregation(target_timeframes=[input_tf])
+        for input_tf in TimeframeConfig.TIMEFRAME_TO_POLARS.keys():
+            agg = Aggregation(AggregationConfig(target_timeframes=[input_tf]))
             assert agg.target_timeframes[0] == input_tf
 
     @pytest.mark.parametrize("timeframe", ["1min", "5min", "15min", "30min"])
     def test_sub_hourly_aggregation(self, timeframe):
         """Test aggregation for sub-hourly timeframes."""
-        agg = Aggregation(target_timeframes=[timeframe], asset_class="equities")
+        agg = Aggregation(AggregationConfig(target_timeframes=[timeframe], asset_class="equities"))
 
         # Create test data
         test_data = create_long_term_data(days=1, freq_minutes=1, symbol="SPY")
@@ -1202,7 +1230,7 @@ class TestAllTimeframes:
     @pytest.mark.parametrize("timeframe", ["1h", "4h", "6h", "12h"])
     def test_hourly_aggregation(self, timeframe):
         """Test aggregation for hourly timeframes including new 6h and 12h."""
-        agg = Aggregation(target_timeframes=[timeframe], asset_class="equities")
+        agg = Aggregation(AggregationConfig(target_timeframes=[timeframe], asset_class="equities"))
 
         test_data = create_long_term_data(days=7, freq_minutes=60, symbol="SPY")
         result = agg.process(test_data)
@@ -1242,7 +1270,11 @@ class TestAllTimeframes:
         )
 
         # Test equities with session_start=09:30 and hour_boundary=False
-        agg = Aggregation(target_timeframes=["1h"], asset_class="equities", session_start="09:30", hour_boundary=False)
+        agg = Aggregation(
+            AggregationConfig(
+                target_timeframes=["1h"], asset_class="equities", session_start="09:30", hour_boundary=False
+            )
+        )
 
         result = agg.process(test_data)
 
@@ -1269,7 +1301,7 @@ class TestTimeframeEdgeCases:
 
         timeframes = ["1h", "4h", "1d"]
         for tf in timeframes:
-            agg = Aggregation(target_timeframes=[tf], asset_class="equities")
+            agg = Aggregation(AggregationConfig(target_timeframes=[tf], asset_class="equities"))
             result = agg.process(minimal_data)
 
             # Should handle gracefully - might produce 0-N results
@@ -1286,7 +1318,7 @@ class TestNewMultiTimeframeFeatures:
         data = create_long_term_data(days=1, freq_minutes=1, symbol="AAPL")
         data = data.head(60)  # One hour
 
-        agg = Aggregation(target_timeframes=["5min", "15min", "30min"])
+        agg = Aggregation(AggregationConfig(target_timeframes=["5min", "15min", "30min"]))
         result = agg.process(data)
 
         # Should have timeframe column
@@ -1316,7 +1348,7 @@ class TestNewMultiTimeframeFeatures:
         for part in data_parts[1:]:
             multi_symbol_data = multi_symbol_data.vstack(part)
 
-        agg = Aggregation(target_timeframes=["15min", "1h"])
+        agg = Aggregation(AggregationConfig(target_timeframes=["15min", "1h"]))
         result = agg.process(multi_symbol_data)
 
         # Verify structure
@@ -1336,7 +1368,7 @@ class TestNewMultiTimeframeFeatures:
         data = create_long_term_data(days=1, freq_minutes=1, symbol="TEST")
         data = data.head(30)  # 30 minutes of data
 
-        agg = Aggregation(target_timeframes=["5min"])  # Single timeframe as string
+        agg = Aggregation(create_aggregation_config(target_timeframes=["5min"]))  # Single timeframe as string
         result = agg.process(data)
 
         # Should still have timeframe column
@@ -1353,23 +1385,23 @@ class TestAggregationEdgeCases:
     """Test cases for Aggregation edge cases and error conditions."""
 
     def test_target_timeframes_not_list_raises_typeerror(self):
-        """Test that passing non-list target_timeframes raises TypeError."""
-        with pytest.raises(TypeError) as exc_info:
-            Aggregation(target_timeframes="5min")  # String instead of list
-        assert "target_timeframes must be a list" in str(exc_info.value)
+        """Test that passing non-list target_timeframes raises ValidationError."""
+        with pytest.raises(ValidationError) as exc_info:
+            Aggregation(AggregationConfig(target_timeframes="5min"))  # String instead of list
+        assert "Input should be a valid list" in str(exc_info.value)
 
     def test_target_timeframes_empty_list_raises_valueerror(self):
-        """Test that passing empty list for target_timeframes raises ValueError."""
-        with pytest.raises(ValueError) as exc_info:
-            Aggregation(target_timeframes=[])  # Empty list
-        assert "target_timeframes cannot be empty" in str(exc_info.value)
+        """Test that passing empty list for target_timeframes raises ValidationError."""
+        with pytest.raises(ValidationError) as exc_info:
+            Aggregation(AggregationConfig(target_timeframes=[]))  # Empty list
+        assert "List should have at least 1 item" in str(exc_info.value)
 
     def test_unsupported_timeframe_raises_valueerror(self):
         """Test that unsupported timeframe format raises ValueError."""
         data = create_long_term_data(days=1, freq_minutes=1)
         data = data.head(60)  # 1 hour of data
 
-        agg = Aggregation(target_timeframes=["5min"])
+        agg = Aggregation(create_aggregation_config(target_timeframes=["5min"]))
 
         # This should work normally first
         result = agg.process(data)
@@ -1388,7 +1420,7 @@ class TestAggregationEdgeCases:
 
     def test_input_validation_failure_raises_valueerror(self):
         """Test that input validation failure raises ValueError."""
-        agg = Aggregation(target_timeframes=["5min"])
+        agg = Aggregation(create_aggregation_config(target_timeframes=["5min"]))
 
         # Test with invalid data structure (missing required columns)
         invalid_data = pl.DataFrame({"wrong_column": [1, 2, 3], "another_wrong": ["a", "b", "c"]})
@@ -1404,7 +1436,7 @@ class TestAggregationPrivateMethods:
 
     def test_should_use_hour_boundary_supported_timeframes(self):
         """Test _should_use_hour_boundary with supported timeframe strings."""
-        agg = Aggregation(target_timeframes=["1h"])
+        agg = Aggregation(create_aggregation_config())
 
         # Test supported hourly and higher timeframes
         assert agg._should_use_hour_boundary("1h") is True
@@ -1417,7 +1449,7 @@ class TestAggregationPrivateMethods:
 
     def test_should_use_hour_boundary_polars_style_patterns(self):
         """Test _should_use_hour_boundary with polars-style timeframe patterns."""
-        agg = Aggregation(target_timeframes=["1h"])
+        agg = Aggregation(create_aggregation_config())
 
         # Test polars-style patterns (case insensitive)
         assert agg._should_use_hour_boundary("2h") is True
@@ -1437,7 +1469,7 @@ class TestAggregationPrivateMethods:
 
     def test_should_use_hour_boundary_edge_cases(self):
         """Test _should_use_hour_boundary edge cases and invalid patterns."""
-        agg = Aggregation(target_timeframes=["1h"])
+        agg = Aggregation(create_aggregation_config())
 
         # Invalid patterns should return False
         assert agg._should_use_hour_boundary("invalid") is False
@@ -1447,7 +1479,7 @@ class TestAggregationPrivateMethods:
 
     def test_is_hourly_or_higher_various_formats(self):
         """Test _is_hourly_or_higher with various timeframe formats."""
-        agg = Aggregation(target_timeframes=["1h"])
+        agg = Aggregation(create_aggregation_config())
 
         # Test explicit hourly patterns
         assert agg._is_hourly_or_higher("1h") is True

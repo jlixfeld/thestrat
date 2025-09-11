@@ -17,7 +17,7 @@ class ConcreteComponent(Component):
     def process(self, data):
         return self._convert_to_polars(data)
 
-    def validate_input(self, data):
+    def validate_input(self, _data):
         return True
 
 
@@ -113,7 +113,7 @@ class TestComponent:
         """Test that abstract methods must be implemented in subclasses."""
         with pytest.raises(TypeError):
             # Should raise TypeError because abstract methods not implemented
-            Component()
+            Component()  # type: ignore[abstract] - Intentionally instantiating abstract class to test error handling
 
     def test_config_parameter_optional(self):
         """Test component initialization without parameters."""
@@ -186,12 +186,12 @@ class TestAbstractMethods:
 
         # Create a concrete class that doesn't implement process method
         class IncompleteComponent(Component):
-            def validate_input(self, data):
+            def validate_input(self, _data):
                 return True
 
         # Should raise TypeError when trying to instantiate
         with pytest.raises(TypeError) as exc_info:
-            IncompleteComponent()
+            IncompleteComponent()  # type: ignore[abstract] - Testing that class missing process() method fails
         assert "Can't instantiate abstract class" in str(exc_info.value)
         assert "process" in str(exc_info.value)
 
@@ -201,12 +201,12 @@ class TestAbstractMethods:
 
         # Create a concrete class that doesn't implement validate_input method
         class IncompleteComponent(Component):
-            def process(self, data):
-                return data
+            def process(self, _data):
+                return _data
 
         # Should raise TypeError when trying to instantiate
         with pytest.raises(TypeError) as exc_info:
-            IncompleteComponent()
+            IncompleteComponent()  # type: ignore[abstract] - Testing that class missing validate_input() method fails
         assert "Can't instantiate abstract class" in str(exc_info.value)
         assert "validate_input" in str(exc_info.value)
 
@@ -219,7 +219,7 @@ class TestAbstractMethods:
             def process(self, data):
                 return self._convert_to_polars(data)
 
-            def validate_input(self, data):
+            def validate_input(self, _data):
                 return True
 
         # Should instantiate successfully
@@ -248,15 +248,15 @@ class TestAbstractMethods:
         from thestrat.base import Component
 
         # Create a class that temporarily bypasses ABC to access pass statements
-        class DirectCallComponent(Component):
+        class _DirectCallComponent(Component):
             def process(self, data):
                 # Call the parent abstract method directly to hit the pass statement
-                return super(Component, self).process(data) if hasattr(super(Component, self), "process") else None
+                return super(Component, self).process(data) if hasattr(super(Component, self), "process") else None  # type: ignore[misc] - Intentional call to abstract method for test coverage
 
             def validate_input(self, data):
                 # Call the parent abstract method directly to hit the pass statement
                 return (
-                    super(Component, self).validate_input(data)
+                    super(Component, self).validate_input(data)  # type: ignore[misc] - Intentional call to abstract method for test coverage
                     if hasattr(super(Component, self), "validate_input")
                     else True
                 )

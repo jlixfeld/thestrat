@@ -26,7 +26,7 @@ Understanding how different asset classes work within the framework.
 
 Before using TheStrat, you should have:
 
-- **Python 3.10 or higher** installed
+- **Python 3.11 or higher** installed
 - Basic understanding of financial markets and OHLCV data
 - Familiarity with Python data structures (pandas/polars DataFrames)
 

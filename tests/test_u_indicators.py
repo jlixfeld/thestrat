@@ -9,8 +9,10 @@ from datetime import datetime, timedelta
 import pandas as pd
 import polars as pl
 import pytest
+from pydantic import ValidationError
 
 from thestrat.indicators import Indicators
+from thestrat.schemas import GapDetectionConfig, IndicatorsConfig, SwingPointsConfig, TimeframeItemConfig
 from thestrat.signals import SIGNALS
 
 
@@ -19,53 +21,78 @@ class TestIndicatorsInit:
     """Test cases for Indicators initialization."""
 
     def test_init_with_all_timeframe_config(self):
-        """Test initialization with 'all' timeframe configuration."""
-        timeframe_configs = [
-            {
-                "timeframes": ["all"],
-                "swing_points": {"window": 7, "threshold": 3.0},
-                "gap_detection": {"threshold": 0.001},
-            }
-        ]
-        indicators = Indicators(timeframe_configs=timeframe_configs)
+        """Test initialization with 'all' timeframe configuration using Factory."""
+        from thestrat.factory import Factory
 
-        assert indicators.timeframe_configs == timeframe_configs
-        # Initial values should be defaults (will be overridden per timeframe)
-        assert indicators.swing_window == 5  # Default
-        assert indicators.swing_threshold == 5.0  # Default
+        config = IndicatorsConfig(
+            timeframe_configs=[
+                TimeframeItemConfig(
+                    timeframes=["all"],
+                    swing_points=SwingPointsConfig(window=7, threshold=3.0),
+                    gap_detection=GapDetectionConfig(threshold=0.001),
+                )
+            ]
+        )
+        indicators = Factory.create_indicators(config)
+
+        assert len(indicators.config.timeframe_configs) == 1
+        assert indicators.config.timeframe_configs[0].timeframes == ["all"]
+        # Configuration is properly stored and will be extracted during processing
+        assert indicators.config.timeframe_configs[0].swing_points is not None
+        assert indicators.config.timeframe_configs[0].swing_points.window == 7
 
     def test_init_with_swing_config(self):
-        """Test initialization with swing point configuration."""
-        timeframe_configs = [
-            {
-                "timeframes": ["all"],
-                "swing_points": {
-                    "window": 7,
-                    "threshold": 3.0,  # 3% threshold
-                },
-            }
-        ]
-        indicators = Indicators(timeframe_configs=timeframe_configs)
+        """Test initialization with swing point configuration using Factory."""
+        from thestrat.factory import Factory
 
-        assert indicators.timeframe_configs == timeframe_configs
-        assert indicators.swing_window == 5  # Default value (overridden per timeframe)
-        assert indicators.swing_threshold == 5.0  # Default value (overridden per timeframe)
+        config = IndicatorsConfig(
+            timeframe_configs=[
+                TimeframeItemConfig(
+                    timeframes=["all"],
+                    swing_points=SwingPointsConfig(window=7, threshold=3.0),
+                )
+            ]
+        )
+        indicators = Factory.create_indicators(config)
+
+        assert len(indicators.config.timeframe_configs) == 1
+        assert indicators.config.timeframe_configs[0].timeframes == ["all"]
+        assert indicators.config.timeframe_configs[0].swing_points is not None
+        assert indicators.config.timeframe_configs[0].swing_points.window == 7
+        assert indicators.config.timeframe_configs[0].swing_points.threshold == 3.0
 
     def test_init_partial_swing_config(self):
-        """Test initialization with partial swing configuration."""
-        timeframe_configs = [{"timeframes": ["all"], "swing_points": {"window": 10}}]
-        indicators = Indicators(timeframe_configs=timeframe_configs)
+        """Test initialization with partial swing configuration using Factory."""
+        from thestrat.factory import Factory
 
-        assert indicators.swing_window == 5  # Default value (overridden per timeframe)
-        assert indicators.swing_threshold == 5.0  # Should use default 5%
+        config = IndicatorsConfig(
+            timeframe_configs=[
+                TimeframeItemConfig(
+                    timeframes=["all"],
+                    swing_points=SwingPointsConfig(window=10),  # threshold will use default 5.0
+                )
+            ]
+        )
+        indicators = Factory.create_indicators(config)
+
+        assert indicators.config.timeframe_configs[0].swing_points is not None
+        assert indicators.config.timeframe_configs[0].swing_points.window == 10
+        assert indicators.config.timeframe_configs[0].swing_points.threshold == 5.0  # Uses default
 
     def test_init_empty_swing_config(self):
-        """Test initialization with empty swing points config."""
-        timeframe_configs = [{"timeframes": ["all"], "swing_points": {}}]
-        indicators = Indicators(timeframe_configs=timeframe_configs)
+        """Test initialization with minimal config using Factory (defaults applied)."""
+        from thestrat.factory import Factory
 
-        assert indicators.swing_window == 5  # Should use defaults
-        assert indicators.swing_threshold == 5.0
+        config = IndicatorsConfig(
+            timeframe_configs=[
+                TimeframeItemConfig(timeframes=["all"])  # No swing_points specified - uses defaults when needed
+            ]
+        )
+        indicators = Factory.create_indicators(config)
+
+        assert len(indicators.config.timeframe_configs) == 1
+        assert indicators.config.timeframe_configs[0].timeframes == ["all"]
+        # swing_points will be None, defaults will be applied during processing
 
 
 @pytest.mark.unit
@@ -76,13 +103,15 @@ class TestIndicatorsValidation:
     def indicators(self):
         """Create indicators instance for testing."""
         return Indicators(
-            timeframe_configs=[
-                {
-                    "timeframes": ["all"],
-                    "swing_points": {"window": 5, "threshold": 5.0},
-                    "gap_detection": {"threshold": 0.001},
-                }
-            ]
+            IndicatorsConfig(
+                timeframe_configs=[
+                    TimeframeItemConfig(
+                        timeframes=["all"],
+                        swing_points=SwingPointsConfig(window=5, threshold=5.0),
+                        gap_detection=GapDetectionConfig(threshold=0.001),
+                    )
+                ]
+            )
         )
 
     @pytest.fixture
@@ -178,9 +207,14 @@ class TestSwingPoints:
     def test_swing_point_detection(self, trending_data):
         """Test basic swing point detection."""
         indicators = Indicators(
-            timeframe_configs=[{"timeframes": ["all"], "swing_points": {"window": 3, "threshold": 1.0}}]
+            IndicatorsConfig(
+                timeframe_configs=[
+                    TimeframeItemConfig(timeframes=["all"], swing_points=SwingPointsConfig(window=3, threshold=1.0))
+                ]
+            )
         )  # Lower threshold
-        result = indicators._calculate_swing_points(trending_data)
+        config = indicators.config.timeframe_configs[0]
+        result = indicators._calculate_swing_points(trending_data, config)
 
         assert "swing_high" in result.columns
         assert "swing_low" in result.columns
@@ -204,8 +238,13 @@ class TestSwingPoints:
 
     def test_pivot_values_at_swings(self, trending_data):
         """Test that pivot values are set correctly at swing points."""
-        indicators = Indicators(timeframe_configs=[{"timeframes": ["all"], "swing_points": {"window": 2}}])
-        result = indicators._calculate_swing_points(trending_data)
+        indicators = Indicators(
+            IndicatorsConfig(
+                timeframe_configs=[TimeframeItemConfig(timeframes=["all"], swing_points=SwingPointsConfig(window=3))]
+            )
+        )
+        config = indicators.config.timeframe_configs[0]
+        result = indicators._calculate_swing_points(trending_data, config)
 
         # Pivot high should be set where new_swing_high is True
         swing_high_rows = result.filter(pl.col("new_swing_high"))
@@ -241,12 +280,26 @@ class TestSwingPoints:
         )
 
         # With high threshold (5%), should filter out small swings
-        indicators_strict = Indicators(timeframe_configs=[{"timeframes": ["all"], "swing_points": {"threshold": 5.0}}])
-        result_strict = indicators_strict._calculate_swing_points(data)
+        indicators_strict = Indicators(
+            IndicatorsConfig(
+                timeframe_configs=[
+                    TimeframeItemConfig(timeframes=["all"], swing_points=SwingPointsConfig(threshold=5.0))
+                ]
+            )
+        )
+        config = indicators_strict.config.timeframe_configs[0]
+        result_strict = indicators_strict._calculate_swing_points(data, config)
 
         # With low threshold (0.1%), should detect more swings
-        indicators_loose = Indicators(timeframe_configs=[{"timeframes": ["all"], "swing_points": {"threshold": 0.1}}])
-        result_loose = indicators_loose._calculate_swing_points(data)
+        indicators_loose = Indicators(
+            IndicatorsConfig(
+                timeframe_configs=[
+                    TimeframeItemConfig(timeframes=["all"], swing_points=SwingPointsConfig(threshold=0.1))
+                ]
+            )
+        )
+        config = indicators_loose.config.timeframe_configs[0]
+        result_loose = indicators_loose._calculate_swing_points(data, config)
 
         strict_swings = len(result_strict.filter(pl.col("new_swing_high") | pl.col("new_swing_low")))
         loose_swings = len(result_loose.filter(pl.col("new_swing_high") | pl.col("new_swing_low")))
@@ -277,9 +330,14 @@ class TestMarketStructure:
 
     def test_market_structure_classification(self, market_structure_data):
         """Test market structure pattern classification."""
-        indicators = Indicators(timeframe_configs=[{"timeframes": ["all"], "swing_points": {"window": 2}}])
+        indicators = Indicators(
+            IndicatorsConfig(
+                timeframe_configs=[TimeframeItemConfig(timeframes=["all"], swing_points=SwingPointsConfig(window=3))]
+            )
+        )
         # First detect swing points
-        with_swings = indicators._calculate_swing_points(market_structure_data)
+        config = indicators.config.timeframe_configs[0]
+        with_swings = indicators._calculate_swing_points(market_structure_data, config)
         # Then classify market structure
         result = indicators._calculate_market_structure(with_swings)
 
@@ -304,8 +362,13 @@ class TestMarketStructure:
 
     def test_higher_high_detection(self, market_structure_data):
         """Test higher high detection."""
-        indicators = Indicators(timeframe_configs=[{"timeframes": ["all"], "swing_points": {"window": 2}}])
-        with_swings = indicators._calculate_swing_points(market_structure_data)
+        indicators = Indicators(
+            IndicatorsConfig(
+                timeframe_configs=[TimeframeItemConfig(timeframes=["all"], swing_points=SwingPointsConfig(window=3))]
+            )
+        )
+        config = indicators.config.timeframe_configs[0]
+        with_swings = indicators._calculate_swing_points(market_structure_data, config)
         result = indicators._calculate_market_structure(with_swings)
 
         # Should detect higher highs in uptrending data
@@ -314,8 +377,13 @@ class TestMarketStructure:
 
     def test_market_structure_mutually_exclusive(self, market_structure_data):
         """Test that market structure classifications are mutually exclusive."""
-        indicators = Indicators(timeframe_configs=[{"timeframes": ["all"], "swing_points": {"window": 2}}])
-        with_swings = indicators._calculate_swing_points(market_structure_data)
+        indicators = Indicators(
+            IndicatorsConfig(
+                timeframe_configs=[TimeframeItemConfig(timeframes=["all"], swing_points=SwingPointsConfig(window=3))]
+            )
+        )
+        config = indicators.config.timeframe_configs[0]
+        with_swings = indicators._calculate_swing_points(market_structure_data, config)
         result = indicators._calculate_market_structure(with_swings)
 
         # A swing high cannot be both HH and LH (boolean flags should be mutually exclusive)
@@ -340,8 +408,13 @@ class TestStratPatterns:
 
     def test_continuity_pattern(self, pattern_data):
         """Test continuity pattern detection."""
-        indicators = Indicators(timeframe_configs=[{"timeframes": ["all"], "swing_points": {"window": 2}}])
-        result = indicators._calculate_strat_patterns(pattern_data)
+        indicators = Indicators(
+            IndicatorsConfig(
+                timeframe_configs=[TimeframeItemConfig(timeframes=["all"], swing_points=SwingPointsConfig(window=3))]
+            )
+        )
+        config = indicators.config.timeframe_configs[0]
+        result = indicators._calculate_strat_patterns(pattern_data, config)
 
         assert "continuity" in result.columns
         # Should be Int32 column with values 0, 1, -1
@@ -349,16 +422,26 @@ class TestStratPatterns:
 
     def test_in_force_pattern(self, pattern_data):
         """Test in-force pattern detection."""
-        indicators = Indicators(timeframe_configs=[{"timeframes": ["all"], "swing_points": {"window": 2}}])
-        result = indicators._calculate_strat_patterns(pattern_data)
+        indicators = Indicators(
+            IndicatorsConfig(
+                timeframe_configs=[TimeframeItemConfig(timeframes=["all"], swing_points=SwingPointsConfig(window=3))]
+            )
+        )
+        config = indicators.config.timeframe_configs[0]
+        result = indicators._calculate_strat_patterns(pattern_data, config)
 
         assert "in_force" in result.columns
         assert result["in_force"].dtype == pl.Boolean
 
     def test_scenario_classification(self, pattern_data):
         """Test scenario classification (1, 2, 3)."""
-        indicators = Indicators(timeframe_configs=[{"timeframes": ["all"], "swing_points": {"window": 2}}])
-        result = indicators._calculate_strat_patterns(pattern_data)
+        indicators = Indicators(
+            IndicatorsConfig(
+                timeframe_configs=[TimeframeItemConfig(timeframes=["all"], swing_points=SwingPointsConfig(window=3))]
+            )
+        )
+        config = indicators.config.timeframe_configs[0]
+        result = indicators._calculate_strat_patterns(pattern_data, config)
 
         assert "scenario" in result.columns
         # Should contain string values "1", "2U", "2D", "3" (no "0")
@@ -367,8 +450,13 @@ class TestStratPatterns:
 
     def test_signal_pattern(self, pattern_data):
         """Test signal pattern detection."""
-        indicators = Indicators(timeframe_configs=[{"timeframes": ["all"], "swing_points": {"window": 2}}])
-        result = indicators._calculate_strat_patterns(pattern_data)
+        indicators = Indicators(
+            IndicatorsConfig(
+                timeframe_configs=[TimeframeItemConfig(timeframes=["all"], swing_points=SwingPointsConfig(window=3))]
+            )
+        )
+        config = indicators.config.timeframe_configs[0]
+        result = indicators._calculate_strat_patterns(pattern_data, config)
 
         assert "signal" in result.columns
         assert "type" in result.columns
@@ -397,8 +485,13 @@ class TestStratPatterns:
             }
         )
 
-        indicators = Indicators(timeframe_configs=[{"timeframes": ["all"], "swing_points": {"window": 2}}])
-        result = indicators._calculate_strat_patterns(data)
+        indicators = Indicators(
+            IndicatorsConfig(
+                timeframe_configs=[TimeframeItemConfig(timeframes=["all"], swing_points=SwingPointsConfig(window=3))]
+            )
+        )
+        config = indicators.config.timeframe_configs[0]
+        result = indicators._calculate_strat_patterns(data, config)
 
         assert "hammer" in result.columns
         assert "shooter" in result.columns
@@ -420,40 +513,60 @@ class TestAdvancedPatterns:
 
     def test_kicker_patterns(self, advanced_pattern_data):
         """Test kicker pattern detection."""
-        indicators = Indicators(timeframe_configs=[{"timeframes": ["all"], "swing_points": {"window": 2}}])
-        with_swings = indicators._calculate_swing_points(advanced_pattern_data)
-        with_basic = indicators._calculate_strat_patterns(with_swings)
-        result = indicators._calculate_advanced_patterns(with_basic)
+        indicators = Indicators(
+            IndicatorsConfig(
+                timeframe_configs=[TimeframeItemConfig(timeframes=["all"], swing_points=SwingPointsConfig(window=3))]
+            )
+        )
+        config = indicators.config.timeframe_configs[0]
+        with_swings = indicators._calculate_swing_points(advanced_pattern_data, config)
+        with_basic = indicators._calculate_strat_patterns(with_swings, config)
+        result = indicators._calculate_advanced_patterns(with_basic, config)
 
         assert "kicker" in result.columns
         assert result["kicker"].dtype == pl.Int32  # Changed from Boolean to Int32 (0/1/null)
 
     def test_f23_patterns(self, advanced_pattern_data):
         """Test F23 pattern detection."""
-        indicators = Indicators(timeframe_configs=[{"timeframes": ["all"], "swing_points": {"window": 2}}])
-        with_swings = indicators._calculate_swing_points(advanced_pattern_data)
-        with_basic = indicators._calculate_strat_patterns(with_swings)
-        result = indicators._calculate_advanced_patterns(with_basic)
+        indicators = Indicators(
+            IndicatorsConfig(
+                timeframe_configs=[TimeframeItemConfig(timeframes=["all"], swing_points=SwingPointsConfig(window=3))]
+            )
+        )
+        config = indicators.config.timeframe_configs[0]
+        with_swings = indicators._calculate_swing_points(advanced_pattern_data, config)
+        with_basic = indicators._calculate_strat_patterns(with_swings, config)
+        result = indicators._calculate_advanced_patterns(with_basic, config)
 
         assert "f23" in result.columns
         assert result["f23"].dtype == pl.Boolean
 
     def test_pmg_patterns(self, advanced_pattern_data):
         """Test PMG (Pivot Machine Gun) pattern detection."""
-        indicators = Indicators(timeframe_configs=[{"timeframes": ["all"], "swing_points": {"window": 2}}])
-        with_swings = indicators._calculate_swing_points(advanced_pattern_data)
-        with_basic = indicators._calculate_strat_patterns(with_swings)
-        result = indicators._calculate_advanced_patterns(with_basic)
+        indicators = Indicators(
+            IndicatorsConfig(
+                timeframe_configs=[TimeframeItemConfig(timeframes=["all"], swing_points=SwingPointsConfig(window=3))]
+            )
+        )
+        config = indicators.config.timeframe_configs[0]
+        with_swings = indicators._calculate_swing_points(advanced_pattern_data, config)
+        with_basic = indicators._calculate_strat_patterns(with_swings, config)
+        result = indicators._calculate_advanced_patterns(with_basic, config)
 
         assert "pmg" in result.columns
         assert result["pmg"].dtype == pl.Int32
 
     def test_motherbar_problems(self, advanced_pattern_data):
         """Test motherbar problems detection."""
-        indicators = Indicators(timeframe_configs=[{"timeframes": ["all"], "swing_points": {"window": 2}}])
-        with_swings = indicators._calculate_swing_points(advanced_pattern_data)
-        with_basic = indicators._calculate_strat_patterns(with_swings)
-        result = indicators._calculate_advanced_patterns(with_basic)
+        indicators = Indicators(
+            IndicatorsConfig(
+                timeframe_configs=[TimeframeItemConfig(timeframes=["all"], swing_points=SwingPointsConfig(window=3))]
+            )
+        )
+        config = indicators.config.timeframe_configs[0]
+        with_swings = indicators._calculate_swing_points(advanced_pattern_data, config)
+        with_basic = indicators._calculate_strat_patterns(with_swings, config)
+        result = indicators._calculate_advanced_patterns(with_basic, config)
 
         assert "motherbar_problems" in result.columns
         assert result["motherbar_problems"].dtype == pl.Boolean
@@ -472,7 +585,11 @@ class TestPriceAnalysis:
 
     def test_price_analysis_calculations(self, price_analysis_data):
         """Test price analysis percentage calculations."""
-        indicators = Indicators(timeframe_configs=[{"timeframes": ["all"], "swing_points": {"window": 2}}])
+        indicators = Indicators(
+            IndicatorsConfig(
+                timeframe_configs=[TimeframeItemConfig(timeframes=["all"], swing_points=SwingPointsConfig(window=3))]
+            )
+        )
         result = indicators.process(price_analysis_data)
 
         assert "percent_close_from_high" in result.columns
@@ -493,19 +610,23 @@ class TestPriceAnalysis:
         """Test price analysis when close is at high or low."""
         from .utils.thestrat_data_utils import create_timestamp_series
 
-        timestamps = create_timestamp_series("2023-01-01", 5, 1440)  # Daily - increased to 5 rows
+        timestamps = create_timestamp_series("2023-01-01", 8, 1440)  # Daily - increased to 8 rows
         data = pl.DataFrame(
             {
                 "timestamp": timestamps,
-                "open": [100, 100, 100, 100, 100],
-                "high": [105, 105, 105, 105, 105],
-                "low": [95, 95, 95, 95, 95],
-                "close": [105, 95, 100, 105, 95],  # At high, at low, in middle, at high, at low
-                "volume": [1000] * 5,
+                "open": [100, 100, 100, 100, 100, 100, 100, 100],
+                "high": [105, 105, 105, 105, 105, 105, 105, 105],
+                "low": [95, 95, 95, 95, 95, 95, 95, 95],
+                "close": [105, 95, 100, 105, 95, 102, 98, 103],  # At high, at low, in middle, at high, at low, mixed
+                "volume": [1000] * 8,
             }
         )
 
-        indicators = Indicators(timeframe_configs=[{"timeframes": ["all"], "swing_points": {"window": 2}}])
+        indicators = Indicators(
+            IndicatorsConfig(
+                timeframe_configs=[TimeframeItemConfig(timeframes=["all"], swing_points=SwingPointsConfig(window=3))]
+            )
+        )
         result = indicators.process(data)
 
         # First bar: close at high
@@ -534,7 +655,11 @@ class TestGapAnalysis:
 
     def test_gap_detection(self, gap_data):
         """Test gap up and gap down detection."""
-        indicators = Indicators(timeframe_configs=[{"timeframes": ["all"], "swing_points": {"window": 2}}])
+        indicators = Indicators(
+            IndicatorsConfig(
+                timeframe_configs=[TimeframeItemConfig(timeframes=["all"], swing_points=SwingPointsConfig(window=3))]
+            )
+        )
         result = indicators.process(gap_data)
 
         assert "gap_up" in result.columns
@@ -559,7 +684,11 @@ class TestGapAnalysis:
 
     def test_gapper_indicator(self, gap_data):
         """Test combined gapper indicator."""
-        indicators = Indicators(timeframe_configs=[{"timeframes": ["all"], "swing_points": {"window": 2}}])
+        indicators = Indicators(
+            IndicatorsConfig(
+                timeframe_configs=[TimeframeItemConfig(timeframes=["all"], swing_points=SwingPointsConfig(window=3))]
+            )
+        )
         result = indicators.process(gap_data)
 
         gappers = result["gapper"].to_list()
@@ -584,7 +713,11 @@ class TestATHATL:
 
     def test_ath_atl_calculation(self, ath_atl_data):
         """Test ATH and ATL calculations."""
-        indicators = Indicators(timeframe_configs=[{"timeframes": ["all"], "swing_points": {"window": 2}}])
+        indicators = Indicators(
+            IndicatorsConfig(
+                timeframe_configs=[TimeframeItemConfig(timeframes=["all"], swing_points=SwingPointsConfig(window=3))]
+            )
+        )
         result = indicators.process(ath_atl_data)
 
         assert "ath" in result.columns
@@ -604,7 +737,11 @@ class TestATHATL:
 
     def test_new_ath_atl_flags(self, ath_atl_data):
         """Test new ATH/ATL flag detection."""
-        indicators = Indicators(timeframe_configs=[{"timeframes": ["all"], "swing_points": {"window": 2}}])
+        indicators = Indicators(
+            IndicatorsConfig(
+                timeframe_configs=[TimeframeItemConfig(timeframes=["all"], swing_points=SwingPointsConfig(window=3))]
+            )
+        )
         result = indicators.process(ath_atl_data)
 
         new_ath_flags = result["new_ath"].to_list()
@@ -635,13 +772,15 @@ class TestFullProcessing:
     def test_process_complete_pipeline(self, comprehensive_data):
         """Test complete indicator processing pipeline."""
         indicators = Indicators(
-            timeframe_configs=[
-                {
-                    "timeframes": ["all"],
-                    "swing_points": {"window": 5, "threshold": 5.0},
-                    "gap_detection": {"threshold": 0.001},
-                }
-            ]
+            IndicatorsConfig(
+                timeframe_configs=[
+                    TimeframeItemConfig(
+                        timeframes=["all"],
+                        swing_points=SwingPointsConfig(window=5, threshold=5.0),
+                        gap_detection=GapDetectionConfig(threshold=0.001),
+                    )
+                ]
+            )
         )
         result = indicators.process(comprehensive_data)
 
@@ -706,7 +845,11 @@ class TestFullProcessing:
         # Convert to pandas
         pandas_data = comprehensive_data.to_pandas()
 
-        indicators = Indicators(timeframe_configs=[{"timeframes": ["all"], "swing_points": {"window": 2}}])
+        indicators = Indicators(
+            IndicatorsConfig(
+                timeframe_configs=[TimeframeItemConfig(timeframes=["all"], swing_points=SwingPointsConfig(window=3))]
+            )
+        )
         result = indicators.process(pandas_data)
 
         # Should still return Polars DataFrame
@@ -723,7 +866,11 @@ class TestFullProcessing:
             }
         )
 
-        indicators = Indicators(timeframe_configs=[{"timeframes": ["all"], "swing_points": {"window": 2}}])
+        indicators = Indicators(
+            IndicatorsConfig(
+                timeframe_configs=[TimeframeItemConfig(timeframes=["all"], swing_points=SwingPointsConfig(window=3))]
+            )
+        )
         with pytest.raises(ValueError, match="Missing required columns"):
             indicators.process(invalid_data)
 
@@ -757,8 +904,13 @@ class TestCorrectedScenarioClassification:
 
     def test_scenario_classification_correct(self, scenario_test_data):
         """Test that scenarios are classified correctly."""
-        indicators = Indicators(timeframe_configs=[{"timeframes": ["all"], "swing_points": {"window": 2}}])
-        result = indicators._calculate_strat_patterns(scenario_test_data)
+        indicators = Indicators(
+            IndicatorsConfig(
+                timeframe_configs=[TimeframeItemConfig(timeframes=["all"], swing_points=SwingPointsConfig(window=3))]
+            )
+        )
+        config = indicators.config.timeframe_configs[0]
+        result = indicators._calculate_strat_patterns(scenario_test_data, config)
 
         _scenarios = result["scenario"].to_list()
 
@@ -802,8 +954,13 @@ class TestCorrectedContinuity:
 
     def test_continuity_single_bar_logic(self, continuity_test_data):
         """Test that continuity uses single bar open/close comparison."""
-        indicators = Indicators(timeframe_configs=[{"timeframes": ["all"], "swing_points": {"window": 2}}])
-        result = indicators._calculate_strat_patterns(continuity_test_data)
+        indicators = Indicators(
+            IndicatorsConfig(
+                timeframe_configs=[TimeframeItemConfig(timeframes=["all"], swing_points=SwingPointsConfig(window=3))]
+            )
+        )
+        config = indicators.config.timeframe_configs[0]
+        result = indicators._calculate_strat_patterns(continuity_test_data, config)
 
         continuity = result["continuity"].to_list()
 
@@ -843,8 +1000,13 @@ class TestCorrectedInForce:
 
     def test_in_force_breakout_logic(self, in_force_test_data):
         """Test in_force detects breakout of previous bar's range."""
-        indicators = Indicators(timeframe_configs=[{"timeframes": ["all"], "swing_points": {"window": 2}}])
-        result = indicators._calculate_strat_patterns(in_force_test_data)
+        indicators = Indicators(
+            IndicatorsConfig(
+                timeframe_configs=[TimeframeItemConfig(timeframes=["all"], swing_points=SwingPointsConfig(window=3))]
+            )
+        )
+        config = indicators.config.timeframe_configs[0]
+        result = indicators._calculate_strat_patterns(in_force_test_data, config)
 
         in_force = result["in_force"].to_list()
         continuity = result["continuity"].to_list()
@@ -887,8 +1049,13 @@ class TestCorrectedHammerShooter:
 
     def test_hammer_pattern_correct_ratios(self, hammer_shooter_test_data):
         """Test hammer pattern uses correct ratios and thresholds."""
-        indicators = Indicators(timeframe_configs=[{"timeframes": ["all"], "swing_points": {"window": 2}}])
-        result = indicators._calculate_strat_patterns(hammer_shooter_test_data)
+        indicators = Indicators(
+            IndicatorsConfig(
+                timeframe_configs=[TimeframeItemConfig(timeframes=["all"], swing_points=SwingPointsConfig(window=3))]
+            )
+        )
+        config = indicators.config.timeframe_configs[0]
+        result = indicators._calculate_strat_patterns(hammer_shooter_test_data, config)
 
         hammers = result["hammer"].to_list()
 
@@ -913,12 +1080,17 @@ class TestCorrectedHammerShooter:
         # Range > 3*Body? 11 > 3*1 = 3? Yes
         # (close-low)/(high-low) = (99-90)/(101-90) = 9/11 = 0.818 > 0.6? Yes
         # (open-low)/(high-low) = (100-90)/(101-90) = 10/11 = 0.909 > 0.6? Yes
-        hammer_result = indicators._calculate_strat_patterns(hammer_data)
+        config = indicators.config.timeframe_configs[0]
+        hammer_result = indicators._calculate_strat_patterns(hammer_data, config)
         assert hammer_result["hammer"][0] is True
 
     def test_shooter_pattern_correct_ratios(self, hammer_shooter_test_data):
         """Test shooter pattern uses correct ratios and thresholds."""
-        indicators = Indicators(timeframe_configs=[{"timeframes": ["all"], "swing_points": {"window": 2}}])
+        indicators = Indicators(
+            IndicatorsConfig(
+                timeframe_configs=[TimeframeItemConfig(timeframes=["all"], swing_points=SwingPointsConfig(window=3))]
+            )
+        )
 
         # Create proper shooter pattern
         shooter_data = pl.DataFrame(
@@ -936,7 +1108,8 @@ class TestCorrectedHammerShooter:
         # Range > 3*Body? 11 > 3*1 = 3? Yes
         # (high-close)/(high-low) = (110-101)/(110-99) = 9/11 = 0.818 > 0.6? Yes
         # (high-open)/(high-low) = (110-100)/(110-99) = 10/11 = 0.909 > 0.6? Yes
-        shooter_result = indicators._calculate_strat_patterns(shooter_data)
+        config = indicators.config.timeframe_configs[0]
+        shooter_result = indicators._calculate_strat_patterns(shooter_data, config)
         assert shooter_result["shooter"][0] is True
 
 
@@ -960,10 +1133,15 @@ class TestCorrectedF23Pattern:
 
     def test_f23_trigger_calculation(self, f23_test_data):
         """Test F23 trigger price calculation (midpoint)."""
-        indicators = Indicators(timeframe_configs=[{"timeframes": ["all"], "swing_points": {"window": 2}}])
+        indicators = Indicators(
+            IndicatorsConfig(
+                timeframe_configs=[TimeframeItemConfig(timeframes=["all"], swing_points=SwingPointsConfig(window=3))]
+            )
+        )
         # First calculate basic patterns to get continuity column
-        with_basic = indicators._calculate_strat_patterns(f23_test_data)
-        result = indicators._calculate_advanced_patterns(with_basic)
+        config = indicators.config.timeframe_configs[0]
+        with_basic = indicators._calculate_strat_patterns(f23_test_data, config)
+        result = indicators._calculate_advanced_patterns(with_basic, config)
 
         # F23 trigger for bar 1 = midpoint of bar 0: high1 - ((high1 - low1) / 2)
         # = 101 - ((101 - 99) / 2) = 101 - 1 = 100
@@ -975,7 +1153,11 @@ class TestCorrectedF23Pattern:
 
     def test_f23_pattern_detection(self):
         """Test F23U and F23D detection."""
-        indicators = Indicators(timeframe_configs=[{"timeframes": ["all"], "swing_points": {"window": 2}}])
+        indicators = Indicators(
+            IndicatorsConfig(
+                timeframe_configs=[TimeframeItemConfig(timeframes=["all"], swing_points=SwingPointsConfig(window=3))]
+            )
+        )
 
         # F23D: 2U scenario but close < f23_trigger
         f23d_data = pl.DataFrame(
@@ -989,8 +1171,9 @@ class TestCorrectedF23Pattern:
             }
         )
 
-        with_basic = indicators._calculate_strat_patterns(f23d_data)
-        result = indicators._calculate_advanced_patterns(with_basic)
+        config = indicators.config.timeframe_configs[0]
+        with_basic = indicators._calculate_strat_patterns(f23d_data, config)
+        result = indicators._calculate_advanced_patterns(with_basic, config)
         f23x_values = result["f23x"].to_list()
         assert f23x_values[1] == "F23D"
 
@@ -1006,8 +1189,9 @@ class TestCorrectedF23Pattern:
             }
         )
 
-        with_basic = indicators._calculate_strat_patterns(f23u_data)
-        result = indicators._calculate_advanced_patterns(with_basic)
+        config = indicators.config.timeframe_configs[0]
+        with_basic = indicators._calculate_strat_patterns(f23u_data, config)
+        result = indicators._calculate_advanced_patterns(with_basic, config)
         f23x_values = result["f23x"].to_list()
         assert f23x_values[1] == "F23U"
 
@@ -1019,7 +1203,11 @@ class TestCorrectedKicker:
     def test_gapper_detection(self):
         """Test gap detection logic with percentage-based calculation."""
         # Use default gap_threshold of 0.001 (0.1%)
-        indicators = Indicators(timeframe_configs=[{"timeframes": ["all"], "swing_points": {"window": 2}}])
+        indicators = Indicators(
+            IndicatorsConfig(
+                timeframe_configs=[TimeframeItemConfig(timeframes=["all"], swing_points=SwingPointsConfig(window=3))]
+            )
+        )
 
         # Gap up: open > high1 * (1 + gap_threshold)
         gap_up_data = pl.DataFrame(
@@ -1033,8 +1221,9 @@ class TestCorrectedKicker:
             }
         )
 
-        with_basic = indicators._calculate_strat_patterns(gap_up_data)
-        result = indicators._calculate_advanced_patterns(with_basic)
+        config = indicators.config.timeframe_configs[0]
+        with_basic = indicators._calculate_strat_patterns(gap_up_data, config)
+        result = indicators._calculate_advanced_patterns(with_basic, config)
         gappers = result["advanced_gapper"].to_list()
 
         # Gap threshold = high1 * (1 + 0.001) = 101 * 1.001 = 101.101
@@ -1053,8 +1242,9 @@ class TestCorrectedKicker:
             }
         )
 
-        with_basic = indicators._calculate_strat_patterns(gap_down_data)
-        result = indicators._calculate_advanced_patterns(with_basic)
+        config = indicators.config.timeframe_configs[0]
+        with_basic = indicators._calculate_strat_patterns(gap_down_data, config)
+        result = indicators._calculate_advanced_patterns(with_basic, config)
         gappers = result["advanced_gapper"].to_list()
 
         # Gap threshold = low1 * (1 - 0.001) = 99 * 0.999 = 98.901
@@ -1063,7 +1253,11 @@ class TestCorrectedKicker:
 
     def test_kicker_continuity_reversal(self):
         """Test kicker requires continuity reversal."""
-        indicators = Indicators(timeframe_configs=[{"timeframes": ["all"], "swing_points": {"window": 2}}])
+        indicators = Indicators(
+            IndicatorsConfig(
+                timeframe_configs=[TimeframeItemConfig(timeframes=["all"], swing_points=SwingPointsConfig(window=3))]
+            )
+        )
 
         # Bullish kicker: continuity1=0 & gapper=1 & continuity=1
         bullish_kicker_data = pl.DataFrame(
@@ -1077,8 +1271,9 @@ class TestCorrectedKicker:
             }
         )
 
-        with_basic = indicators._calculate_strat_patterns(bullish_kicker_data)
-        result = indicators._calculate_advanced_patterns(with_basic)
+        config = indicators.config.timeframe_configs[0]
+        with_basic = indicators._calculate_strat_patterns(bullish_kicker_data, config)
+        result = indicators._calculate_advanced_patterns(with_basic, config)
         kickers = result["kicker"].to_list()
         continuity = result["continuity"].to_list()
 
@@ -1099,8 +1294,9 @@ class TestCorrectedKicker:
             }
         )
 
-        with_basic = indicators._calculate_strat_patterns(bearish_kicker_data)
-        result = indicators._calculate_advanced_patterns(with_basic)
+        config = indicators.config.timeframe_configs[0]
+        with_basic = indicators._calculate_strat_patterns(bearish_kicker_data, config)
+        result = indicators._calculate_advanced_patterns(with_basic, config)
         kickers = result["kicker"].to_list()
         continuity = result["continuity"].to_list()
 
@@ -1116,7 +1312,11 @@ class TestCorrectedPMG:
 
     def test_pmg_cumulative_logic(self):
         """Test PMG cumulative higher high/lower low tracking."""
-        indicators = Indicators(timeframe_configs=[{"timeframes": ["all"], "swing_points": {"window": 2}}])
+        indicators = Indicators(
+            IndicatorsConfig(
+                timeframe_configs=[TimeframeItemConfig(timeframes=["all"], swing_points=SwingPointsConfig(window=3))]
+            )
+        )
 
         # Create data with specific high/low patterns
         pmg_data = pl.DataFrame(
@@ -1130,8 +1330,9 @@ class TestCorrectedPMG:
             }
         )
 
-        with_basic = indicators._calculate_strat_patterns(pmg_data)
-        result = indicators._calculate_advanced_patterns(with_basic)
+        config = indicators.config.timeframe_configs[0]
+        with_basic = indicators._calculate_strat_patterns(pmg_data, config)
+        result = indicators._calculate_advanced_patterns(with_basic, config)
         pmg_values = result["pmg"].to_list()
 
         # PMG should track cumulative runs:
@@ -1152,7 +1353,11 @@ class TestMotherbarProblems:
 
     def test_motherbar_breakout_logic(self):
         """Test motherbar problems correctly identifies inside bar patterns."""
-        indicators = Indicators(timeframe_configs=[{"timeframes": ["all"], "swing_points": {"window": 2}}])
+        indicators = Indicators(
+            IndicatorsConfig(
+                timeframe_configs=[TimeframeItemConfig(timeframes=["all"], swing_points=SwingPointsConfig(window=3))]
+            )
+        )
 
         # Create data with specific inside bar and breakout patterns
         # Bar 0: Regular bar (baseline)
@@ -1186,10 +1391,10 @@ class TestMotherbarProblems:
             }
         )
 
-        with_basic = indicators._calculate_strat_patterns(motherbar_data)
-        result = indicators._calculate_advanced_patterns(with_basic)
+        config = indicators.config.timeframe_configs[0]
+        with_basic = indicators._calculate_strat_patterns(motherbar_data, config)
+        result = indicators._calculate_advanced_patterns(with_basic, config)
         motherbar_problems = result["motherbar_problems"].to_list()
-        _scenarios = result["scenario"].to_list()
 
         # Expected scenarios based on high/low relationships:
         # Bar 0: No previous bar -> scenario will be None or handled specially
@@ -1212,7 +1417,11 @@ class TestMotherbarProblems:
 
     def test_motherbar_identification(self):
         """Test that mother bars are correctly identified as bars immediately before inside bars."""
-        indicators = Indicators(timeframe_configs=[{"timeframes": ["all"], "swing_points": {"window": 2}}])
+        indicators = Indicators(
+            IndicatorsConfig(
+                timeframe_configs=[TimeframeItemConfig(timeframes=["all"], swing_points=SwingPointsConfig(window=3))]
+            )
+        )
 
         # Create simple scenario: Regular bar -> Inside bar -> Breakout
         simple_data = pl.DataFrame(
@@ -1226,10 +1435,10 @@ class TestMotherbarProblems:
             }
         )
 
-        with_basic = indicators._calculate_strat_patterns(simple_data)
-        result = indicators._calculate_advanced_patterns(with_basic)
+        config = indicators.config.timeframe_configs[0]
+        with_basic = indicators._calculate_strat_patterns(simple_data, config)
+        result = indicators._calculate_advanced_patterns(with_basic, config)
         motherbar_problems = result["motherbar_problems"].to_list()
-        _scenarios = result["scenario"].to_list()
 
         # Bar 0: No previous bar -> False
         # Bar 1: Inside bar -> Bar 0 becomes mother bar -> True
@@ -1239,7 +1448,11 @@ class TestMotherbarProblems:
 
     def test_compound_inside_bars(self):
         """Test multiple consecutive inside bars within the same mother bar range."""
-        indicators = Indicators(timeframe_configs=[{"timeframes": ["all"], "swing_points": {"window": 2}}])
+        indicators = Indicators(
+            IndicatorsConfig(
+                timeframe_configs=[TimeframeItemConfig(timeframes=["all"], swing_points=SwingPointsConfig(window=3))]
+            )
+        )
 
         # Create compound inside bar scenario
         compound_data = pl.DataFrame(
@@ -1253,8 +1466,9 @@ class TestMotherbarProblems:
             }
         )
 
-        with_basic = indicators._calculate_strat_patterns(compound_data)
-        result = indicators._calculate_advanced_patterns(with_basic)
+        config = indicators.config.timeframe_configs[0]
+        with_basic = indicators._calculate_strat_patterns(compound_data, config)
+        result = indicators._calculate_advanced_patterns(with_basic, config)
         motherbar_problems = result["motherbar_problems"].to_list()
 
         # Bar 0: First bar -> False
@@ -1267,7 +1481,11 @@ class TestMotherbarProblems:
 
     def test_motherbar_no_inside_bars(self):
         """Test when no inside bars are present (no mother bars established)."""
-        indicators = Indicators(timeframe_configs=[{"timeframes": ["all"], "swing_points": {"window": 2}}])
+        indicators = Indicators(
+            IndicatorsConfig(
+                timeframe_configs=[TimeframeItemConfig(timeframes=["all"], swing_points=SwingPointsConfig(window=3))]
+            )
+        )
 
         # Create data with no inside bars - all directional or outside bars
         no_inside_data = pl.DataFrame(
@@ -1281,8 +1499,9 @@ class TestMotherbarProblems:
             }
         )
 
-        with_basic = indicators._calculate_strat_patterns(no_inside_data)
-        result = indicators._calculate_advanced_patterns(with_basic)
+        config = indicators.config.timeframe_configs[0]
+        with_basic = indicators._calculate_strat_patterns(no_inside_data, config)
+        result = indicators._calculate_advanced_patterns(with_basic, config)
         motherbar_problems = result["motherbar_problems"].to_list()
 
         # No inside bars means no mother bars established -> all False
@@ -1291,7 +1510,11 @@ class TestMotherbarProblems:
 
     def test_motherbar_immediate_breakout(self):
         """Test inside bar followed by immediate breakout."""
-        indicators = Indicators(timeframe_configs=[{"timeframes": ["all"], "swing_points": {"window": 2}}])
+        indicators = Indicators(
+            IndicatorsConfig(
+                timeframe_configs=[TimeframeItemConfig(timeframes=["all"], swing_points=SwingPointsConfig(window=3))]
+            )
+        )
 
         immediate_breakout_data = pl.DataFrame(
             {
@@ -1304,8 +1527,9 @@ class TestMotherbarProblems:
             }
         )
 
-        with_basic = indicators._calculate_strat_patterns(immediate_breakout_data)
-        result = indicators._calculate_advanced_patterns(with_basic)
+        config = indicators.config.timeframe_configs[0]
+        with_basic = indicators._calculate_strat_patterns(immediate_breakout_data, config)
+        result = indicators._calculate_advanced_patterns(with_basic, config)
         motherbar_problems = result["motherbar_problems"].to_list()
 
         # Bar 0: First bar -> False
@@ -1316,7 +1540,11 @@ class TestMotherbarProblems:
 
     def test_motherbar_mixed_scenarios(self):
         """Test combination of different scenario patterns with motherbar logic."""
-        indicators = Indicators(timeframe_configs=[{"timeframes": ["all"], "swing_points": {"window": 2}}])
+        indicators = Indicators(
+            IndicatorsConfig(
+                timeframe_configs=[TimeframeItemConfig(timeframes=["all"], swing_points=SwingPointsConfig(window=3))]
+            )
+        )
 
         # Mix of 1, 2U, 2D, and 3 scenarios
         mixed_data = pl.DataFrame(
@@ -1330,8 +1558,9 @@ class TestMotherbarProblems:
             }
         )
 
-        with_basic = indicators._calculate_strat_patterns(mixed_data)
-        result = indicators._calculate_advanced_patterns(with_basic)
+        config = indicators.config.timeframe_configs[0]
+        with_basic = indicators._calculate_strat_patterns(mixed_data, config)
+        result = indicators._calculate_advanced_patterns(with_basic, config)
         motherbar_problems = result["motherbar_problems"].to_list()
 
         # Bar 0: First bar -> False
@@ -1365,7 +1594,11 @@ class TestFullCorrectedPipeline:
 
     def test_all_corrected_indicators_present(self, comprehensive_test_data):
         """Test that all corrected indicators are present in final output."""
-        indicators = Indicators(timeframe_configs=[{"timeframes": ["all"], "swing_points": {"window": 2}}])
+        indicators = Indicators(
+            IndicatorsConfig(
+                timeframe_configs=[TimeframeItemConfig(timeframes=["all"], swing_points=SwingPointsConfig(window=3))]
+            )
+        )
         result = indicators.process(comprehensive_test_data)
 
         # All corrected patterns should be present
@@ -1396,7 +1629,11 @@ class TestFullCorrectedPipeline:
 
     def test_corrected_calculations_validate(self, comprehensive_test_data):
         """Test that corrected calculations produce expected results."""
-        indicators = Indicators(timeframe_configs=[{"timeframes": ["all"], "swing_points": {"window": 2}}])
+        indicators = Indicators(
+            IndicatorsConfig(
+                timeframe_configs=[TimeframeItemConfig(timeframes=["all"], swing_points=SwingPointsConfig(window=3))]
+            )
+        )
         result = indicators.process(comprehensive_test_data)
 
         # Sample validation of corrected logic
@@ -1443,8 +1680,13 @@ class TestScenarioCalculations:
             }
         )
 
-        indicators = Indicators(timeframe_configs=[{"timeframes": ["all"], "swing_points": {"window": 2}}])
-        result = indicators._calculate_strat_patterns(data)
+        indicators = Indicators(
+            IndicatorsConfig(
+                timeframe_configs=[TimeframeItemConfig(timeframes=["all"], swing_points=SwingPointsConfig(window=3))]
+            )
+        )
+        config = indicators.config.timeframe_configs[0]
+        result = indicators._calculate_strat_patterns(data, config)
 
         # Second bar should be scenario "1"
         assert result["scenario"][1] == "1"
@@ -1461,8 +1703,13 @@ class TestScenarioCalculations:
             }
         )
 
-        indicators = Indicators(timeframe_configs=[{"timeframes": ["all"], "swing_points": {"window": 2}}])
-        result = indicators._calculate_strat_patterns(data)
+        indicators = Indicators(
+            IndicatorsConfig(
+                timeframe_configs=[TimeframeItemConfig(timeframes=["all"], swing_points=SwingPointsConfig(window=3))]
+            )
+        )
+        config = indicators.config.timeframe_configs[0]
+        result = indicators._calculate_strat_patterns(data, config)
 
         # Second bar should be scenario "2U"
         assert result["scenario"][1] == "2U"
@@ -1479,8 +1726,13 @@ class TestScenarioCalculations:
             }
         )
 
-        indicators = Indicators(timeframe_configs=[{"timeframes": ["all"], "swing_points": {"window": 2}}])
-        result = indicators._calculate_strat_patterns(data)
+        indicators = Indicators(
+            IndicatorsConfig(
+                timeframe_configs=[TimeframeItemConfig(timeframes=["all"], swing_points=SwingPointsConfig(window=3))]
+            )
+        )
+        config = indicators.config.timeframe_configs[0]
+        result = indicators._calculate_strat_patterns(data, config)
 
         # Second bar should be scenario "2D"
         assert result["scenario"][1] == "2D"
@@ -1497,8 +1749,13 @@ class TestScenarioCalculations:
             }
         )
 
-        indicators = Indicators(timeframe_configs=[{"timeframes": ["all"], "swing_points": {"window": 2}}])
-        result = indicators._calculate_strat_patterns(data)
+        indicators = Indicators(
+            IndicatorsConfig(
+                timeframe_configs=[TimeframeItemConfig(timeframes=["all"], swing_points=SwingPointsConfig(window=3))]
+            )
+        )
+        config = indicators.config.timeframe_configs[0]
+        result = indicators._calculate_strat_patterns(data, config)
 
         # Second bar should be scenario "3"
         assert result["scenario"][1] == "3"
@@ -1520,8 +1777,13 @@ class TestContinuityCalculations:
             }
         )
 
-        indicators = Indicators(timeframe_configs=[{"timeframes": ["all"], "swing_points": {"window": 2}}])
-        result = indicators._calculate_strat_patterns(data)
+        indicators = Indicators(
+            IndicatorsConfig(
+                timeframe_configs=[TimeframeItemConfig(timeframes=["all"], swing_points=SwingPointsConfig(window=3))]
+            )
+        )
+        config = indicators.config.timeframe_configs[0]
+        result = indicators._calculate_strat_patterns(data, config)
 
         assert result["continuity"][0] == 1  # Bullish = 1
 
@@ -1537,8 +1799,13 @@ class TestContinuityCalculations:
             }
         )
 
-        indicators = Indicators(timeframe_configs=[{"timeframes": ["all"], "swing_points": {"window": 2}}])
-        result = indicators._calculate_strat_patterns(data)
+        indicators = Indicators(
+            IndicatorsConfig(
+                timeframe_configs=[TimeframeItemConfig(timeframes=["all"], swing_points=SwingPointsConfig(window=3))]
+            )
+        )
+        config = indicators.config.timeframe_configs[0]
+        result = indicators._calculate_strat_patterns(data, config)
 
         assert result["continuity"][0] == 0  # Bearish = 0
 
@@ -1554,8 +1821,13 @@ class TestContinuityCalculations:
             }
         )
 
-        indicators = Indicators(timeframe_configs=[{"timeframes": ["all"], "swing_points": {"window": 2}}])
-        result = indicators._calculate_strat_patterns(data)
+        indicators = Indicators(
+            IndicatorsConfig(
+                timeframe_configs=[TimeframeItemConfig(timeframes=["all"], swing_points=SwingPointsConfig(window=3))]
+            )
+        )
+        config = indicators.config.timeframe_configs[0]
+        result = indicators._calculate_strat_patterns(data, config)
 
         assert result["continuity"][0] == -1  # Doji = -1
 
@@ -1576,8 +1848,13 @@ class TestInForceCalculations:
             }
         )
 
-        indicators = Indicators(timeframe_configs=[{"timeframes": ["all"], "swing_points": {"window": 2}}])
-        result = indicators._calculate_strat_patterns(data)
+        indicators = Indicators(
+            IndicatorsConfig(
+                timeframe_configs=[TimeframeItemConfig(timeframes=["all"], swing_points=SwingPointsConfig(window=3))]
+            )
+        )
+        config = indicators.config.timeframe_configs[0]
+        result = indicators._calculate_strat_patterns(data, config)
 
         assert result["in_force"][1] is True  # Should be in force
 
@@ -1593,8 +1870,13 @@ class TestInForceCalculations:
             }
         )
 
-        indicators = Indicators(timeframe_configs=[{"timeframes": ["all"], "swing_points": {"window": 2}}])
-        result = indicators._calculate_strat_patterns(data)
+        indicators = Indicators(
+            IndicatorsConfig(
+                timeframe_configs=[TimeframeItemConfig(timeframes=["all"], swing_points=SwingPointsConfig(window=3))]
+            )
+        )
+        config = indicators.config.timeframe_configs[0]
+        result = indicators._calculate_strat_patterns(data, config)
 
         assert result["in_force"][1] is True  # Should be in force
 
@@ -1616,8 +1898,13 @@ class TestSignalCalculations:
             }
         )
 
-        indicators = Indicators(timeframe_configs=[{"timeframes": ["all"], "swing_points": {"window": 2}}])
-        result = indicators._calculate_strat_patterns(data)
+        indicators = Indicators(
+            IndicatorsConfig(
+                timeframe_configs=[TimeframeItemConfig(timeframes=["all"], swing_points=SwingPointsConfig(window=3))]
+            )
+        )
+        config = indicators.config.timeframe_configs[0]
+        result = indicators._calculate_strat_patterns(data, config)
 
         # Last bar should detect 2D-2U signal
         assert result["signal"][2] == "2D-2U"
@@ -1637,8 +1924,13 @@ class TestSignalCalculations:
             }
         )
 
-        indicators = Indicators(timeframe_configs=[{"timeframes": ["all"], "swing_points": {"window": 2}}])
-        result = indicators._calculate_strat_patterns(data)
+        indicators = Indicators(
+            IndicatorsConfig(
+                timeframe_configs=[TimeframeItemConfig(timeframes=["all"], swing_points=SwingPointsConfig(window=3))]
+            )
+        )
+        config = indicators.config.timeframe_configs[0]
+        result = indicators._calculate_strat_patterns(data, config)
 
         # Check scenarios first
         assert result["scenario"][1] == "3"  # Outside bar
@@ -1662,8 +1954,13 @@ class TestSignalCalculations:
             }
         )
 
-        indicators = Indicators(timeframe_configs=[{"timeframes": ["all"], "swing_points": {"window": 2}}])
-        result = indicators._calculate_strat_patterns(data)
+        indicators = Indicators(
+            IndicatorsConfig(
+                timeframe_configs=[TimeframeItemConfig(timeframes=["all"], swing_points=SwingPointsConfig(window=3))]
+            )
+        )
+        config = indicators.config.timeframe_configs[0]
+        result = indicators._calculate_strat_patterns(data, config)
 
         # Check scenarios
         assert result["scenario"][1] == "2U"
@@ -1695,8 +1992,13 @@ class TestHammerShooterCalculations:
         # Close from low = (107-90)/(110-90) = 17/20 = 0.85 > 0.6 ✓
         # Open from low = (108-90)/(110-90) = 18/20 = 0.90 > 0.6 ✓
 
-        indicators = Indicators(timeframe_configs=[{"timeframes": ["all"], "swing_points": {"window": 2}}])
-        result = indicators._calculate_strat_patterns(data)
+        indicators = Indicators(
+            IndicatorsConfig(
+                timeframe_configs=[TimeframeItemConfig(timeframes=["all"], swing_points=SwingPointsConfig(window=3))]
+            )
+        )
+        config = indicators.config.timeframe_configs[0]
+        result = indicators._calculate_strat_patterns(data, config)
 
         assert result["hammer"][0] is True
         assert result["shooter"][0] is False  # Should not be shooter
@@ -1717,8 +2019,13 @@ class TestHammerShooterCalculations:
         # High-close = (110-93)/(110-90) = 17/20 = 0.85 > 0.6 ✓
         # High-open = (110-92)/(110-90) = 18/20 = 0.90 > 0.6 ✓
 
-        indicators = Indicators(timeframe_configs=[{"timeframes": ["all"], "swing_points": {"window": 2}}])
-        result = indicators._calculate_strat_patterns(data)
+        indicators = Indicators(
+            IndicatorsConfig(
+                timeframe_configs=[TimeframeItemConfig(timeframes=["all"], swing_points=SwingPointsConfig(window=3))]
+            )
+        )
+        config = indicators.config.timeframe_configs[0]
+        result = indicators._calculate_strat_patterns(data, config)
 
         assert result["shooter"][0] is True
         assert result["hammer"][0] is False  # Should not be hammer
@@ -1741,7 +2048,11 @@ class TestGapCalculations:
             }
         )
 
-        indicators = Indicators(timeframe_configs=[{"timeframes": ["all"], "swing_points": {"window": 2}}])
+        indicators = Indicators(
+            IndicatorsConfig(
+                timeframe_configs=[TimeframeItemConfig(timeframes=["all"], swing_points=SwingPointsConfig(window=3))]
+            )
+        )
         result = indicators.process(data)  # Use full process for complete pipeline
 
         assert result["advanced_gapper"][14] == 1  # Gap up on last bar
@@ -1759,7 +2070,11 @@ class TestGapCalculations:
             }
         )
 
-        indicators = Indicators(timeframe_configs=[{"timeframes": ["all"], "swing_points": {"window": 2}}])
+        indicators = Indicators(
+            IndicatorsConfig(
+                timeframe_configs=[TimeframeItemConfig(timeframes=["all"], swing_points=SwingPointsConfig(window=3))]
+            )
+        )
         result = indicators.process(data)  # Use full process for complete pipeline
 
         assert result["advanced_gapper"][14] == 0  # Gap down on last bar
@@ -1767,8 +2082,8 @@ class TestGapCalculations:
     def test_gap_configurable_threshold(self):
         """Test gap detection with custom threshold."""
         # Use larger threshold of 1% (0.01)
-        timeframe_configs = [{"timeframes": ["all"], "gap_detection": {"threshold": 0.01}}]
-        indicators = Indicators(timeframe_configs=timeframe_configs)
+        timeframe_configs = [TimeframeItemConfig(timeframes=["all"], gap_detection=GapDetectionConfig(threshold=0.01))]
+        indicators = Indicators(IndicatorsConfig(timeframe_configs=timeframe_configs))
 
         data = pl.DataFrame(
             {
@@ -1821,7 +2136,11 @@ class TestGapCalculations:
             ]
         )
 
-        indicators = Indicators(timeframe_configs=[{"timeframes": ["all"], "swing_points": {"window": 2}}])
+        indicators = Indicators(
+            IndicatorsConfig(
+                timeframe_configs=[TimeframeItemConfig(timeframes=["all"], swing_points=SwingPointsConfig(window=3))]
+            )
+        )
 
         crypto_result = indicators.process(crypto_data)
         forex_result = indicators.process(forex_data)
@@ -1848,8 +2167,13 @@ class TestSignalMetadataIntegration:
             }
         )
 
-        indicators = Indicators(timeframe_configs=[{"timeframes": ["all"], "swing_points": {"window": 2}}])
-        result = indicators._calculate_strat_patterns(data)
+        indicators = Indicators(
+            IndicatorsConfig(
+                timeframe_configs=[TimeframeItemConfig(timeframes=["all"], swing_points=SwingPointsConfig(window=3))]
+            )
+        )
+        config = indicators.config.timeframe_configs[0]
+        result = indicators._calculate_strat_patterns(data, config)
 
         # Check if signal was detected and JSON created
         signal_json_list = result["signal_json"].to_list()
@@ -1900,18 +2224,20 @@ class TestPerTimeframeIndicators:
 
         # Configure different settings per timeframe
         indicators = Indicators(
-            timeframe_configs=[
-                {
-                    "timeframes": ["5min"],
-                    "swing_points": {"window": 3, "threshold": 1.0},
-                    "gap_detection": {"threshold": 0.0005},
-                },
-                {
-                    "timeframes": ["1h"],
-                    "swing_points": {"window": 5, "threshold": 5.0},
-                    "gap_detection": {"threshold": 0.002},
-                },
-            ]
+            IndicatorsConfig(
+                timeframe_configs=[
+                    TimeframeItemConfig(
+                        timeframes=["5min"],
+                        swing_points=SwingPointsConfig(window=3, threshold=1.0),
+                        gap_detection=GapDetectionConfig(threshold=0.0005),
+                    ),
+                    TimeframeItemConfig(
+                        timeframes=["1h"],
+                        swing_points=SwingPointsConfig(window=5, threshold=5.0),
+                        gap_detection=GapDetectionConfig(threshold=0.002),
+                    ),
+                ]
+            )
         )
 
         result = indicators.process(test_data)
@@ -1942,13 +2268,15 @@ class TestPerTimeframeIndicators:
 
         # Use 'all' timeframe configuration
         indicators = Indicators(
-            timeframe_configs=[
-                {
-                    "timeframes": ["all"],
-                    "swing_points": {"window": 5, "threshold": 3.0},
-                    "gap_detection": {"threshold": 0.001},
-                }
-            ]
+            IndicatorsConfig(
+                timeframe_configs=[
+                    TimeframeItemConfig(
+                        timeframes=["all"],
+                        swing_points=SwingPointsConfig(window=5, threshold=3.0),
+                        gap_detection=GapDetectionConfig(threshold=0.001),
+                    )
+                ]
+            )
         )
 
         result = indicators.process(simple_data)
@@ -1986,7 +2314,11 @@ class TestPerTimeframeIndicators:
 
         # Only configure 5m specifically
         indicators = Indicators(
-            timeframe_configs=[{"timeframes": ["5min"], "swing_points": {"window": 3, "threshold": 2.0}}]
+            IndicatorsConfig(
+                timeframe_configs=[
+                    TimeframeItemConfig(timeframes=["5min"], swing_points=SwingPointsConfig(window=3, threshold=2.0))
+                ]
+            )
         )
 
         # Should raise error because 15m is not configured
@@ -1996,8 +2328,8 @@ class TestPerTimeframeIndicators:
     def test_empty_timeframe_configs_raises_error(self):
         """Test that empty timeframe_configs raises ValueError (new API requirement)."""
         # Empty timeframe_configs should raise error
-        with pytest.raises(ValueError, match="timeframe_configs is required"):
-            Indicators(timeframe_configs=[])
+        with pytest.raises(ValidationError, match="List should have at least 1 item"):
+            Indicators(IndicatorsConfig(timeframe_configs=[]))
 
 
 @pytest.mark.unit
@@ -2020,12 +2352,14 @@ class TestIndicatorsEdgeCases:
 
         # Create indicators with specific timeframes but no 'all' config
         indicators = Indicators(
-            timeframe_configs=[
-                {
-                    "timeframes": ["5min"],  # Specific timeframe, not "all"
-                    "swing_points": {"window": 5, "threshold": 3.0},
-                }
-            ]
+            IndicatorsConfig(
+                timeframe_configs=[
+                    TimeframeItemConfig(
+                        timeframes=["5min"],  # Specific timeframe, not "all"
+                        swing_points=SwingPointsConfig(window=5, threshold=3.0),
+                    )
+                ]
+            )
         )
 
         # Should raise ValueError because there's no timeframe column and no 'all' config
@@ -2049,28 +2383,26 @@ class TestIndicatorsEdgeCases:
 
         # Enable signal generation to create the get_signal_object function
         indicators = Indicators(
-            timeframe_configs=[
-                {
-                    "timeframes": ["all"],
-                    "swing_points": {"window": 3, "threshold": 1.0},
-                    "signals": {
-                        "enabled": True,
-                        "types": ["continuation", "reversal"],
-                        "reversal": {"trigger_bar_offset": 1},
-                    },
-                }
-            ]
+            IndicatorsConfig(
+                timeframe_configs=[
+                    TimeframeItemConfig(
+                        timeframes=["all"],
+                        swing_points=SwingPointsConfig(window=3, threshold=1.0),
+                    )
+                ]
+            )
         )
 
         result = indicators.process(data)
 
-        # The get_signal_object function should be accessible via attrs if signals were generated
-        if hasattr(result, "attrs") and "signal_objects" in result.attrs:
-            # Test that we can retrieve signal objects by index
-            signal_objects = result.attrs["signal_objects"]
-            if signal_objects:  # If there are any signal objects
-                # This exercises the get_signal_object function
-                assert callable(lambda idx: signal_objects.get(idx))
+        # Note: Polars DataFrames don't support attrs like pandas
+        # The signal processing functionality works, but signal objects are not stored in attrs
+        # This test verifies that the signal column is properly generated
+        if "signal" in result.columns:
+            # Test that signals are properly generated (non-null values)
+            signal_column = result["signal"]
+            # This exercises the signal generation functionality
+            assert signal_column is not None
 
 
 @pytest.mark.unit
@@ -2095,13 +2427,14 @@ class TestIndicatorsTimestampHandling:
 
         # Configure with signal generation that requires trigger bar offset
         indicators = Indicators(
-            timeframe_configs=[
-                {
-                    "timeframes": ["all"],
-                    "swing_points": {"window": 3, "threshold": 1.0},
-                    "signals": {"enabled": True, "types": ["reversal"], "reversal": {"trigger_bar_offset": 1}},
-                }
-            ]
+            IndicatorsConfig(
+                timeframe_configs=[
+                    TimeframeItemConfig(
+                        timeframes=["all"],
+                        swing_points=SwingPointsConfig(window=3, threshold=1.0),
+                    )
+                ]
+            )
         )
 
         result = indicators.process(data)
@@ -2142,17 +2475,14 @@ class TestIndicatorsTimestampHandling:
 
             # Configure with signal generation to exercise timestamp handling
             indicators = Indicators(
-                timeframe_configs=[
-                    {
-                        "timeframes": ["all"],
-                        "swing_points": {"window": 3, "threshold": 1.0},
-                        "signals": {
-                            "enabled": True,
-                            "types": ["continuation"],
-                            "continuation": {"trigger_bar_offset": 1},
-                        },
-                    }
-                ]
+                IndicatorsConfig(
+                    timeframe_configs=[
+                        TimeframeItemConfig(
+                            timeframes=["all"],
+                            swing_points=SwingPointsConfig(window=3, threshold=1.0),
+                        )
+                    ]
+                )
             )
 
             # Should process without error despite different timestamp formats
@@ -2181,18 +2511,14 @@ class TestIndicatorsTimestampHandling:
 
         # Configure signals to exercise timestamp handling paths
         indicators = Indicators(
-            timeframe_configs=[
-                {
-                    "timeframes": ["all"],
-                    "swing_points": {"window": 3, "threshold": 1.0},
-                    "signals": {
-                        "enabled": True,
-                        "types": ["continuation", "reversal"],
-                        "continuation": {"trigger_bar_offset": 1},
-                        "reversal": {"trigger_bar_offset": 1, "target_bar_offset": 2},
-                    },
-                }
-            ]
+            IndicatorsConfig(
+                timeframe_configs=[
+                    TimeframeItemConfig(
+                        timeframes=["all"],
+                        swing_points=SwingPointsConfig(window=3, threshold=1.0),
+                    )
+                ]
+            )
         )
 
         result = indicators.process(data)

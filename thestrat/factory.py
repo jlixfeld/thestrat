@@ -5,12 +5,18 @@ This module provides clean factory methods for creating and configuring
 TheStrat components with Pydantic schema validation.
 """
 
-from typing import Any
+from typing import Any, TypedDict
 
 from .aggregation import Aggregation
-from .base import Component
 from .indicators import Indicators
 from .schemas import AggregationConfig, FactoryConfig, IndicatorsConfig
+
+
+class ComponentDict(TypedDict):
+    """Type definition for component dictionary returned by Factory.create_all()."""
+
+    aggregation: Aggregation
+    indicators: Indicators
 
 
 class Factory:
@@ -48,13 +54,7 @@ class Factory:
             ... )
             >>> aggregation = Factory.create_aggregation(config)
         """
-        return Aggregation(
-            target_timeframes=config.target_timeframes,
-            asset_class=config.asset_class,
-            timezone=config.timezone,
-            hour_boundary=config.hour_boundary,
-            session_start=config.session_start,
-        )
+        return Aggregation(config)
 
     @staticmethod
     def create_indicators(config: IndicatorsConfig) -> Indicators:
@@ -63,19 +63,7 @@ class Factory:
 
         Args:
             config: Validated IndicatorsConfig containing per-timeframe configurations
-                with structure:
-                `timeframe_configs`: List of per-timeframe configurations:
-
-                ```python
-                [
-                    {
-                        "timeframes": ["5m", "15m"],  # List of timeframes, or ["all"] for all data
-                        "swing_points": {"window": int, "threshold": float},
-                        "gap_detection": {"threshold": float}
-                    },
-                    # ... additional configurations
-                ]
-                ```
+                using Pydantic models
 
         Returns:
             Configured Indicators component
@@ -92,23 +80,10 @@ class Factory:
             ... )
             >>> indicators = Factory.create_indicators(config)
         """
-        # Convert Pydantic models to dicts for the Indicators constructor
-        timeframe_configs = []
-        for tf_config in config.timeframe_configs:
-            config_dict = {"timeframes": tf_config.timeframes}
-
-            if tf_config.swing_points is not None:
-                config_dict["swing_points"] = tf_config.swing_points.model_dump()
-
-            if tf_config.gap_detection is not None:
-                config_dict["gap_detection"] = tf_config.gap_detection.model_dump()
-
-            timeframe_configs.append(config_dict)
-
-        return Indicators(timeframe_configs=timeframe_configs)
+        return Indicators(config)
 
     @classmethod
-    def create_all(cls, config: FactoryConfig) -> dict[str, Component]:
+    def create_all(cls, config: FactoryConfig) -> ComponentDict:
         """
         Create complete processing pipeline with aggregation and indicators.
 
@@ -125,11 +100,11 @@ class Factory:
             }
 
         Example:
-            >>> from thestrat.schemas import FactoryConfig, AggregationConfig, IndicatorsConfig
+            >>> from thestrat.schemas import FactoryConfig, AggregationConfig, IndicatorsConfig, TimeframeItemConfig
             >>> config = FactoryConfig(
             ...     aggregation=AggregationConfig(target_timeframes=["5m"]),
             ...     indicators=IndicatorsConfig(
-            ...         timeframe_configs=[{"timeframes": ["all"]}]
+            ...         timeframe_configs=[TimeframeItemConfig(timeframes=["all"])]
             ...     )
             ... )
             >>> components = Factory.create_all(config)

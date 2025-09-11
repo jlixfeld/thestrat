@@ -80,11 +80,10 @@ class TestCreateIndicators:
         indicators = Factory.create_indicators(config)
 
         assert isinstance(indicators, Indicators)
-        assert len(indicators.timeframe_configs) == 1
-        assert indicators.timeframe_configs[0]["timeframes"] == ["all"]
-        # Check defaults from Indicators constructor
-        assert indicators.swing_window == 5
-        assert indicators.swing_threshold == 5.0
+        assert len(indicators.config.timeframe_configs) == 1
+        assert indicators.config.timeframe_configs[0].timeframes == ["all"]
+        # Check that config is properly stored (defaults are now handled in processing)
+        assert indicators.config.timeframe_configs[0].swing_points is None
 
     def test_create_indicators_complete_config(self):
         """Test creating indicators with complete Pydantic configuration."""
@@ -100,13 +99,15 @@ class TestCreateIndicators:
         indicators = Factory.create_indicators(config)
 
         assert isinstance(indicators, Indicators)
-        assert len(indicators.timeframe_configs) == 1
+        assert len(indicators.config.timeframe_configs) == 1
 
-        tf_config = indicators.timeframe_configs[0]
-        assert tf_config["timeframes"] == ["5min", "15min"]
-        assert tf_config["swing_points"]["window"] == 7
-        assert tf_config["swing_points"]["threshold"] == 3.0
-        assert tf_config["gap_detection"]["threshold"] == 0.002
+        tf_config = indicators.config.timeframe_configs[0]
+        assert tf_config.timeframes == ["5min", "15min"]
+        assert tf_config.swing_points is not None
+        assert tf_config.swing_points.window == 7
+        assert tf_config.swing_points.threshold == 3.0
+        assert tf_config.gap_detection is not None
+        assert tf_config.gap_detection.threshold == 0.002
 
     def test_create_indicators_multiple_timeframe_configs(self):
         """Test creating indicators with multiple timeframe configurations."""
@@ -120,19 +121,22 @@ class TestCreateIndicators:
         indicators = Factory.create_indicators(config)
 
         assert isinstance(indicators, Indicators)
-        assert len(indicators.timeframe_configs) == 3
+        assert len(indicators.config.timeframe_configs) == 3
 
         # Check first config
-        assert indicators.timeframe_configs[0]["timeframes"] == ["5min"]
-        assert indicators.timeframe_configs[0]["swing_points"]["threshold"] == 2.0
+        assert indicators.config.timeframe_configs[0].timeframes == ["5min"]
+        assert indicators.config.timeframe_configs[0].swing_points is not None
+        assert indicators.config.timeframe_configs[0].swing_points.threshold == 2.0
 
         # Check second config
-        assert indicators.timeframe_configs[1]["timeframes"] == ["1h"]
-        assert indicators.timeframe_configs[1]["swing_points"]["window"] == 7
+        assert indicators.config.timeframe_configs[1].timeframes == ["1h"]
+        assert indicators.config.timeframe_configs[1].swing_points is not None
+        assert indicators.config.timeframe_configs[1].swing_points.window == 7
 
         # Check third config
-        assert indicators.timeframe_configs[2]["timeframes"] == ["1d"]
-        assert indicators.timeframe_configs[2]["gap_detection"]["threshold"] == 0.01
+        assert indicators.config.timeframe_configs[2].timeframes == ["1d"]
+        assert indicators.config.timeframe_configs[2].gap_detection is not None
+        assert indicators.config.timeframe_configs[2].gap_detection.threshold == 0.01
 
     def test_create_indicators_optional_configs(self):
         """Test creating indicators with optional swing_points and gap_detection."""
@@ -149,19 +153,19 @@ class TestCreateIndicators:
         indicators = Factory.create_indicators(config)
 
         assert isinstance(indicators, Indicators)
-        assert len(indicators.timeframe_configs) == 3
+        assert len(indicators.config.timeframe_configs) == 3
 
         # First config has swing_points
-        assert "swing_points" in indicators.timeframe_configs[0]
-        assert "gap_detection" not in indicators.timeframe_configs[0]
+        assert indicators.config.timeframe_configs[0].swing_points is not None
+        assert indicators.config.timeframe_configs[0].gap_detection is None
 
         # Second config has gap_detection
-        assert "swing_points" not in indicators.timeframe_configs[1]
-        assert "gap_detection" in indicators.timeframe_configs[1]
+        assert indicators.config.timeframe_configs[1].swing_points is None
+        assert indicators.config.timeframe_configs[1].gap_detection is not None
 
         # Third config has neither
-        assert "swing_points" not in indicators.timeframe_configs[2]
-        assert "gap_detection" not in indicators.timeframe_configs[2]
+        assert indicators.config.timeframe_configs[2].swing_points is None
+        assert indicators.config.timeframe_configs[2].gap_detection is None
 
 
 @pytest.mark.unit
@@ -187,8 +191,8 @@ class TestCreateAll:
         assert components["aggregation"].asset_class == "equities"
 
         # Check indicators
-        assert len(components["indicators"].timeframe_configs) == 1
-        assert components["indicators"].timeframe_configs[0]["timeframes"] == ["all"]
+        assert len(components["indicators"].config.timeframe_configs) == 1
+        assert components["indicators"].config.timeframe_configs[0].timeframes == ["all"]
 
     def test_create_all_complete_config(self):
         """Test creating all components with complete Pydantic configuration."""
@@ -217,11 +221,13 @@ class TestCreateAll:
 
         # Check indicators component
         indicators = components["indicators"]
-        tf_config = indicators.timeframe_configs[0]
-        assert tf_config["timeframes"] == ["5min", "1h"]
-        assert tf_config["swing_points"]["window"] == 7
-        assert tf_config["swing_points"]["threshold"] == 3.0
-        assert tf_config["gap_detection"]["threshold"] == 0.002
+        tf_config = indicators.config.timeframe_configs[0]
+        assert tf_config.timeframes == ["5min", "1h"]
+        assert tf_config.swing_points is not None
+        assert tf_config.swing_points.window == 7
+        assert tf_config.swing_points.threshold == 3.0
+        assert tf_config.gap_detection is not None
+        assert tf_config.gap_detection.threshold == 0.002
 
     def test_create_all_complex_config(self):
         """Test creating all components with complex multi-timeframe configuration."""
@@ -257,18 +263,22 @@ class TestCreateAll:
 
         # Verify indicators
         indicators = components["indicators"]
-        assert len(indicators.timeframe_configs) == 3
+        assert len(indicators.config.timeframe_configs) == 3
 
         # Check each timeframe config
-        assert indicators.timeframe_configs[0]["timeframes"] == ["5min", "15min"]
-        assert indicators.timeframe_configs[0]["swing_points"]["threshold"] == 2.0
+        assert indicators.config.timeframe_configs[0].timeframes == ["5min", "15min"]
+        assert indicators.config.timeframe_configs[0].swing_points is not None
+        assert indicators.config.timeframe_configs[0].swing_points.threshold == 2.0
 
-        assert indicators.timeframe_configs[1]["timeframes"] == ["1h", "4h"]
-        assert indicators.timeframe_configs[1]["swing_points"]["threshold"] == 3.5
-        assert indicators.timeframe_configs[1]["gap_detection"]["threshold"] == 0.01
+        assert indicators.config.timeframe_configs[1].timeframes == ["1h", "4h"]
+        assert indicators.config.timeframe_configs[1].swing_points is not None
+        assert indicators.config.timeframe_configs[1].swing_points.threshold == 3.5
+        assert indicators.config.timeframe_configs[1].gap_detection is not None
+        assert indicators.config.timeframe_configs[1].gap_detection.threshold == 0.01
 
-        assert indicators.timeframe_configs[2]["timeframes"] == ["1d"]
-        assert indicators.timeframe_configs[2]["swing_points"]["window"] == 10
+        assert indicators.config.timeframe_configs[2].timeframes == ["1d"]
+        assert indicators.config.timeframe_configs[2].swing_points is not None
+        assert indicators.config.timeframe_configs[2].swing_points.window == 10
 
 
 @pytest.mark.unit
@@ -408,8 +418,8 @@ class TestPydanticIntegration:
         indicators = Factory.create_indicators(config)
 
         # Verify the nested structure is properly converted
-        tf_config = indicators.timeframe_configs[0]
-        assert isinstance(tf_config["swing_points"], dict)
-        assert isinstance(tf_config["gap_detection"], dict)
-        assert tf_config["swing_points"]["window"] == 7
-        assert tf_config["gap_detection"]["threshold"] == 0.002
+        tf_config = indicators.config.timeframe_configs[0]
+        assert isinstance(tf_config.swing_points, SwingPointsConfig)
+        assert isinstance(tf_config.gap_detection, GapDetectionConfig)
+        assert tf_config.swing_points.window == 7
+        assert tf_config.gap_detection.threshold == 0.002

@@ -43,7 +43,7 @@ I don't provide support for this code. The Strat community has many great resour
 [![Tests](https://github.com/jlixfeld/thestrat/actions/workflows/tests.yml/badge.svg)](https://github.com/jlixfeld/thestrat/actions/workflows/tests.yml)
 [![Coverage](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/jlixfeld/c383059dafef5a6c070532174f3f0ba8/raw/coverage.json)](https://github.com/jlixfeld/thestrat/actions/workflows/coverage.yml)
 [![Documentation](https://github.com/jlixfeld/thestrat/actions/workflows/docs.yml/badge.svg)](https://jlixfeld.github.io/thestrat/)
-[![Python Versions](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue)](https://github.com/jlixfeld/thestrat)
+[![Python Versions](https://img.shields.io/badge/python-3.11%20%7C%203.12-blue)](https://github.com/jlixfeld/thestrat)
 
 A Python module for financial data aggregation and technical analysis using #TheStrat methodology.
 
@@ -73,25 +73,29 @@ uv sync --extra test --extra dev
 
 ```python
 from thestrat import Factory
-from thestrat.schemas import FactoryConfig
+from thestrat.schemas import (
+    FactoryConfig, AggregationConfig, IndicatorsConfig,
+    TimeframeItemConfig, SwingPointsConfig
+)
 
 # Create components with validated configuration
 config = FactoryConfig(
-    aggregation={
-        "target_timeframes": ["5m"],
-        "asset_class": "equities",
-    },
-    indicators={
-        "timeframe_configs": [
-            {
-                "timeframes": ["all"],  # Apply to all target timeframes
-                "swing_points": {
-                    "window": 5,
-                    "threshold": 2.0  # 2% threshold
-                }
-            }
+    aggregation=AggregationConfig(
+        target_timeframes=["5m"],
+        asset_class="equities",
+        timezone="US/Eastern"
+    ),
+    indicators=IndicatorsConfig(
+        timeframe_configs=[
+            TimeframeItemConfig(
+                timeframes=["all"],  # Apply to all target timeframes
+                swing_points=SwingPointsConfig(
+                    window=5,
+                    threshold=2.0  # 2% threshold
+                )
+            )
         ]
-    }
+    )
 )
 
 pipeline = Factory.create_all(config)
