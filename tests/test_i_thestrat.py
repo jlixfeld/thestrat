@@ -149,8 +149,8 @@ class TestTheStratIntegration:
         assert len(analyzed) == 12  # 48 hours / 4 hours per bar
         # Check timezone - assert it's a Datetime type first
         timestamp_dtype = analyzed.schema["timestamp"]
-        assert str(timestamp_dtype).startswith('Datetime')
-        assert getattr(timestamp_dtype, 'time_zone', None) == "UTC"
+        assert isinstance(timestamp_dtype, pl.Datetime)
+        assert timestamp_dtype.time_zone == "UTC"
 
     def test_forex_utc_workflow(self):
         """Test workflow with forex UTC market data."""

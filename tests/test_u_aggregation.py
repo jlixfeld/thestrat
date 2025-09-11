@@ -394,8 +394,8 @@ class TestTimezoneHandling:
 
         # Should preserve timezone-aware format
         timestamp_dtype = result.schema["timestamp"]
-        assert str(timestamp_dtype).startswith('Datetime')
-        assert getattr(timestamp_dtype, 'time_zone', None) == "UTC"
+        assert isinstance(timestamp_dtype, pl.Datetime)
+        assert timestamp_dtype.time_zone == "UTC"
 
 
 @pytest.mark.unit
