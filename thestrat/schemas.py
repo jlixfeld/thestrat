@@ -8,13 +8,12 @@ type safety, and detailed error reporting.
 
 import re
 from datetime import datetime
-from typing import Any, ClassVar, Literal, get_args, get_origin
+from typing import Any, ClassVar, Literal, Self, get_args, get_origin
 
 import pytz
 from polars import Boolean, Datetime, Float64, Int32, String
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from pydantic.fields import FieldInfo
-from typing_extensions import Self
 
 
 class AssetClassConfig(BaseModel):
