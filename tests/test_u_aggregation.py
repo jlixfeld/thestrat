@@ -1183,7 +1183,7 @@ class TestAllTimeframes:
     def test_all_timeframe_mappings_exist(self):
         """Test that all timeframes in TIMEFRAME_TO_POLARS are valid."""
         # Test that we can create Aggregation objects for all timeframes
-        for input_tf, _polars_tf in TimeframeConfig.TIMEFRAME_TO_POLARS.items():
+        for input_tf in TimeframeConfig.TIMEFRAME_TO_POLARS.keys():
             agg = Aggregation(AggregationConfig(target_timeframes=[input_tf]))
             assert agg.target_timeframes[0] == input_tf
 
