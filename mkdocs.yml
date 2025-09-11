@@ -1,0 +1,122 @@
+site_name: TheStrat Documentation
+site_description: "#TheStrat indicators and timeframe aggregation for financial market data"
+site_url: https://jlixfeld.github.io/thestrat/
+repo_url: https://github.com/jlixfeld/thestrat
+repo_name: jlixfeld/thestrat
+
+theme:
+  name: material
+  palette:
+    # Palette toggle for automatic mode
+    - media: "(prefers-color-scheme)"
+      toggle:
+        icon: material/brightness-auto
+        name: Switch to light mode
+
+    # Palette toggle for light mode
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: blue
+      accent: blue
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+
+    # Palette toggle for dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: blue
+      accent: blue
+      toggle:
+        icon: material/brightness-4
+        name: Switch to system preference
+
+  features:
+    - navigation.tracking
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - navigation.tabs
+    - search.highlight
+    - search.suggest
+    - content.code.copy
+    - content.code.annotate
+    - content.code.select
+    - navigation.footer
+    - content.tooltips
+
+plugins:
+  - search
+  - gen-files:
+      scripts:
+        - docs/gen_ref_nav.py
+  - literate-nav:
+      nav_file: SUMMARY.md
+  - section-index
+  - mkdocstrings:
+      handlers:
+        python:
+          options:
+            # Docstring parsing
+            docstring_style: google
+            docstring_section_style: table
+            docstring_options:
+              ignore_init_summary: true
+            # Signature formatting  
+            separate_signature: true
+            line_length: 80
+            show_signature_annotations: true
+            signature_crossrefs: true
+            unwrap_annotated: true
+            # Display options
+            show_root_heading: true
+            show_root_full_path: false
+            show_source: true
+            show_submodules: false
+            merge_init_into_class: true
+            inherited_members: false
+            summary: true
+            # Heading levels
+            heading_level: 1
+
+nav:
+  - Home: index.md
+  - User Guide:
+    - user-guide/index.md
+    - Installation: user-guide/installation.md
+    - Quick Start: user-guide/quickstart.md
+    - Configuration: user-guide/configuration.md
+    - Examples: user-guide/examples.md
+    - Asset Classes: user-guide/asset-classes.md
+  - API Reference: reference/
+  - Developer Guide:
+    - developer-guide/index.md
+    - Contributing: developer-guide/contributing.md
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences
+  - admonition
+  - pymdownx.details
+  - pymdownx.tabbed:
+      alternate_style: true
+  - attr_list
+  - md_in_html
+  - pymdownx.arithmatex:
+      generic: true
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+
+extra_css:
+  - stylesheets/extra.css
+
+extra_javascript:
+  - javascripts/mathjax.js
+  - https://polyfill.io/v3/polyfill.min.js?features=es6
+  - https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js

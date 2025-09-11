@@ -1,0 +1,70 @@
+name: Auto-close external issues
+
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  issues: write
+
+jobs:
+  auto-close:
+    if: github.event.issue.user.login != 'jlixfeld' && github.event.issue.user.type != 'Bot'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Close issue and add comment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            // Close the issue immediately
+            await github.rest.issues.update({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              state: 'closed',
+              labels: ['wontfix', 'no-support']
+            });
+
+            // Add explanatory comment
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: `👋 Thanks for your interest in this project!
+
+## This Repository Doesn't Provide Support
+
+I've automatically closed this issue because **this repository has a strict no-support policy**. This isn't personal - it's to maintain healthy boundaries while sharing code with the community.
+
+## 📚 For Learning #TheStrat Methodology
+
+The Strat is an amazing trading methodology developed by Rob Smith and the community. To learn it:
+
+- **Official Content**: Check out Rob Smith's [YouTube channel](https://www.youtube.com/@smithsintheblack)
+- **Community**: Join the discussion at [#TheStrat on X/Twitter](https://x.com/hashtag/TheStrat) 
+- **Facebook Group**: [TheStrat Community](https://m.facebook.com/groups/TheStrat/)
+
+## 🔨 For Building Your Own Tools
+
+This code is shared as **inspiration only**. I encourage you to:
+
+1. **Study the methodology** thoroughly from official sources first
+2. **Build your own implementation** that fits your specific needs
+3. **Make it yours** - your custom solution will work better for your workflow
+
+## Why This Approach?
+
+Building your own Strat tools instead of using mine will give you:
+- ✅ Code that fits your exact trading style
+- ✅ Deep understanding of how your tools work
+- ✅ Ability to modify and extend as needed
+- ✅ No dependency on someone else's implementation
+
+## 📖 More Info
+
+See our [SUPPORT.md](https://github.com/jlixfeld/thestrat/blob/main/.github/SUPPORT.md) for the full explanation of this policy.
+
+---
+
+**Build your own. Make it yours. Trade it successfully.** 📈`
+            });

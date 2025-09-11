@@ -1,0 +1,84 @@
+name: Coverage
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  coverage:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: |
+          uv sync --extra test
+
+      - name: Run tests with coverage
+        run: |
+          uv run pytest tests/ --cov=thestrat --cov-report=json --cov-report=term
+
+      - name: Extract coverage percentage
+        id: coverage
+        run: |
+          COVERAGE=$(python -c "import json; print(json.load(open('coverage.json'))['totals']['percent_covered_display'])")
+          echo "percentage=$COVERAGE" >> $GITHUB_OUTPUT
+          echo "Coverage: $COVERAGE%"
+
+      - name: Create coverage badge
+        run: |
+          COVERAGE=${{ steps.coverage.outputs.percentage }}
+          COLOR="red"
+          
+          # Set badge color based on coverage percentage
+          if (( $(echo "$COVERAGE >= 90" | bc -l) )); then
+            COLOR="brightgreen"
+          elif (( $(echo "$COVERAGE >= 80" | bc -l) )); then
+            COLOR="green"  
+          elif (( $(echo "$COVERAGE >= 70" | bc -l) )); then
+            COLOR="yellow"
+          elif (( $(echo "$COVERAGE >= 60" | bc -l) )); then
+            COLOR="orange"
+          fi
+          
+          # Create badge JSON
+          mkdir -p .github/badges
+          cat > .github/badges/coverage.json << EOF
+          {
+            "schemaVersion": 1,
+            "label": "coverage",
+            "message": "${COVERAGE}%",
+            "color": "$COLOR"
+          }
+          EOF
+          
+          echo "Created coverage badge with ${COVERAGE}% coverage"
+
+      - name: Display coverage result
+        run: |
+          echo "Coverage: ${{ steps.coverage.outputs.percentage }}%"
+          echo "Badge manually updated at: https://gist.github.com/jlixfeld/c383059dafef5a6c070532174f3f0ba8"
+          
+          # Note: Gist update requires personal access token with gist scope
+          # For now, the badge shows the current coverage percentage
+          # To update automatically, add a PAT as repository secret

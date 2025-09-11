@@ -1,0 +1,34 @@
+name: Tests
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+
+    steps:
+    - uses: actions/checkout@v3
+    - name: Install uv
+      uses: astral-sh/setup-uv@v3
+      with:
+        version: "latest"
+    - name: Set up Python ${{ matrix.python-version }}
+      run: uv python install ${{ matrix.python-version }}
+    - name: Install dependencies
+      run: |
+        uv sync --extra test --extra dev
+        uv add coverage[toml]
+    - name: Lint and format with ruff
+      run: |
+        uv run ruff check .
+        uv run ruff format --check .
+    - name: Test with pytest
+      run: |
+        uv run pytest tests/ --cov=thestrat --cov-report=term-missing
