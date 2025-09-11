@@ -24,7 +24,7 @@ jobs:
     - name: Install dependencies
       run: |
         uv sync --extra test --extra dev
-        uv add coverage[toml]
+        uv add 'coverage[toml]'
     - name: Lint and format with ruff
       run: |
         uv run ruff check .
