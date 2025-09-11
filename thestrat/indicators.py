@@ -176,6 +176,7 @@ class Indicators(Component):
         gap_detection_config = config.gap_detection
         if gap_detection_config is None:
             from .schemas import GapDetectionConfig
+
             gap_detection_config = GapDetectionConfig()  # Use defaults
 
         df = data.clone()
@@ -220,6 +221,7 @@ class Indicators(Component):
         swing_points_config = config.swing_points
         if swing_points_config is None:
             from .schemas import SwingPointsConfig
+
             swing_points_config = SwingPointsConfig()  # Use defaults
 
         swing_window = swing_points_config.window
@@ -388,6 +390,7 @@ class Indicators(Component):
         gap_detection_config = config.gap_detection
         if gap_detection_config is None:
             from .schemas import GapDetectionConfig
+
             gap_detection_config = GapDetectionConfig()  # Use defaults
 
         df = data.clone()
@@ -671,6 +674,7 @@ class Indicators(Component):
         gap_detection_config = config.gap_detection
         if gap_detection_config is None:
             from .schemas import GapDetectionConfig
+
             gap_detection_config = GapDetectionConfig()  # Use defaults
 
         gap_threshold = gap_detection_config.threshold

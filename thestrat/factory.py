@@ -14,6 +14,7 @@ from .schemas import AggregationConfig, FactoryConfig, IndicatorsConfig
 
 class ComponentDict(TypedDict):
     """Type definition for component dictionary returned by Factory.create_all()."""
+
     aggregation: Aggregation
     indicators: Indicators
 
