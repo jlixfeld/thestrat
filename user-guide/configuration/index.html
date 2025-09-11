@@ -494,19 +494,6 @@
         
       
       
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    Configuration
-    
-  </span>
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
       <a href="./" class="md-nav__link md-nav__link--active">
         
   
@@ -518,52 +505,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#overview" class="md-nav__link">
-    <span class="md-ellipsis">
-      Overview
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#quick-start" class="md-nav__link">
-    <span class="md-ellipsis">
-      Quick Start
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#schema-documentation" class="md-nav__link">
-    <span class="md-ellipsis">
-      Schema Documentation
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
       
     </li>
   
@@ -606,6 +547,29 @@
   
   <span class="md-ellipsis">
     Asset Classes
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../dataframe-schema/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    DataFrame Schema
     
   </span>
   
@@ -975,41 +939,6 @@
     
   
   
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#overview" class="md-nav__link">
-    <span class="md-ellipsis">
-      Overview
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#quick-start" class="md-nav__link">
-    <span class="md-ellipsis">
-      Quick Start
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#schema-documentation" class="md-nav__link">
-    <span class="md-ellipsis">
-      Schema Documentation
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
 </nav>
                   </div>
                 </div>
@@ -1025,397 +954,7 @@
 
 
 <h1 id="configuration-reference">Configuration Reference</h1>
-<p>TheStrat uses Pydantic schemas for configuration validation, providing type safety, detailed error reporting, and comprehensive documentation.</p>
-<h2 id="overview">Overview</h2>
-<p>Configuration in TheStrat follows a hierarchical structure:</p>
-<ul>
-<li><strong>FactoryConfig</strong> - Root configuration for complete pipeline setup</li>
-<li><strong>AggregationConfig</strong> - OHLCV timeframe aggregation settings</li>
-<li><strong>IndicatorsConfig</strong> - TheStrat indicator configurations</li>
-<li><strong>AssetClassConfig</strong> - Market-specific settings (crypto, equities, FX)</li>
-</ul>
-<h2 id="quick-start">Quick Start</h2>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">thestrat</span><span class="w"> </span><span class="kn">import</span> <span class="n">Factory</span>
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="c1"># Minimal configuration</span>
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="n">config</span> <span class="o">=</span> <span class="p">{</span>
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    <span class="s2">&quot;aggregation&quot;</span><span class="p">:</span> <span class="p">{</span>
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>        <span class="s2">&quot;target_timeframes&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;5m&quot;</span><span class="p">,</span> <span class="s2">&quot;1h&quot;</span><span class="p">],</span>
-</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>        <span class="s2">&quot;asset_class&quot;</span><span class="p">:</span> <span class="s2">&quot;equities&quot;</span>
-</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>    <span class="p">},</span>
-</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>    <span class="s2">&quot;indicators&quot;</span><span class="p">:</span> <span class="p">{</span>
-</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>        <span class="s2">&quot;timeframe_configs&quot;</span><span class="p">:</span> <span class="p">[{</span>
-</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>            <span class="s2">&quot;timeframes&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;all&quot;</span><span class="p">],</span>
-</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>            <span class="s2">&quot;swing_points&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;window&quot;</span><span class="p">:</span> <span class="mi">5</span><span class="p">,</span> <span class="s2">&quot;threshold&quot;</span><span class="p">:</span> <span class="mf">2.0</span><span class="p">}</span>
-</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>        <span class="p">}]</span>
-</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>    <span class="p">}</span>
-</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a><span class="p">}</span>
-</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>
-</span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a><span class="n">pipeline</span> <span class="o">=</span> <span class="n">Factory</span><span class="o">.</span><span class="n">create_all</span><span class="p">(</span><span class="n">config</span><span class="p">)</span>
-</span></code></pre></div>
-<h2 id="schema-documentation">Schema Documentation</h2>
-<h1 id="thestrat-schema-documentation">TheStrat Schema Documentation</h1>
-<p>Auto-generated documentation for all Pydantic configuration models.</p>
-<hr />
-<h2 id="assetclassconfig">AssetClassConfig</h2>
-<p>Configuration for a specific asset class with comprehensive market metadata.</p>
-<table>
-<thead>
-<tr>
-<th>Field</th>
-<th>Type</th>
-<th>Default</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>timezone</code></td>
-<td>str</td>
-<td>PydanticUndefined</td>
-<td>Timezone for market hours and timestamp handling</td>
-</tr>
-<tr>
-<td><code>session_start</code></td>
-<td>str</td>
-<td>PydanticUndefined</td>
-<td>Market session start time in HH:MM 24-hour format</td>
-</tr>
-<tr>
-<td><code>hour_boundary</code></td>
-<td>bool</td>
-<td>PydanticUndefined</td>
-<td>Whether to align aggregation to hour boundaries for hourly+ timeframes</td>
-</tr>
-<tr>
-<td><code>trading_hours</code></td>
-<td>str</td>
-<td>PydanticUndefined</td>
-<td>Human-readable description of trading hours</td>
-</tr>
-</tbody>
-</table>
-<h3 id="class-constants">Class Constants</h3>
-<ul>
-<li><strong><code>REGISTRY</code></strong>: Registry of predefined configurations for each asset class</li>
-<li>Available keys: crypto, equities, fx</li>
-</ul>
-<h4 id="configured-asset-classes">Configured Asset Classes</h4>
-<p><strong>crypto</strong>
-- Trading Hours: 24/7 continuous trading
-- Timezone: <code>UTC</code>
-- Session Start: <code>00:00</code>
-- Hour Boundary: <code>True</code></p>
-<p><strong>equities</strong>
-- Trading Hours: 9:30 AM - 4:00 PM ET (regular session)
-- Timezone: <code>US/Eastern</code>
-- Session Start: <code>09:30</code>
-- Hour Boundary: <code>False</code></p>
-<p><strong>fx</strong>
-- Trading Hours: Sunday 5 PM - Friday 5 PM ET (24/5)
-- Timezone: <code>UTC</code>
-- Session Start: <code>00:00</code>
-- Hour Boundary: <code>True</code></p>
-<h2 id="timeframeconfig">TimeframeConfig</h2>
-<p>Configuration and validation for timeframes with comprehensive metadata.</p>
-<table>
-<thead>
-<tr>
-<th>Field</th>
-<th>Type</th>
-<th>Default</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td></td>
-<td></td>
-<td></td>
-<td></td>
-</tr>
-</tbody>
-</table>
-<h3 id="class-constants_1">Class Constants</h3>
-<ul>
-<li><strong><code>TIMEFRAME_TO_POLARS</code></strong>: Mapping of timeframe strings to Polars format strings</li>
-<li>Available keys: 1min, 5min, 15min, 30min, 1h, 4h, 6h, 12h, 1d, 1w, 1m, 1q, 1y</li>
-<li><strong><code>TIMEFRAME_METADATA</code></strong>: Comprehensive metadata for each supported timeframe</li>
-<li>Available keys: 1min, 5min, 15min, 30min, 1h, 4h, 6h, 12h, 1d, 1w, 1m, 1q, 1y</li>
-</ul>
-<h4 id="timeframe-details">Timeframe Details</h4>
-<table>
-<thead>
-<tr>
-<th>Timeframe</th>
-<th>Category</th>
-<th>Duration</th>
-<th>Description</th>
-<th>Typical Use</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>1min</code></td>
-<td>sub-hourly</td>
-<td>1m</td>
-<td>1-minute bars for high-frequency analysis</td>
-<td>Scalping, entry timing, tick analysis</td>
-</tr>
-<tr>
-<td><code>5min</code></td>
-<td>sub-hourly</td>
-<td>5m</td>
-<td>5-minute bars for short-term patterns</td>
-<td>Day trading, quick reversals</td>
-</tr>
-<tr>
-<td><code>15min</code></td>
-<td>sub-hourly</td>
-<td>15m</td>
-<td>15-minute bars for intraday structure</td>
-<td>Swing entries, session analysis</td>
-</tr>
-<tr>
-<td><code>30min</code></td>
-<td>sub-hourly</td>
-<td>30m</td>
-<td>30-minute bars for session structure</td>
-<td>Half-hourly patterns, session transitions</td>
-</tr>
-<tr>
-<td><code>1h</code></td>
-<td>hourly</td>
-<td>1h</td>
-<td>1-hour bars for daily structure analysis</td>
-<td>Day trading context, hourly levels</td>
-</tr>
-<tr>
-<td><code>4h</code></td>
-<td>multi-hourly</td>
-<td>4h</td>
-<td>4-hour bars for swing trading</td>
-<td>Swing trading, multi-day holds</td>
-</tr>
-<tr>
-<td><code>6h</code></td>
-<td>multi-hourly</td>
-<td>6h</td>
-<td>6-hour bars for extended swing analysis</td>
-<td>Position trading context</td>
-</tr>
-<tr>
-<td><code>12h</code></td>
-<td>multi-hourly</td>
-<td>12h</td>
-<td>12-hour bars for daily session analysis</td>
-<td>Asian/Western session splits</td>
-</tr>
-<tr>
-<td><code>1d</code></td>
-<td>daily</td>
-<td>1d</td>
-<td>Daily bars for trend analysis</td>
-<td>Trend identification, position trading</td>
-</tr>
-<tr>
-<td><code>1w</code></td>
-<td>weekly</td>
-<td>1w</td>
-<td>Weekly bars for long-term structure</td>
-<td>Major trend analysis, portfolio allocation</td>
-</tr>
-<tr>
-<td><code>1m</code></td>
-<td>monthly</td>
-<td>4w</td>
-<td>Monthly bars for macro analysis</td>
-<td>Long-term investing, macro trends</td>
-</tr>
-<tr>
-<td><code>1q</code></td>
-<td>quarterly</td>
-<td>12w</td>
-<td>Quarterly bars for fundamental analysis</td>
-<td>Business cycle analysis, long-term allocation</td>
-</tr>
-<tr>
-<td><code>1y</code></td>
-<td>yearly</td>
-<td>52w</td>
-<td>Yearly bars for multi-year analysis</td>
-<td>Multi-year trends, generational analysis</td>
-</tr>
-</tbody>
-</table>
-<h2 id="swingpointsconfig">SwingPointsConfig</h2>
-<p>Configuration for swing point detection with comprehensive parameter documentation.</p>
-<table>
-<thead>
-<tr>
-<th>Field</th>
-<th>Type</th>
-<th>Default</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>window</code></td>
-<td>int</td>
-<td><code>5</code></td>
-<td>Number of bars for swing detection window (must be odd for symmetry)</td>
-</tr>
-<tr>
-<td><code>threshold</code></td>
-<td>float</td>
-<td><code>5.0</code></td>
-<td>Minimum percentage move to qualify as swing point</td>
-</tr>
-</tbody>
-</table>
-<h2 id="gapdetectionconfig">GapDetectionConfig</h2>
-<p>Configuration for gap detection with comprehensive threshold documentation.</p>
-<table>
-<thead>
-<tr>
-<th>Field</th>
-<th>Type</th>
-<th>Default</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>threshold</code></td>
-<td>float</td>
-<td><code>0.001</code></td>
-<td>Minimum gap size as decimal percentage (0.01 = 1% gap)</td>
-</tr>
-</tbody>
-</table>
-<h2 id="timeframeitemconfig">TimeframeItemConfig</h2>
-<p>Configuration for a single timeframe item with flexible timeframe targeting.</p>
-<table>
-<thead>
-<tr>
-<th>Field</th>
-<th>Type</th>
-<th>Default</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>timeframes</code></td>
-<td>list[str]</td>
-<td>PydanticUndefined</td>
-<td>List of timeframes to apply this configuration to</td>
-</tr>
-<tr>
-<td><code>swing_points</code></td>
-<td>UnionType[SwingPointsConfig, NoneType]</td>
-<td><code>None</code></td>
-<td>Optional swing point detection configuration for these timeframes</td>
-</tr>
-<tr>
-<td><code>gap_detection</code></td>
-<td>UnionType[GapDetectionConfig, NoneType]</td>
-<td><code>None</code></td>
-<td>Optional gap detection configuration for these timeframes</td>
-</tr>
-</tbody>
-</table>
-<h2 id="indicatorsconfig">IndicatorsConfig</h2>
-<p>Complete configuration for indicators component with per-timeframe settings.</p>
-<table>
-<thead>
-<tr>
-<th>Field</th>
-<th>Type</th>
-<th>Default</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>timeframe_configs</code></td>
-<td>list[TimeframeItemConfig]</td>
-<td>PydanticUndefined</td>
-<td>List of timeframe-specific indicator configurations</td>
-</tr>
-</tbody>
-</table>
-<h2 id="aggregationconfig">AggregationConfig</h2>
-<p>Complete configuration for aggregation component with market-aware settings.</p>
-<table>
-<thead>
-<tr>
-<th>Field</th>
-<th>Type</th>
-<th>Default</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>target_timeframes</code></td>
-<td>list[str]</td>
-<td>PydanticUndefined</td>
-<td>List of target timeframes for OHLC aggregation</td>
-</tr>
-<tr>
-<td><code>asset_class</code></td>
-<td>Literal[crypto, equities, fx]</td>
-<td><code>"equities"</code></td>
-<td>Asset class determining market behavior and defaults</td>
-</tr>
-<tr>
-<td><code>timezone</code></td>
-<td>UnionType[str, NoneType]</td>
-<td><code>None</code></td>
-<td>Override timezone (None uses asset class default)</td>
-</tr>
-<tr>
-<td><code>hour_boundary</code></td>
-<td>UnionType[bool, NoneType]</td>
-<td><code>None</code></td>
-<td>Override hour boundary alignment (None uses asset class default)</td>
-</tr>
-<tr>
-<td><code>session_start</code></td>
-<td>UnionType[str, NoneType]</td>
-<td><code>None</code></td>
-<td>Override session start time HH:MM (None uses asset class default)</td>
-</tr>
-</tbody>
-</table>
-<h2 id="factoryconfig">FactoryConfig</h2>
-<p>Root configuration for Factory.create_all method with complete pipeline setup.</p>
-<table>
-<thead>
-<tr>
-<th>Field</th>
-<th>Type</th>
-<th>Default</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>aggregation</code></td>
-<td>AggregationConfig</td>
-<td>PydanticUndefined</td>
-<td>Aggregation component configuration for OHLC timeframe conversion</td>
-</tr>
-<tr>
-<td><code>indicators</code></td>
-<td>IndicatorsConfig</td>
-<td>PydanticUndefined</td>
-<td>Indicators component configuration for TheStrat analysis</td>
-</tr>
-</tbody>
-</table>
+<p>Configuration documentation will be generated during build.</p>
 
 
 
