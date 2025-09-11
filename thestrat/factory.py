@@ -5,12 +5,17 @@ This module provides clean factory methods for creating and configuring
 TheStrat components with Pydantic schema validation.
 """
 
-from typing import Any
+from typing import Any, TypedDict
 
 from .aggregation import Aggregation
-from .base import Component
 from .indicators import Indicators
 from .schemas import AggregationConfig, FactoryConfig, IndicatorsConfig
+
+
+class ComponentDict(TypedDict):
+    """Type definition for component dictionary returned by Factory.create_all()."""
+    aggregation: Aggregation
+    indicators: Indicators
 
 
 class Factory:
@@ -77,7 +82,7 @@ class Factory:
         return Indicators(config)
 
     @classmethod
-    def create_all(cls, config: FactoryConfig) -> dict[str, Component]:
+    def create_all(cls, config: FactoryConfig) -> ComponentDict:
         """
         Create complete processing pipeline with aggregation and indicators.
 

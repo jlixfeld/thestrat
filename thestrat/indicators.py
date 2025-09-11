@@ -22,6 +22,9 @@ class Indicators(Component):
     analysis, pattern recognition, and gap detection optimized for TheStrat methodology.
     """
 
+    # Type hints for commonly accessed attributes
+    config: IndicatorsConfig
+
     def __init__(self, config: IndicatorsConfig):
         """
         Initialize indicators component with validated configuration.
