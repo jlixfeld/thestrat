@@ -36,11 +36,12 @@ class Aggregation(Component):
     """
 
     # Type hints for commonly accessed attributes
-    timezone: str
-    asset_class: str
-    target_timeframes: list[str]
-    session_start: str
-    hour_boundary: bool
+    # Note: These fields are guaranteed to be non-None after config validation
+    timezone: str  # Resolved from config.timezone after asset class defaults applied
+    asset_class: str  # Always set from config.asset_class
+    target_timeframes: list[str]  # Always set from config.target_timeframes
+    session_start: str  # Resolved from config.session_start after asset class defaults applied
+    hour_boundary: bool  # Resolved from config.hour_boundary after asset class defaults applied
 
     def __init__(self, config: AggregationConfig):
         """
@@ -57,6 +58,12 @@ class Aggregation(Component):
         # Extract commonly used values for convenience
         self.target_timeframes = config.target_timeframes.copy()
         self.asset_class = config.asset_class
+
+        # These fields are guaranteed to be non-None after model validation
+        assert config.timezone is not None
+        assert config.session_start is not None
+        assert config.hour_boundary is not None
+
         self.timezone = config.timezone
         self.session_start = config.session_start
         self.hour_boundary = config.hour_boundary
@@ -221,7 +228,6 @@ class Aggregation(Component):
             return False
 
         return True
-
 
     def _should_use_hour_boundary(self, timeframe: str) -> bool:
         """Determine if timeframe should use hour boundary alignment."""

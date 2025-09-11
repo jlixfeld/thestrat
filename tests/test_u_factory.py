@@ -103,8 +103,10 @@ class TestCreateIndicators:
 
         tf_config = indicators.config.timeframe_configs[0]
         assert tf_config.timeframes == ["5min", "15min"]
+        assert tf_config.swing_points is not None
         assert tf_config.swing_points.window == 7
         assert tf_config.swing_points.threshold == 3.0
+        assert tf_config.gap_detection is not None
         assert tf_config.gap_detection.threshold == 0.002
 
     def test_create_indicators_multiple_timeframe_configs(self):
@@ -123,14 +125,17 @@ class TestCreateIndicators:
 
         # Check first config
         assert indicators.config.timeframe_configs[0].timeframes == ["5min"]
+        assert indicators.config.timeframe_configs[0].swing_points is not None
         assert indicators.config.timeframe_configs[0].swing_points.threshold == 2.0
 
         # Check second config
         assert indicators.config.timeframe_configs[1].timeframes == ["1h"]
+        assert indicators.config.timeframe_configs[1].swing_points is not None
         assert indicators.config.timeframe_configs[1].swing_points.window == 7
 
         # Check third config
         assert indicators.config.timeframe_configs[2].timeframes == ["1d"]
+        assert indicators.config.timeframe_configs[2].gap_detection is not None
         assert indicators.config.timeframe_configs[2].gap_detection.threshold == 0.01
 
     def test_create_indicators_optional_configs(self):
@@ -218,8 +223,10 @@ class TestCreateAll:
         indicators = components["indicators"]
         tf_config = indicators.config.timeframe_configs[0]
         assert tf_config.timeframes == ["5min", "1h"]
+        assert tf_config.swing_points is not None
         assert tf_config.swing_points.window == 7
         assert tf_config.swing_points.threshold == 3.0
+        assert tf_config.gap_detection is not None
         assert tf_config.gap_detection.threshold == 0.002
 
     def test_create_all_complex_config(self):
@@ -260,13 +267,17 @@ class TestCreateAll:
 
         # Check each timeframe config
         assert indicators.config.timeframe_configs[0].timeframes == ["5min", "15min"]
+        assert indicators.config.timeframe_configs[0].swing_points is not None
         assert indicators.config.timeframe_configs[0].swing_points.threshold == 2.0
 
         assert indicators.config.timeframe_configs[1].timeframes == ["1h", "4h"]
+        assert indicators.config.timeframe_configs[1].swing_points is not None
         assert indicators.config.timeframe_configs[1].swing_points.threshold == 3.5
+        assert indicators.config.timeframe_configs[1].gap_detection is not None
         assert indicators.config.timeframe_configs[1].gap_detection.threshold == 0.01
 
         assert indicators.config.timeframe_configs[2].timeframes == ["1d"]
+        assert indicators.config.timeframe_configs[2].swing_points is not None
         assert indicators.config.timeframe_configs[2].swing_points.window == 10
 
 
