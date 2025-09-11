@@ -69,7 +69,7 @@ uv run ruff check --fix .
 **Configuration** (already in `pyproject.toml`):
 - Line length: 120 characters
 - Quote style: Double quotes
-- Python target: 3.10+
+- Python target: 3.11+
 
 ### Type Hints
 

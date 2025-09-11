@@ -65,7 +65,7 @@ Guidelines for making contributions, code style, and pull request process.
 
 ## Technology Stack
 
-- **Python 3.10+** - Modern Python features
+- **Python 3.11+** - Modern Python features
 - **Polars** - High-performance data processing
 - **Pandas** - Legacy support and interoperability  
 - **Pytest** - Testing framework
