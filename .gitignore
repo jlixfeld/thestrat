@@ -165,3 +165,7 @@ site/
 # Temporary test files
 temp_*.py
 scratch_*.py
+
+# Test files (only allow in /tests/ directory)
+test_*.py
+!/tests/test_*.py
