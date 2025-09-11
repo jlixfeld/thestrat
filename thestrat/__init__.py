@@ -20,7 +20,13 @@ from .schemas import (
 )
 from .signals import SIGNALS, PriceChange, SignalBias, SignalCategory, SignalMetadata, SignalStatus
 
-__version__ = "1.0.0"
+try:
+    from importlib.metadata import version
+
+    __version__ = version("thestrat")
+except Exception:
+    # Fallback if package not found (development mode)
+    __version__ = "ERROR: VERSION NOT FOUND"
 __all__ = [
     "Factory",
     "Component",

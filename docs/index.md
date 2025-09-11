@@ -120,6 +120,6 @@ Ready to implement #TheStrat in your trading system?
 
 ## Project Status
 
-**Version**: 1.0.1 - Production/Stable
+![Version](https://img.shields.io/github/v/tag/jlixfeld/thestrat?label=version&sort=semver)
 **Python**: 3.11+
 **License**: Private - All rights reserved

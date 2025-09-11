@@ -62,7 +62,7 @@ Test your installation by importing the module:
 
 ```python title="Verify Installation"
 import thestrat
-print(f"TheStrat version: {thestrat.__version__}")
+print(f"TheStrat version: {thestrat.__version__}")  # Dynamic version from package
 
 # Test basic functionality with Pydantic models
 from thestrat import Factory
