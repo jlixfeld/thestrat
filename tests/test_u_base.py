@@ -64,13 +64,13 @@ class TestComponent:
     def test_init_without_config(self, component):
         """Test component initialization without config."""
         # New API doesn't have config attribute
-        assert hasattr(component, '__class__')
+        assert hasattr(component, "__class__")
 
     def test_init_with_config(self):
         """Test component initialization without parameters."""
         # New API doesn't accept config parameter
         component = ConcreteComponent()
-        assert hasattr(component, '__class__')
+        assert hasattr(component, "__class__")
 
     def test_convert_pandas_to_polars(self, component, sample_pandas_df):
         """Test conversion of pandas DataFrame to Polars."""
@@ -118,13 +118,13 @@ class TestComponent:
     def test_config_parameter_optional(self):
         """Test component initialization without parameters."""
         component = ConcreteComponent()
-        assert hasattr(component, '__class__')
+        assert hasattr(component, "__class__")
 
     def test_config_parameter_accepts_dict(self):
         """Test component initialization works."""
-        # New API doesn't use config parameter  
+        # New API doesn't use config parameter
         component = ConcreteComponent()
-        assert hasattr(component, '__class__')
+        assert hasattr(component, "__class__")
 
     def test_pandas_datetime_conversion_preserves_timezone(self, component):
         """Test that pandas datetime with timezone is preserved."""
@@ -183,12 +183,12 @@ class TestAbstractMethods:
     def test_abstract_process_method_implementation_required(self):
         """Test that concrete classes must implement the process method."""
         from thestrat.base import Component
-        
+
         # Create a concrete class that doesn't implement process method
         class IncompleteComponent(Component):
             def validate_input(self, data):
                 return True
-        
+
         # Should raise TypeError when trying to instantiate
         with pytest.raises(TypeError) as exc_info:
             IncompleteComponent()
@@ -198,12 +198,12 @@ class TestAbstractMethods:
     def test_abstract_validate_input_method_implementation_required(self):
         """Test that concrete classes must implement the validate_input method."""
         from thestrat.base import Component
-        
+
         # Create a concrete class that doesn't implement validate_input method
         class IncompleteComponent(Component):
             def process(self, data):
                 return data
-        
+
         # Should raise TypeError when trying to instantiate
         with pytest.raises(TypeError) as exc_info:
             IncompleteComponent()
@@ -213,69 +213,73 @@ class TestAbstractMethods:
     def test_concrete_implementation_with_both_methods(self):
         """Test that concrete classes with both methods can be instantiated."""
         from thestrat.base import Component
-        
+
         # Create a complete concrete class
         class CompleteComponent(Component):
             def process(self, data):
                 return self._convert_to_polars(data)
-                
+
             def validate_input(self, data):
                 return True
-        
+
         # Should instantiate successfully
         component = CompleteComponent()
         assert isinstance(component, Component)
-        assert hasattr(component, 'process')
-        assert hasattr(component, 'validate_input')
+        assert hasattr(component, "process")
+        assert hasattr(component, "validate_input")
 
     def test_abstract_methods_are_pass_statements(self):
         """Test that the abstract methods in Component are just pass statements."""
+
         from thestrat.base import Component
-        import inspect
-        
+
         # Get the source of the abstract methods to verify they are pass statements
         process_method = Component.process
         validate_input_method = Component.validate_input
-        
+
         # The methods should exist and be abstract
-        assert hasattr(process_method, '__isabstractmethod__')
-        assert hasattr(validate_input_method, '__isabstractmethod__')
+        assert hasattr(process_method, "__isabstractmethod__")
+        assert hasattr(validate_input_method, "__isabstractmethod__")
         assert process_method.__isabstractmethod__ is True
         assert validate_input_method.__isabstractmethod__ is True
 
     def test_abstract_method_pass_statements_directly(self):
         """Test calling abstract methods directly to cover the pass statements."""
         from thestrat.base import Component
-        
+
         # Create a class that temporarily bypasses ABC to access pass statements
         class DirectCallComponent(Component):
             def process(self, data):
                 # Call the parent abstract method directly to hit the pass statement
-                return super(Component, self).process(data) if hasattr(super(Component, self), 'process') else None
-                
+                return super(Component, self).process(data) if hasattr(super(Component, self), "process") else None
+
             def validate_input(self, data):
-                # Call the parent abstract method directly to hit the pass statement  
-                return super(Component, self).validate_input(data) if hasattr(super(Component, self), 'validate_input') else True
-        
+                # Call the parent abstract method directly to hit the pass statement
+                return (
+                    super(Component, self).validate_input(data)
+                    if hasattr(super(Component, self), "validate_input")
+                    else True
+                )
+
         # This approach may not work due to ABC implementation, so let's try a different approach
         # We can use object.__new__ to create an instance without calling __init__
         import polars as pl
-        
+
         # Create minimal test data
         test_data = pl.DataFrame({"a": [1, 2, 3]})
-        
+
         # Try to call abstract methods using unbound method approach
         # This tests the actual pass statement lines in the abstract methods
         try:
             # Call process method from Component class directly
-            result = Component.process(None, test_data) 
+            result = Component.process(None, test_data)
             assert result is None  # pass statement returns None
         except (TypeError, NotImplementedError):
             # Expected for abstract methods, but we've at least attempted to cover the lines
             pass
-            
+
         try:
-            # Call validate_input method from Component class directly  
+            # Call validate_input method from Component class directly
             result = Component.validate_input(None, test_data)
             assert result is None  # pass statement returns None
         except (TypeError, NotImplementedError):

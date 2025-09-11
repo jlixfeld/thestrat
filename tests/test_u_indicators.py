@@ -20,11 +20,13 @@ class TestIndicatorsInit:
 
     def test_init_with_all_timeframe_config(self):
         """Test initialization with 'all' timeframe configuration."""
-        timeframe_configs = [{
-            "timeframes": ["all"],
-            "swing_points": {"window": 7, "threshold": 3.0},
-            "gap_detection": {"threshold": 0.001}
-        }]
+        timeframe_configs = [
+            {
+                "timeframes": ["all"],
+                "swing_points": {"window": 7, "threshold": 3.0},
+                "gap_detection": {"threshold": 0.001},
+            }
+        ]
         indicators = Indicators(timeframe_configs=timeframe_configs)
 
         assert indicators.timeframe_configs == timeframe_configs
@@ -34,13 +36,15 @@ class TestIndicatorsInit:
 
     def test_init_with_swing_config(self):
         """Test initialization with swing point configuration."""
-        timeframe_configs = [{
-            "timeframes": ["all"],
-            "swing_points": {
-                "window": 7,
-                "threshold": 3.0,  # 3% threshold
+        timeframe_configs = [
+            {
+                "timeframes": ["all"],
+                "swing_points": {
+                    "window": 7,
+                    "threshold": 3.0,  # 3% threshold
+                },
             }
-        }]
+        ]
         indicators = Indicators(timeframe_configs=timeframe_configs)
 
         assert indicators.timeframe_configs == timeframe_configs
@@ -71,11 +75,15 @@ class TestIndicatorsValidation:
     @pytest.fixture
     def indicators(self):
         """Create indicators instance for testing."""
-        return Indicators(timeframe_configs=[{
-            "timeframes": ["all"],
-            "swing_points": {"window": 5, "threshold": 5.0},
-            "gap_detection": {"threshold": 0.001}
-        }])
+        return Indicators(
+            timeframe_configs=[
+                {
+                    "timeframes": ["all"],
+                    "swing_points": {"window": 5, "threshold": 5.0},
+                    "gap_detection": {"threshold": 0.001},
+                }
+            ]
+        )
 
     @pytest.fixture
     def valid_ohlc_data(self):
@@ -169,7 +177,9 @@ class TestSwingPoints:
 
     def test_swing_point_detection(self, trending_data):
         """Test basic swing point detection."""
-        indicators = Indicators(timeframe_configs=[{"timeframes": ["all"], "swing_points": {"window": 3, "threshold": 1.0}}])  # Lower threshold
+        indicators = Indicators(
+            timeframe_configs=[{"timeframes": ["all"], "swing_points": {"window": 3, "threshold": 1.0}}]
+        )  # Lower threshold
         result = indicators._calculate_swing_points(trending_data)
 
         assert "swing_high" in result.columns
@@ -624,11 +634,15 @@ class TestFullProcessing:
 
     def test_process_complete_pipeline(self, comprehensive_data):
         """Test complete indicator processing pipeline."""
-        indicators = Indicators(timeframe_configs=[{
-            "timeframes": ["all"],
-            "swing_points": {"window": 5, "threshold": 5.0},
-            "gap_detection": {"threshold": 0.001}
-        }])
+        indicators = Indicators(
+            timeframe_configs=[
+                {
+                    "timeframes": ["all"],
+                    "swing_points": {"window": 5, "threshold": 5.0},
+                    "gap_detection": {"threshold": 0.001},
+                }
+            ]
+        )
         result = indicators.process(comprehensive_data)
 
         # Should contain all core indicator categories
@@ -746,25 +760,25 @@ class TestCorrectedScenarioClassification:
         indicators = Indicators(timeframe_configs=[{"timeframes": ["all"], "swing_points": {"window": 2}}])
         result = indicators._calculate_strat_patterns(scenario_test_data)
 
-        scenarios = result["scenario"].to_list()
+        _scenarios = result["scenario"].to_list()
 
         # Bar 0: No previous bar, should be None
-        assert scenarios[0] is None
+        assert _scenarios[0] is None
 
         # Bar 1: high(102) > high1(101) AND low(100) >= low1(99) = 2U
-        assert scenarios[1] == "2U"
+        assert _scenarios[1] == "2U"
 
         # Bar 2: low(99) < low1(100) AND high(101) <= high1(102) = 2D
-        assert scenarios[2] == "2D"
+        assert _scenarios[2] == "2D"
 
         # Bar 3: high(105) > high1(101) AND low(98) < low1(99) = 3
-        assert scenarios[3] == "3"
+        assert _scenarios[3] == "3"
 
         # Bar 4: high(101) <= high1(105) AND low(100) >= low1(98) = 1
-        assert scenarios[4] == "1"
+        assert _scenarios[4] == "1"
 
         # Bar 5: high(104) > high1(101) AND low(102) >= low1(100) = 2U
-        assert scenarios[5] == "2U"
+        assert _scenarios[5] == "2U"
 
 
 @pytest.mark.unit
@@ -1151,8 +1165,22 @@ class TestMotherbarProblems:
             {
                 "timestamp": [datetime(2023, 1, 1) + timedelta(days=i) for i in range(6)],
                 "open": [100.0, 101.0, 101.5, 103.0, 105.0, 105.5],
-                "high": [102.0, 101.5, 101.8, 105.0, 106.0, 105.8],  # Bar 0: 102, Bar 1: inside (101.5), Bar 2: inside (101.8), Bar 3: breakout (105), Bar 4: 106, Bar 5: inside (105.8)
-                "low": [98.0, 99.0, 98.5, 103.0, 104.0, 104.5],        # Bar 0: 98, Bar 1: inside (99), Bar 2: inside (98.5), Bar 3: breakout (103), Bar 4: 104, Bar 5: inside (104.5)
+                "high": [
+                    102.0,
+                    101.5,
+                    101.8,
+                    105.0,
+                    106.0,
+                    105.8,
+                ],  # Bar 0: 102, Bar 1: inside (101.5), Bar 2: inside (101.8), Bar 3: breakout (105), Bar 4: 106, Bar 5: inside (105.8)
+                "low": [
+                    98.0,
+                    99.0,
+                    98.5,
+                    103.0,
+                    104.0,
+                    104.5,
+                ],  # Bar 0: 98, Bar 1: inside (99), Bar 2: inside (98.5), Bar 3: breakout (103), Bar 4: 104, Bar 5: inside (104.5)
                 "close": [101.0, 100.5, 100.8, 104.0, 105.5, 105.2],
                 "volume": [1000] * 6,
             }
@@ -1161,14 +1189,14 @@ class TestMotherbarProblems:
         with_basic = indicators._calculate_strat_patterns(motherbar_data)
         result = indicators._calculate_advanced_patterns(with_basic)
         motherbar_problems = result["motherbar_problems"].to_list()
-        scenarios = result["scenario"].to_list()
+        _scenarios = result["scenario"].to_list()
 
         # Expected scenarios based on high/low relationships:
         # Bar 0: No previous bar -> scenario will be None or handled specially
         # Bar 1: high(101.5) <= prev_high(102) AND low(99) >= prev_low(98) -> scenario "1" (inside)
-        # Bar 2: high(101.8) <= prev_high(101.5) AND low(98.5) < prev_low(99) -> scenario "2D" 
+        # Bar 2: high(101.8) <= prev_high(101.5) AND low(98.5) < prev_low(99) -> scenario "2D"
         # Bar 3: high(105) > prev_high(101.8) AND low(103) > prev_low(98.5) -> scenario "2U"
-        # Bar 4: high(106) > prev_high(105) AND low(104) > prev_low(103) -> scenario "2U"  
+        # Bar 4: high(106) > prev_high(105) AND low(104) > prev_low(103) -> scenario "2U"
         # Bar 5: high(105.8) <= prev_high(106) AND low(104.5) >= prev_low(104) -> scenario "1" (inside)
 
         # Expected motherbar_problems based on correct logic:
@@ -1191,8 +1219,8 @@ class TestMotherbarProblems:
             {
                 "timestamp": [datetime(2023, 1, 1) + timedelta(days=i) for i in range(3)],
                 "open": [100.0, 100.5, 105.0],
-                "high": [102.0, 101.0, 108.0],    # Bar 0: 102, Bar 1: 101 (inside), Bar 2: 108 (breakout)
-                "low": [98.0, 99.0, 103.0],       # Bar 0: 98, Bar 1: 99 (inside), Bar 2: 103 (breakout)
+                "high": [102.0, 101.0, 108.0],  # Bar 0: 102, Bar 1: 101 (inside), Bar 2: 108 (breakout)
+                "low": [98.0, 99.0, 103.0],  # Bar 0: 98, Bar 1: 99 (inside), Bar 2: 103 (breakout)
                 "close": [101.0, 100.2, 106.0],
                 "volume": [1000] * 3,
             }
@@ -1201,7 +1229,7 @@ class TestMotherbarProblems:
         with_basic = indicators._calculate_strat_patterns(simple_data)
         result = indicators._calculate_advanced_patterns(with_basic)
         motherbar_problems = result["motherbar_problems"].to_list()
-        scenarios = result["scenario"].to_list()
+        _scenarios = result["scenario"].to_list()
 
         # Bar 0: No previous bar -> False
         # Bar 1: Inside bar -> Bar 0 becomes mother bar -> True
@@ -1218,8 +1246,8 @@ class TestMotherbarProblems:
             {
                 "timestamp": [datetime(2023, 1, 1) + timedelta(days=i) for i in range(5)],
                 "open": [100.0, 101.0, 100.5, 101.2, 105.0],
-                "high": [103.0, 102.0, 101.5, 102.5, 110.0], # Bar 0: 103, Bars 1-3: all inside 103, Bar 4: breakout
-                "low": [97.0, 98.0, 99.0, 98.5, 104.0],        # Bar 0: 97, Bars 1-3: all above 97, Bar 4: breakout
+                "high": [103.0, 102.0, 101.5, 102.5, 110.0],  # Bar 0: 103, Bars 1-3: all inside 103, Bar 4: breakout
+                "low": [97.0, 98.0, 99.0, 98.5, 104.0],  # Bar 0: 97, Bars 1-3: all above 97, Bar 4: breakout
                 "close": [101.5, 101.0, 100.8, 101.8, 107.0],
                 "volume": [1000] * 5,
             }
@@ -1230,7 +1258,7 @@ class TestMotherbarProblems:
         motherbar_problems = result["motherbar_problems"].to_list()
 
         # Bar 0: First bar -> False
-        # Bar 1: Inside bar -> Bar 0 becomes mother bar -> True  
+        # Bar 1: Inside bar -> Bar 0 becomes mother bar -> True
         # Bar 2: Inside bar again -> True (compound inside)
         # Bar 3: Outside bar (scenario "3") -> breaks mother bar range -> False
         # Bar 4: Regular bar, no active mother bar -> False
@@ -1246,8 +1274,8 @@ class TestMotherbarProblems:
             {
                 "timestamp": [datetime(2023, 1, 1) + timedelta(days=i) for i in range(4)],
                 "open": [100.0, 102.0, 104.0, 101.0],
-                "high": [101.0, 104.0, 106.0, 103.0],   # Each bar higher high than previous
-                "low": [99.0, 101.0, 103.0, 100.0],     # Each bar higher low than previous (2U pattern)
+                "high": [101.0, 104.0, 106.0, 103.0],  # Each bar higher high than previous
+                "low": [99.0, 101.0, 103.0, 100.0],  # Each bar higher low than previous (2U pattern)
                 "close": [100.5, 103.5, 105.5, 102.5],
                 "volume": [1000] * 4,
             }
@@ -1269,8 +1297,8 @@ class TestMotherbarProblems:
             {
                 "timestamp": [datetime(2023, 1, 1) + timedelta(days=i) for i in range(3)],
                 "open": [100.0, 100.5, 103.0],
-                "high": [102.0, 101.0, 105.0],     # Bar 1 is inside, Bar 2 breaks out immediately
-                "low": [98.0, 99.0, 104.0],        # Bar 1 is inside, Bar 2 breaks above mother bar
+                "high": [102.0, 101.0, 105.0],  # Bar 1 is inside, Bar 2 breaks out immediately
+                "low": [98.0, 99.0, 104.0],  # Bar 1 is inside, Bar 2 breaks above mother bar
                 "close": [101.0, 100.2, 104.5],
                 "volume": [1000] * 3,
             }
@@ -1296,7 +1324,7 @@ class TestMotherbarProblems:
                 "timestamp": [datetime(2023, 1, 1) + timedelta(days=i) for i in range(7)],
                 "open": [100.0, 100.5, 103.0, 101.0, 99.0, 100.2, 104.0],
                 "high": [102.0, 101.0, 105.0, 100.5, 103.0, 101.0, 108.0],  # 1(inside), 2U, 2D, 2U, 1(inside), 3
-                "low": [98.0, 99.0, 102.0, 97.0, 98.0, 97.0, 95.0],   # 1(inside), 2U, 2D, 2U, 1(inside), 3  
+                "low": [98.0, 99.0, 102.0, 97.0, 98.0, 97.0, 95.0],  # 1(inside), 2U, 2D, 2U, 1(inside), 3
                 "close": [101.0, 100.2, 104.0, 99.5, 101.5, 99.5, 106.0],
                 "volume": [1000] * 7,
             }
@@ -1310,7 +1338,7 @@ class TestMotherbarProblems:
         # Bar 1: Inside bar -> True (Bar 0 becomes mother bar)
         # Bar 2: Breaks above mother bar -> False (resets mother bar)
         # Bar 3: No mother bar active -> False
-        # Bar 4: No mother bar active -> False  
+        # Bar 4: No mother bar active -> False
         # Bar 5: Not inside bar (scenario "2D") -> False (no mother bar established)
         # Bar 6: Outside bar -> False
         expected_problems = [False, True, False, False, False, False, False]
@@ -1372,11 +1400,11 @@ class TestFullCorrectedPipeline:
         result = indicators.process(comprehensive_test_data)
 
         # Sample validation of corrected logic
-        scenarios = result["scenario"].to_list()
+        _scenarios = result["scenario"].to_list()
         continuity = result["continuity"].to_list()
 
         # Verify scenario classification uses correct priority
-        assert all(s in [None, "1", "2U", "2D", "3"] for s in scenarios)
+        assert all(s in [None, "1", "2U", "2D", "3"] for s in _scenarios)
 
         # Verify continuity is single-bar calculation
         for i, cont in enumerate(continuity):
@@ -1421,7 +1449,7 @@ class TestScenarioCalculations:
         # Second bar should be scenario "1"
         assert result["scenario"][1] == "1"
 
-    def test_scenario_2U_calculation(self):
+    def test_scenario_2u_calculation(self):
         """Test scenario 2U: Higher high, same or higher low (H > prev_H and L >= prev_L)."""
         data = pl.DataFrame(
             {
@@ -1439,7 +1467,7 @@ class TestScenarioCalculations:
         # Second bar should be scenario "2U"
         assert result["scenario"][1] == "2U"
 
-    def test_scenario_2D_calculation(self):
+    def test_scenario_2d_calculation(self):
         """Test scenario 2D: Lower low, same or lower high (L < prev_L and H <= prev_H)."""
         data = pl.DataFrame(
             {
@@ -1575,7 +1603,7 @@ class TestInForceCalculations:
 class TestSignalCalculations:
     """Test signal pattern detection with exact pattern sequences."""
 
-    def test_2D_2U_reversal_signal(self):
+    def test_2d_2u_reversal_signal(self):
         """Test 2D-2U reversal pattern detection."""
         # Create exact 2D followed by 2U pattern
         data = pl.DataFrame(
@@ -1596,7 +1624,7 @@ class TestSignalCalculations:
         assert result["type"][2] == "reversal"
         assert result["bias"][2] == "long"
 
-    def test_3_2U_context_reversal(self):
+    def test_3_2u_context_reversal(self):
         """Test 3-2U context reversal pattern."""
         # Create exact 3 followed by 2U pattern
         data = pl.DataFrame(
@@ -1621,7 +1649,7 @@ class TestSignalCalculations:
         assert result["type"][2] == "reversal"
         assert result["bias"][2] == "long"
 
-    def test_2U_2U_continuation_signal(self):
+    def test_2u_2u_continuation_signal(self):
         """Test 2U-2U continuation pattern."""
         # Create exact 2U followed by 2U pattern
         data = pl.DataFrame(
@@ -1855,16 +1883,18 @@ class TestPerTimeframeIndicators:
 
         for tf in ["5min", "1h"]:
             for i in range(10):
-                data_rows.append({
-                    "symbol": "TEST",
-                    "timeframe": tf,
-                    "timestamp": base_time + timedelta(minutes=i*5 if tf == "5min" else i*60),
-                    "open": 100.0 + i * 2.0,
-                    "high": 102.0 + i * 2.0,
-                    "low": 98.0 + i * 2.0,
-                    "close": 101.0 + i * 2.0,
-                    "volume": 1000 + i * 100
-                })
+                data_rows.append(
+                    {
+                        "symbol": "TEST",
+                        "timeframe": tf,
+                        "timestamp": base_time + timedelta(minutes=i * 5 if tf == "5min" else i * 60),
+                        "open": 100.0 + i * 2.0,
+                        "high": 102.0 + i * 2.0,
+                        "low": 98.0 + i * 2.0,
+                        "close": 101.0 + i * 2.0,
+                        "volume": 1000 + i * 100,
+                    }
+                )
 
         test_data = pl.DataFrame(data_rows)
 
@@ -1874,13 +1904,13 @@ class TestPerTimeframeIndicators:
                 {
                     "timeframes": ["5min"],
                     "swing_points": {"window": 3, "threshold": 1.0},
-                    "gap_detection": {"threshold": 0.0005}
+                    "gap_detection": {"threshold": 0.0005},
                 },
                 {
                     "timeframes": ["1h"],
                     "swing_points": {"window": 5, "threshold": 5.0},
-                    "gap_detection": {"threshold": 0.002}
-                }
+                    "gap_detection": {"threshold": 0.002},
+                },
             ]
         )
 
@@ -1892,31 +1922,34 @@ class TestPerTimeframeIndicators:
         assert len(result) == 20  # Same number of rows as input
 
         # Verify key indicator columns are present
-        expected_indicator_cols = [
-            "swing_high", "swing_low", "scenario",
-            "continuity", "in_force", "hammer", "shooter"
-        ]
+        expected_indicator_cols = ["swing_high", "swing_low", "scenario", "continuity", "in_force", "hammer", "shooter"]
         for col in expected_indicator_cols:
             assert col in result.columns
 
     def test_all_timeframe_without_timeframe_column(self):
         """Test that 'all' timeframe works when no timeframe column is present."""
         # Create simple OHLC data without timeframe column
-        simple_data = pl.DataFrame({
-            "timestamp": [datetime(2024, 1, 1, 9, 30) + timedelta(minutes=i) for i in range(10)],
-            "open": [100.0 + i for i in range(10)],
-            "high": [101.0 + i for i in range(10)],
-            "low": [99.0 + i for i in range(10)],
-            "close": [100.5 + i for i in range(10)],
-            "volume": [1000 + i * 100 for i in range(10)]
-        })
+        simple_data = pl.DataFrame(
+            {
+                "timestamp": [datetime(2024, 1, 1, 9, 30) + timedelta(minutes=i) for i in range(10)],
+                "open": [100.0 + i for i in range(10)],
+                "high": [101.0 + i for i in range(10)],
+                "low": [99.0 + i for i in range(10)],
+                "close": [100.5 + i for i in range(10)],
+                "volume": [1000 + i * 100 for i in range(10)],
+            }
+        )
 
         # Use 'all' timeframe configuration
-        indicators = Indicators(timeframe_configs=[{
-            "timeframes": ["all"],
-            "swing_points": {"window": 5, "threshold": 3.0},
-            "gap_detection": {"threshold": 0.001}
-        }])
+        indicators = Indicators(
+            timeframe_configs=[
+                {
+                    "timeframes": ["all"],
+                    "swing_points": {"window": 5, "threshold": 3.0},
+                    "gap_detection": {"threshold": 0.001},
+                }
+            ]
+        )
 
         result = indicators.process(simple_data)
 
@@ -1937,26 +1970,23 @@ class TestPerTimeframeIndicators:
         # Create data for timeframes with and without specific configs
         for tf in ["5min", "15min"]:  # Only 5m has specific config
             for i in range(5):
-                data_rows.append({
-                    "timeframe": tf,
-                    "timestamp": base_time + timedelta(minutes=i*5),
-                    "open": 100.0 + i,
-                    "high": 101.0 + i,
-                    "low": 99.0 + i,
-                    "close": 100.5 + i,
-                    "volume": 1000
-                })
+                data_rows.append(
+                    {
+                        "timeframe": tf,
+                        "timestamp": base_time + timedelta(minutes=i * 5),
+                        "open": 100.0 + i,
+                        "high": 101.0 + i,
+                        "low": 99.0 + i,
+                        "close": 100.5 + i,
+                        "volume": 1000,
+                    }
+                )
 
         test_data = pl.DataFrame(data_rows)
 
         # Only configure 5m specifically
         indicators = Indicators(
-            timeframe_configs=[
-                {
-                    "timeframes": ["5min"],
-                    "swing_points": {"window": 3, "threshold": 2.0}
-                }
-            ]
+            timeframe_configs=[{"timeframes": ["5min"], "swing_points": {"window": 3, "threshold": 2.0}}]
         )
 
         # Should raise error because 15m is not configured
@@ -1977,21 +2007,27 @@ class TestIndicatorsEdgeCases:
     def test_no_all_config_without_timeframe_column_raises_error(self):
         """Test ValueError when data has no timeframe column and no 'all' config."""
         # Create data without timeframe column
-        data = pl.DataFrame({
-            "timestamp": [datetime(2024, 1, 1, 9, 30) + timedelta(minutes=i) for i in range(10)],
-            "open": [100.0 + i for i in range(10)],
-            "high": [101.0 + i for i in range(10)],
-            "low": [99.0 + i for i in range(10)],
-            "close": [100.5 + i for i in range(10)],
-            "volume": [1000 + i * 100 for i in range(10)]
-        })
-        
+        data = pl.DataFrame(
+            {
+                "timestamp": [datetime(2024, 1, 1, 9, 30) + timedelta(minutes=i) for i in range(10)],
+                "open": [100.0 + i for i in range(10)],
+                "high": [101.0 + i for i in range(10)],
+                "low": [99.0 + i for i in range(10)],
+                "close": [100.5 + i for i in range(10)],
+                "volume": [1000 + i * 100 for i in range(10)],
+            }
+        )
+
         # Create indicators with specific timeframes but no 'all' config
-        indicators = Indicators(timeframe_configs=[{
-            "timeframes": ["5min"],  # Specific timeframe, not "all"
-            "swing_points": {"window": 5, "threshold": 3.0}
-        }])
-        
+        indicators = Indicators(
+            timeframe_configs=[
+                {
+                    "timeframes": ["5min"],  # Specific timeframe, not "all"
+                    "swing_points": {"window": 5, "threshold": 3.0},
+                }
+            ]
+        )
+
         # Should raise ValueError because there's no timeframe column and no 'all' config
         with pytest.raises(ValueError) as exc_info:
             indicators.process(data)
@@ -2000,32 +2036,38 @@ class TestIndicatorsEdgeCases:
     def test_get_signal_object_function_retrieval(self):
         """Test the get_signal_object function that's created during signal processing."""
         # Create test data that would generate signals
-        data = pl.DataFrame({
-            "timestamp": [datetime(2024, 1, 1, 9, 30) + timedelta(minutes=i*5) for i in range(20)],
-            "open": [100.0, 102.0, 101.0, 103.0, 100.0] * 4,
-            "high": [101.0, 103.0, 102.0, 104.0, 101.0] * 4,
-            "low": [99.0, 101.0, 100.0, 102.0, 99.0] * 4,
-            "close": [100.5, 102.5, 101.5, 103.5, 100.5] * 4,
-            "volume": [1000] * 20
-        })
-        
-        # Enable signal generation to create the get_signal_object function
-        indicators = Indicators(timeframe_configs=[{
-            "timeframes": ["all"],
-            "swing_points": {"window": 3, "threshold": 1.0},
-            "signals": {
-                "enabled": True,
-                "types": ["continuation", "reversal"],
-                "reversal": {"trigger_bar_offset": 1}
+        data = pl.DataFrame(
+            {
+                "timestamp": [datetime(2024, 1, 1, 9, 30) + timedelta(minutes=i * 5) for i in range(20)],
+                "open": [100.0, 102.0, 101.0, 103.0, 100.0] * 4,
+                "high": [101.0, 103.0, 102.0, 104.0, 101.0] * 4,
+                "low": [99.0, 101.0, 100.0, 102.0, 99.0] * 4,
+                "close": [100.5, 102.5, 101.5, 103.5, 100.5] * 4,
+                "volume": [1000] * 20,
             }
-        }])
-        
+        )
+
+        # Enable signal generation to create the get_signal_object function
+        indicators = Indicators(
+            timeframe_configs=[
+                {
+                    "timeframes": ["all"],
+                    "swing_points": {"window": 3, "threshold": 1.0},
+                    "signals": {
+                        "enabled": True,
+                        "types": ["continuation", "reversal"],
+                        "reversal": {"trigger_bar_offset": 1},
+                    },
+                }
+            ]
+        )
+
         result = indicators.process(data)
-        
+
         # The get_signal_object function should be accessible via attrs if signals were generated
-        if hasattr(result, 'attrs') and 'signal_objects' in result.attrs:
+        if hasattr(result, "attrs") and "signal_objects" in result.attrs:
             # Test that we can retrieve signal objects by index
-            signal_objects = result.attrs['signal_objects']
+            signal_objects = result.attrs["signal_objects"]
             if signal_objects:  # If there are any signal objects
                 # This exercises the get_signal_object function
                 assert callable(lambda idx: signal_objects.get(idx))
@@ -2039,78 +2081,84 @@ class TestIndicatorsTimestampHandling:
         """Test early return when there's insufficient data for trigger bar."""
         # Create enough data to pass validation but minimal for trigger bar testing
         # Need at least swing_window * 2 = 5 * 2 = 10 bars for validation (default swing_window is 5)
-        # Create realistic OHLC data  
-        data = pl.DataFrame({
-            "timestamp": [datetime(2024, 1, 1, 9, 30) + timedelta(minutes=i) for i in range(12)],
-            "open": [100.0, 100.5, 101.0, 101.5, 101.0, 100.5, 100.0, 99.5, 99.0, 99.5, 100.0, 100.5],
-            "high": [101.0, 101.5, 102.0, 102.5, 102.0, 101.5, 101.0, 100.5, 100.0, 100.5, 101.0, 101.5],
-            "low": [99.0, 99.5, 100.0, 100.5, 100.0, 99.5, 99.0, 98.5, 98.0, 98.5, 99.0, 99.5],
-            "close": [100.5, 101.0, 101.5, 102.0, 101.5, 101.0, 100.5, 100.0, 99.5, 100.0, 100.5, 101.0],
-            "volume": [1000] * 12
-        })
-        
-        # Configure with signal generation that requires trigger bar offset
-        indicators = Indicators(timeframe_configs=[{
-            "timeframes": ["all"],
-            "swing_points": {"window": 3, "threshold": 1.0},
-            "signals": {
-                "enabled": True,
-                "types": ["reversal"],
-                "reversal": {"trigger_bar_offset": 1}
+        # Create realistic OHLC data
+        data = pl.DataFrame(
+            {
+                "timestamp": [datetime(2024, 1, 1, 9, 30) + timedelta(minutes=i) for i in range(12)],
+                "open": [100.0, 100.5, 101.0, 101.5, 101.0, 100.5, 100.0, 99.5, 99.0, 99.5, 100.0, 100.5],
+                "high": [101.0, 101.5, 102.0, 102.5, 102.0, 101.5, 101.0, 100.5, 100.0, 100.5, 101.0, 101.5],
+                "low": [99.0, 99.5, 100.0, 100.5, 100.0, 99.5, 99.0, 98.5, 98.0, 98.5, 99.0, 99.5],
+                "close": [100.5, 101.0, 101.5, 102.0, 101.5, 101.0, 100.5, 100.0, 99.5, 100.0, 100.5, 101.0],
+                "volume": [1000] * 12,
             }
-        }])
-        
+        )
+
+        # Configure with signal generation that requires trigger bar offset
+        indicators = Indicators(
+            timeframe_configs=[
+                {
+                    "timeframes": ["all"],
+                    "swing_points": {"window": 3, "threshold": 1.0},
+                    "signals": {"enabled": True, "types": ["reversal"], "reversal": {"trigger_bar_offset": 1}},
+                }
+            ]
+        )
+
         result = indicators.process(data)
-        
-        # Should process without error - the insufficient trigger bar logic 
+
+        # Should process without error - the insufficient trigger bar logic
         # is handled internally during signal generation
         assert len(result) == 12
 
     def test_timestamp_conversion_edge_cases(self):
         """Test various timestamp conversion scenarios."""
         from datetime import datetime
+
         import polars as pl
-        
+
         # Test data with different timestamp formats
         # Need at least 10 bars for validation (swing_window * 2)
         test_cases = [
             # Case 1: Normal datetime objects
             {
                 "timestamp": [datetime(2024, 1, 1, 9, 30) + timedelta(minutes=i) for i in range(12)],
-                "description": "Normal datetime objects"
+                "description": "Normal datetime objects",
             },
             # Case 2: String timestamps (polars will convert these)
-            {
-                "timestamp": [f"2024-01-01T09:{30+i}:00" for i in range(12)],
-                "description": "String timestamps"
-            }
+            {"timestamp": [f"2024-01-01T09:{30 + i}:00" for i in range(12)], "description": "String timestamps"},
         ]
-        
+
         for case in test_cases:
-            data = pl.DataFrame({
-                "timestamp": case["timestamp"],
-                "open": [100.0, 100.5, 101.0, 101.5, 101.0, 100.5, 100.0, 99.5, 99.0, 99.5, 100.0, 100.5],
-                "high": [101.0, 101.5, 102.0, 102.5, 102.0, 101.5, 101.0, 100.5, 100.0, 100.5, 101.0, 101.5],
-                "low": [99.0, 99.5, 100.0, 100.5, 100.0, 99.5, 99.0, 98.5, 98.0, 98.5, 99.0, 99.5],
-                "close": [100.5, 101.0, 101.5, 102.0, 101.5, 101.0, 100.5, 100.0, 99.5, 100.0, 100.5, 101.0],
-                "volume": [1000] * 12
-            })
-            
-            # Configure with signal generation to exercise timestamp handling
-            indicators = Indicators(timeframe_configs=[{
-                "timeframes": ["all"],
-                "swing_points": {"window": 3, "threshold": 1.0},
-                "signals": {
-                    "enabled": True,
-                    "types": ["continuation"],
-                    "continuation": {"trigger_bar_offset": 1}
+            data = pl.DataFrame(
+                {
+                    "timestamp": case["timestamp"],
+                    "open": [100.0, 100.5, 101.0, 101.5, 101.0, 100.5, 100.0, 99.5, 99.0, 99.5, 100.0, 100.5],
+                    "high": [101.0, 101.5, 102.0, 102.5, 102.0, 101.5, 101.0, 100.5, 100.0, 100.5, 101.0, 101.5],
+                    "low": [99.0, 99.5, 100.0, 100.5, 100.0, 99.5, 99.0, 98.5, 98.0, 98.5, 99.0, 99.5],
+                    "close": [100.5, 101.0, 101.5, 102.0, 101.5, 101.0, 100.5, 100.0, 99.5, 100.0, 100.5, 101.0],
+                    "volume": [1000] * 12,
                 }
-            }])
-            
+            )
+
+            # Configure with signal generation to exercise timestamp handling
+            indicators = Indicators(
+                timeframe_configs=[
+                    {
+                        "timeframes": ["all"],
+                        "swing_points": {"window": 3, "threshold": 1.0},
+                        "signals": {
+                            "enabled": True,
+                            "types": ["continuation"],
+                            "continuation": {"trigger_bar_offset": 1},
+                        },
+                    }
+                ]
+            )
+
             # Should process without error despite different timestamp formats
             result = indicators.process(data)
             assert len(result) == 12, f"Failed for {case['description']}"
-            
+
             # Timestamp column should be properly formatted
             assert "timestamp" in result.columns
 
@@ -2119,30 +2167,36 @@ class TestIndicatorsTimestampHandling:
         # This test is tricky because we need to trigger the fallback
         # The fallback happens when timestamp is not a datetime and doesn't have to_pydatetime
         # We'll create a scenario where signal processing might encounter this
-        
-        data = pl.DataFrame({
-            "timestamp": [datetime(2024, 1, 1, 9, 30) + timedelta(minutes=i*5) for i in range(10)],
-            "open": [100.0] * 10,
-            "high": [102.0] * 10,  # Create consistent pattern
-            "low": [98.0] * 10,
-            "close": [101.0] * 10,
-            "volume": [1000] * 10
-        })
-        
-        # Configure signals to exercise timestamp handling paths
-        indicators = Indicators(timeframe_configs=[{
-            "timeframes": ["all"],
-            "swing_points": {"window": 3, "threshold": 1.0},
-            "signals": {
-                "enabled": True,
-                "types": ["continuation", "reversal"],
-                "continuation": {"trigger_bar_offset": 1},
-                "reversal": {"trigger_bar_offset": 1, "target_bar_offset": 2}
+
+        data = pl.DataFrame(
+            {
+                "timestamp": [datetime(2024, 1, 1, 9, 30) + timedelta(minutes=i * 5) for i in range(10)],
+                "open": [100.0] * 10,
+                "high": [102.0] * 10,  # Create consistent pattern
+                "low": [98.0] * 10,
+                "close": [101.0] * 10,
+                "volume": [1000] * 10,
             }
-        }])
-        
+        )
+
+        # Configure signals to exercise timestamp handling paths
+        indicators = Indicators(
+            timeframe_configs=[
+                {
+                    "timeframes": ["all"],
+                    "swing_points": {"window": 3, "threshold": 1.0},
+                    "signals": {
+                        "enabled": True,
+                        "types": ["continuation", "reversal"],
+                        "continuation": {"trigger_bar_offset": 1},
+                        "reversal": {"trigger_bar_offset": 1, "target_bar_offset": 2},
+                    },
+                }
+            ]
+        )
+
         result = indicators.process(data)
-        
+
         # Should process successfully even with edge case timestamp handling
         assert len(result) == 10
         assert "timestamp" in result.columns

@@ -13,7 +13,6 @@ from thestrat import Factory
 from thestrat.schemas import (
     AggregationConfig,
     FactoryConfig,
-    GapDetectionConfig,
     IndicatorsConfig,
     SwingPointsConfig,
     TimeframeItemConfig,
@@ -35,22 +34,18 @@ class TestTheStratIntegration:
         """Test complete pipeline with Polars DataFrame."""
         # Create complete pipeline with Pydantic models
         config = FactoryConfig(
-            aggregation=AggregationConfig(
-                target_timeframes=["5min"],
-                asset_class="equities",
-                timezone="US/Eastern"
-            ),
+            aggregation=AggregationConfig(target_timeframes=["5min"], asset_class="equities", timezone="US/Eastern"),
             indicators=IndicatorsConfig(
                 timeframe_configs=[
                     TimeframeItemConfig(
                         timeframes=["all"],
                         swing_points=SwingPointsConfig(
                             window=5,
-                            threshold=0.01  # 0.01% threshold - very low to detect swing points
-                        )
+                            threshold=0.01,  # 0.01% threshold - very low to detect swing points
+                        ),
                     )
                 ]
-            )
+            ),
         )
 
         pipeline = Factory.create_all(config)
@@ -102,15 +97,8 @@ class TestTheStratIntegration:
 
         # Create pipeline with Pydantic models
         config = FactoryConfig(
-            aggregation=AggregationConfig(
-                target_timeframes=["15min"],
-                asset_class="equities"
-            ),
-            indicators=IndicatorsConfig(
-                timeframe_configs=[
-                    TimeframeItemConfig(timeframes=["all"])
-                ]
-            )
+            aggregation=AggregationConfig(target_timeframes=["15min"], asset_class="equities"),
+            indicators=IndicatorsConfig(timeframe_configs=[TimeframeItemConfig(timeframes=["all"])]),
         )
 
         pipeline = Factory.create_all(config)
@@ -139,16 +127,11 @@ class TestTheStratIntegration:
             aggregation=AggregationConfig(
                 target_timeframes=["4h"],
                 asset_class="crypto",  # Should force UTC timezone
-                timezone="US/Eastern"  # This should be ignored for crypto
+                timezone="US/Eastern",  # This should be ignored for crypto
             ),
             indicators=IndicatorsConfig(
-                timeframe_configs=[
-                    TimeframeItemConfig(
-                        timeframes=["all"],
-                        swing_points=SwingPointsConfig(window=3)
-                    )
-                ]
-            )
+                timeframe_configs=[TimeframeItemConfig(timeframes=["all"], swing_points=SwingPointsConfig(window=3))]
+            ),
         )
 
         pipeline = Factory.create_all(config)
@@ -174,13 +157,9 @@ class TestTheStratIntegration:
         config = FactoryConfig(
             aggregation=AggregationConfig(
                 target_timeframes=["1h"],
-                asset_class="fx"  # Should force UTC timezone
+                asset_class="fx",  # Should force UTC timezone
             ),
-            indicators=IndicatorsConfig(
-                timeframe_configs=[
-                    TimeframeItemConfig(timeframes=["all"])
-                ]
-            )
+            indicators=IndicatorsConfig(timeframe_configs=[TimeframeItemConfig(timeframes=["all"])]),
         )
 
         pipeline = Factory.create_all(config)
@@ -207,14 +186,12 @@ class TestTheStratIntegration:
         )
 
         # Create pipeline with Pydantic models
-        pipeline = Factory.create_all(FactoryConfig(
-            aggregation=AggregationConfig(target_timeframes=["1h"]),
-            indicators=IndicatorsConfig(
-                timeframe_configs=[
-                    TimeframeItemConfig(timeframes=["all"])
-                ]
+        pipeline = Factory.create_all(
+            FactoryConfig(
+                aggregation=AggregationConfig(target_timeframes=["1h"]),
+                indicators=IndicatorsConfig(timeframe_configs=[TimeframeItemConfig(timeframes=["all"])]),
             )
-        ))
+        )
 
         # Aggregation should fail validation
         with pytest.raises(ValueError, match="Input data validation failed"):
@@ -232,18 +209,10 @@ class TestTheStratIntegration:
 
         # Process with hourly aggregation using Pydantic models
         config = FactoryConfig(
-            aggregation=AggregationConfig(
-                target_timeframes=["1h"],
-                asset_class="equities"
-            ),
+            aggregation=AggregationConfig(target_timeframes=["1h"], asset_class="equities"),
             indicators=IndicatorsConfig(
-                timeframe_configs=[
-                    TimeframeItemConfig(
-                        timeframes=["all"],
-                        swing_points=SwingPointsConfig(window=5)
-                    )
-                ]
-            )
+                timeframe_configs=[TimeframeItemConfig(timeframes=["all"], swing_points=SwingPointsConfig(window=5))]
+            ),
         )
 
         pipeline = Factory.create_all(config)
@@ -262,22 +231,18 @@ class TestTheStratIntegration:
         """Test that factory-created components are consistent."""
         # Create multiple instances of the same configuration using Pydantic models
         config = FactoryConfig(
-            aggregation=AggregationConfig(
-                target_timeframes=["5min"],
-                asset_class="equities",
-                timezone="US/Eastern"
-            ),
+            aggregation=AggregationConfig(target_timeframes=["5min"], asset_class="equities", timezone="US/Eastern"),
             indicators=IndicatorsConfig(
                 timeframe_configs=[
                     TimeframeItemConfig(
                         timeframes=["all"],
                         swing_points=SwingPointsConfig(
                             window=7,
-                            threshold=2.0  # 2% threshold
-                        )
+                            threshold=2.0,  # 2% threshold
+                        ),
                     )
                 ]
-            )
+            ),
         )
 
         # Create multiple pipelines
@@ -299,17 +264,19 @@ class TestTheStratIntegration:
         small_data = create_ohlc_data(periods=3, start="2023-01-01", freq_minutes=60, base_price=100.0)
 
         # Create pipeline with Pydantic models
-        pipeline = Factory.create_all(FactoryConfig(
-            aggregation=AggregationConfig(target_timeframes=["1h"]),
-            indicators=IndicatorsConfig(
-                timeframe_configs=[
-                    TimeframeItemConfig(
-                        timeframes=["all"],
-                        swing_points=SwingPointsConfig(window=10)  # Requires more data
-                    )
-                ]
+        pipeline = Factory.create_all(
+            FactoryConfig(
+                aggregation=AggregationConfig(target_timeframes=["1h"]),
+                indicators=IndicatorsConfig(
+                    timeframe_configs=[
+                        TimeframeItemConfig(
+                            timeframes=["all"],
+                            swing_points=SwingPointsConfig(window=10),  # Requires more data
+                        )
+                    ]
+                ),
             )
-        ))
+        )
 
         # Aggregation should work
         aggregated = pipeline["aggregation"].process(small_data)

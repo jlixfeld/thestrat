@@ -378,20 +378,20 @@ class TestSignalEdgeCases:
             target_price=155.0,
             timestamp=datetime(2024, 1, 15, 10, 30),
             symbol="TEST",
-            timeframe="5min"
+            timeframe="5min",
         )
 
     def test_update_target_same_price_noop(self):
         """Test that updating target to the same price does nothing (early return)."""
         signal = self.create_sample_signal()
-        
+
         # Get initial state
         initial_target = signal.target_price
         initial_change_count = len(signal.change_history)
-        
+
         # Update to the same target price - should be a no-op
         signal.update_target(initial_target, "same_price_test")
-        
+
         # Should not have created a new change record
         assert len(signal.change_history) == initial_change_count
         assert signal.target_price == initial_target
@@ -408,9 +408,9 @@ class TestSignalEdgeCases:
             trigger_bar_index=99,
             entry_price=150.0,
             stop_price=148.0,
-            timestamp=datetime(2024, 1, 15, 10, 30)
+            timestamp=datetime(2024, 1, 15, 10, 30),
         )
-        
+
         # Should raise ValueError when trying to update target
         with pytest.raises(ValueError, match="Continuation signals have no target"):
             continuation_signal.update_target(155.0, "invalid_update")
@@ -418,24 +418,24 @@ class TestSignalEdgeCases:
     def test_to_dict_with_triggered_and_closed_timestamps(self):
         """Test to_dict serialization with triggered_at and closed_at timestamps."""
         signal = self.create_sample_signal()
-        
+
         # Set triggered_at and closed_at times directly
         triggered_time = datetime(2024, 1, 15, 10, 35)
         closed_time = datetime(2024, 1, 15, 10, 40)
-        
+
         signal.triggered_at = triggered_time
         signal.closed_at = closed_time
         signal.status = SignalStatus.TARGET_HIT
-        
+
         # Convert to dict
         signal_dict = signal.to_dict()
-        
+
         # Check that triggered_at and closed_at are in ISO format
         assert "triggered_at" in signal_dict
         assert "closed_at" in signal_dict
         assert signal_dict["triggered_at"] == triggered_time.isoformat()
         assert signal_dict["closed_at"] == closed_time.isoformat()
-        
+
         # Check status
         assert signal_dict["status"] == SignalStatus.TARGET_HIT.value
 
@@ -446,7 +446,7 @@ class TestSignalEdgeCases:
             "signal_id": "test_123",
             "pattern": "3-1D",
             "category": "reversal",
-            "bias": "short", 
+            "bias": "short",
             "bar_count": 3,
             "entry_bar_index": 100,
             "trigger_bar_index": 99,
@@ -459,12 +459,12 @@ class TestSignalEdgeCases:
             "status": "target_hit",
             "symbol": "TEST",
             "timeframe": "5min",
-            "change_history": []
+            "change_history": [],
         }
-        
+
         # Restore from dict
         restored_signal = SignalMetadata.from_dict(signal_data)
-        
+
         # Check that timestamps were properly converted
         assert restored_signal.triggered_at == datetime(2024, 1, 15, 10, 35)
         assert restored_signal.closed_at == datetime(2024, 1, 15, 10, 40)
@@ -475,7 +475,7 @@ class TestSignalEdgeCases:
         # Create signal dict without triggered_at and closed_at
         signal_data = {
             "signal_id": "test_456",
-            "pattern": "2U-2U", 
+            "pattern": "2U-2U",
             "category": "continuation",
             "bias": "long",
             "bar_count": 2,
@@ -485,12 +485,12 @@ class TestSignalEdgeCases:
             "stop_price": 95.0,
             "timestamp": "2024-01-15T10:30:00",
             "status": "pending",
-            "change_history": []
+            "change_history": [],
         }
-        
+
         # Restore from dict
         restored_signal = SignalMetadata.from_dict(signal_data)
-        
+
         # Check that None timestamps are handled properly
         assert restored_signal.triggered_at is None
         assert restored_signal.closed_at is None

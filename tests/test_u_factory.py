@@ -39,7 +39,7 @@ class TestCreateAggregation:
             asset_class="crypto",
             timezone="UTC",
             hour_boundary=False,
-            session_start="00:00"
+            session_start="00:00",
         )
         agg = Factory.create_aggregation(config)
 
@@ -53,22 +53,17 @@ class TestCreateAggregation:
     def test_create_aggregation_all_asset_classes(self):
         """Test creating aggregation with all valid asset classes."""
         valid_classes = ["crypto", "equities", "fx"]
-        
+
         for asset_class in valid_classes:
-            config = AggregationConfig(
-                target_timeframes=["1h"],
-                asset_class=asset_class
-            )
+            config = AggregationConfig(target_timeframes=["1h"], asset_class=asset_class)
             agg = Factory.create_aggregation(config)
-            
+
             assert isinstance(agg, Aggregation)
             assert agg.asset_class == asset_class
 
     def test_create_aggregation_multiple_timeframes(self):
         """Test creating aggregation with multiple timeframes."""
-        config = AggregationConfig(
-            target_timeframes=["5min", "15min", "1h", "4h", "1d"]
-        )
+        config = AggregationConfig(target_timeframes=["5min", "15min", "1h", "4h", "1d"])
         agg = Factory.create_aggregation(config)
 
         assert isinstance(agg, Aggregation)
@@ -81,11 +76,7 @@ class TestCreateIndicators:
 
     def test_create_indicators_minimal_config(self):
         """Test creating indicators with minimal Pydantic configuration."""
-        config = IndicatorsConfig(
-            timeframe_configs=[
-                TimeframeItemConfig(timeframes=["all"])
-            ]
-        )
+        config = IndicatorsConfig(timeframe_configs=[TimeframeItemConfig(timeframes=["all"])])
         indicators = Factory.create_indicators(config)
 
         assert isinstance(indicators, Indicators)
@@ -102,7 +93,7 @@ class TestCreateIndicators:
                 TimeframeItemConfig(
                     timeframes=["5min", "15min"],
                     swing_points=SwingPointsConfig(window=7, threshold=3.0),
-                    gap_detection=GapDetectionConfig(threshold=0.002)
+                    gap_detection=GapDetectionConfig(threshold=0.002),
                 )
             ]
         )
@@ -110,7 +101,7 @@ class TestCreateIndicators:
 
         assert isinstance(indicators, Indicators)
         assert len(indicators.timeframe_configs) == 1
-        
+
         tf_config = indicators.timeframe_configs[0]
         assert tf_config["timeframes"] == ["5min", "15min"]
         assert tf_config["swing_points"]["window"] == 7
@@ -121,33 +112,24 @@ class TestCreateIndicators:
         """Test creating indicators with multiple timeframe configurations."""
         config = IndicatorsConfig(
             timeframe_configs=[
-                TimeframeItemConfig(
-                    timeframes=["5min"],
-                    swing_points=SwingPointsConfig(window=5, threshold=2.0)
-                ),
-                TimeframeItemConfig(
-                    timeframes=["1h"],
-                    swing_points=SwingPointsConfig(window=7, threshold=5.0)
-                ),
-                TimeframeItemConfig(
-                    timeframes=["1d"],
-                    gap_detection=GapDetectionConfig(threshold=0.01)
-                )
+                TimeframeItemConfig(timeframes=["5min"], swing_points=SwingPointsConfig(window=5, threshold=2.0)),
+                TimeframeItemConfig(timeframes=["1h"], swing_points=SwingPointsConfig(window=7, threshold=5.0)),
+                TimeframeItemConfig(timeframes=["1d"], gap_detection=GapDetectionConfig(threshold=0.01)),
             ]
         )
         indicators = Factory.create_indicators(config)
 
         assert isinstance(indicators, Indicators)
         assert len(indicators.timeframe_configs) == 3
-        
+
         # Check first config
         assert indicators.timeframe_configs[0]["timeframes"] == ["5min"]
         assert indicators.timeframe_configs[0]["swing_points"]["threshold"] == 2.0
-        
+
         # Check second config
         assert indicators.timeframe_configs[1]["timeframes"] == ["1h"]
         assert indicators.timeframe_configs[1]["swing_points"]["window"] == 7
-        
+
         # Check third config
         assert indicators.timeframe_configs[2]["timeframes"] == ["1d"]
         assert indicators.timeframe_configs[2]["gap_detection"]["threshold"] == 0.01
@@ -156,33 +138,27 @@ class TestCreateIndicators:
         """Test creating indicators with optional swing_points and gap_detection."""
         config = IndicatorsConfig(
             timeframe_configs=[
-                TimeframeItemConfig(
-                    timeframes=["5min"],
-                    swing_points=SwingPointsConfig(window=10, threshold=1.5)
-                ),
-                TimeframeItemConfig(
-                    timeframes=["1h"],
-                    gap_detection=GapDetectionConfig(threshold=0.005)
-                ),
+                TimeframeItemConfig(timeframes=["5min"], swing_points=SwingPointsConfig(window=10, threshold=1.5)),
+                TimeframeItemConfig(timeframes=["1h"], gap_detection=GapDetectionConfig(threshold=0.005)),
                 TimeframeItemConfig(
                     timeframes=["1d"]
                     # No swing_points or gap_detection
-                )
+                ),
             ]
         )
         indicators = Factory.create_indicators(config)
 
         assert isinstance(indicators, Indicators)
         assert len(indicators.timeframe_configs) == 3
-        
+
         # First config has swing_points
         assert "swing_points" in indicators.timeframe_configs[0]
         assert "gap_detection" not in indicators.timeframe_configs[0]
-        
+
         # Second config has gap_detection
         assert "swing_points" not in indicators.timeframe_configs[1]
         assert "gap_detection" in indicators.timeframe_configs[1]
-        
+
         # Third config has neither
         assert "swing_points" not in indicators.timeframe_configs[2]
         assert "gap_detection" not in indicators.timeframe_configs[2]
@@ -196,9 +172,7 @@ class TestCreateAll:
         """Test creating all components with minimal Pydantic configuration."""
         config = FactoryConfig(
             aggregation=AggregationConfig(target_timeframes=["1h"]),
-            indicators=IndicatorsConfig(
-                timeframe_configs=[TimeframeItemConfig(timeframes=["all"])]
-            )
+            indicators=IndicatorsConfig(timeframe_configs=[TimeframeItemConfig(timeframes=["all"])]),
         )
         components = Factory.create_all(config)
 
@@ -207,11 +181,11 @@ class TestCreateAll:
         assert "indicators" in components
         assert isinstance(components["aggregation"], Aggregation)
         assert isinstance(components["indicators"], Indicators)
-        
+
         # Check aggregation
         assert components["aggregation"].target_timeframes == ["1h"]
         assert components["aggregation"].asset_class == "equities"
-        
+
         # Check indicators
         assert len(components["indicators"].timeframe_configs) == 1
         assert components["indicators"].timeframe_configs[0]["timeframes"] == ["all"]
@@ -220,20 +194,17 @@ class TestCreateAll:
         """Test creating all components with complete Pydantic configuration."""
         config = FactoryConfig(
             aggregation=AggregationConfig(
-                target_timeframes=["5min", "1h"],
-                asset_class="crypto",
-                timezone="UTC",
-                hour_boundary=False
+                target_timeframes=["5min", "1h"], asset_class="crypto", timezone="UTC", hour_boundary=False
             ),
             indicators=IndicatorsConfig(
                 timeframe_configs=[
                     TimeframeItemConfig(
                         timeframes=["5min", "1h"],
                         swing_points=SwingPointsConfig(window=7, threshold=3.0),
-                        gap_detection=GapDetectionConfig(threshold=0.002)
+                        gap_detection=GapDetectionConfig(threshold=0.002),
                     )
                 ]
-            )
+            ),
         )
         components = Factory.create_all(config)
 
@@ -259,25 +230,21 @@ class TestCreateAll:
                 target_timeframes=["5min", "15min", "1h", "4h", "1d"],
                 asset_class="equities",
                 timezone="US/Eastern",
-                session_start="09:30"
+                session_start="09:30",
             ),
             indicators=IndicatorsConfig(
                 timeframe_configs=[
                     TimeframeItemConfig(
-                        timeframes=["5min", "15min"],
-                        swing_points=SwingPointsConfig(window=5, threshold=2.0)
+                        timeframes=["5min", "15min"], swing_points=SwingPointsConfig(window=5, threshold=2.0)
                     ),
                     TimeframeItemConfig(
                         timeframes=["1h", "4h"],
                         swing_points=SwingPointsConfig(window=7, threshold=3.5),
-                        gap_detection=GapDetectionConfig(threshold=0.01)
+                        gap_detection=GapDetectionConfig(threshold=0.01),
                     ),
-                    TimeframeItemConfig(
-                        timeframes=["1d"],
-                        swing_points=SwingPointsConfig(window=10, threshold=5.0)
-                    )
+                    TimeframeItemConfig(timeframes=["1d"], swing_points=SwingPointsConfig(window=10, threshold=5.0)),
                 ]
-            )
+            ),
         )
         components = Factory.create_all(config)
 
@@ -291,15 +258,15 @@ class TestCreateAll:
         # Verify indicators
         indicators = components["indicators"]
         assert len(indicators.timeframe_configs) == 3
-        
+
         # Check each timeframe config
         assert indicators.timeframe_configs[0]["timeframes"] == ["5min", "15min"]
         assert indicators.timeframe_configs[0]["swing_points"]["threshold"] == 2.0
-        
+
         assert indicators.timeframe_configs[1]["timeframes"] == ["1h", "4h"]
         assert indicators.timeframe_configs[1]["swing_points"]["threshold"] == 3.5
         assert indicators.timeframe_configs[1]["gap_detection"]["threshold"] == 0.01
-        
+
         assert indicators.timeframe_configs[2]["timeframes"] == ["1d"]
         assert indicators.timeframe_configs[2]["swing_points"]["window"] == 10
 
@@ -399,15 +366,12 @@ class TestPydanticIntegration:
 
     def test_config_reusability(self):
         """Test that Pydantic configs can be reused across Factory calls."""
-        agg_config = AggregationConfig(
-            target_timeframes=["5min", "1h"],
-            asset_class="crypto"
-        )
-        
+        agg_config = AggregationConfig(target_timeframes=["5min", "1h"], asset_class="crypto")
+
         # Create aggregation multiple times with same config
         agg1 = Factory.create_aggregation(agg_config)
         agg2 = Factory.create_aggregation(agg_config)
-        
+
         # Both should be identical but separate instances
         assert agg1.target_timeframes == agg2.target_timeframes
         assert agg1.asset_class == agg2.asset_class
@@ -415,19 +379,16 @@ class TestPydanticIntegration:
 
     def test_config_modification_safety(self):
         """Test that modifying factory output doesn't affect original config."""
-        config = AggregationConfig(
-            target_timeframes=["5min"],
-            asset_class="crypto"
-        )
-        
+        config = AggregationConfig(target_timeframes=["5min"], asset_class="crypto")
+
         agg = Factory.create_aggregation(config)
-        
+
         # Modify the aggregation
         agg.target_timeframes.append("1h")
-        
+
         # Original config should be unchanged
         assert config.target_timeframes == ["5min"]
-        
+
         # Create new aggregation from same config
         agg2 = Factory.create_aggregation(config)
         assert agg2.target_timeframes == ["5min"]  # Should still be original
@@ -439,13 +400,13 @@ class TestPydanticIntegration:
                 TimeframeItemConfig(
                     timeframes=["5min"],
                     swing_points=SwingPointsConfig(window=7, threshold=3.0),
-                    gap_detection=GapDetectionConfig(threshold=0.002)
+                    gap_detection=GapDetectionConfig(threshold=0.002),
                 )
             ]
         )
-        
+
         indicators = Factory.create_indicators(config)
-        
+
         # Verify the nested structure is properly converted
         tf_config = indicators.timeframe_configs[0]
         assert isinstance(tf_config["swing_points"], dict)

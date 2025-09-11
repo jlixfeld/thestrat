@@ -102,15 +102,15 @@ class TestAggregationInit:
         # Test crypto default (True)
         crypto_agg = Aggregation(target_timeframes=["1h"], asset_class="crypto")
         assert crypto_agg.hour_boundary is True
-        
-        # Test equities default (False)  
+
+        # Test equities default (False)
         equities_agg = Aggregation(target_timeframes=["1h"], asset_class="equities")
         assert equities_agg.hour_boundary is False
-        
+
         # Test fx default (True)
         fx_agg = Aggregation(target_timeframes=["1h"], asset_class="fx")
         assert fx_agg.hour_boundary is True
-        
+
         # Test explicit override still works
         explicit_agg = Aggregation(target_timeframes=["1h"], asset_class="crypto", hour_boundary=False)
         assert explicit_agg.hour_boundary is False
@@ -137,7 +137,7 @@ class TestAggregationInit:
 
     def test_timeframe_validation_polars_formats(self):
         """Test that supported timeframes from TIMEFRAME_TO_POLARS are accepted."""
-        
+
         # Test all supported timeframes from the mapping
         for tf in TimeframeConfig.TIMEFRAME_TO_POLARS.keys():
             # Should not raise any exception
@@ -477,7 +477,6 @@ class TestAllAssetClasses:
         # Should handle forex precision
         opens = result["open"].to_list()
         assert all(1.0 <= price <= 1.1 for price in opens[:5])  # Typical EUR/USD range
-
 
 
 @pytest.mark.unit
@@ -1218,40 +1217,38 @@ class TestAllTimeframes:
     def test_session_open_alignment(self):
         """Test that hourly+ timeframes align with session_open when hour_boundary=False."""
         from datetime import datetime, timezone
+
         import polars as pl
-        
+
         # Create data with specific timestamps for testing alignment
         timestamps = [
-            datetime(2024, 1, 1, 9, 30, tzinfo=timezone.utc),  # 9:30 
-            datetime(2024, 1, 1, 10, 30, tzinfo=timezone.utc), # 10:30
-            datetime(2024, 1, 1, 11, 30, tzinfo=timezone.utc), # 11:30
-            datetime(2024, 1, 1, 12, 30, tzinfo=timezone.utc), # 12:30
-            datetime(2024, 1, 1, 13, 30, tzinfo=timezone.utc), # 13:30
-            datetime(2024, 1, 1, 14, 30, tzinfo=timezone.utc), # 14:30
+            datetime(2024, 1, 1, 9, 30, tzinfo=timezone.utc),  # 9:30
+            datetime(2024, 1, 1, 10, 30, tzinfo=timezone.utc),  # 10:30
+            datetime(2024, 1, 1, 11, 30, tzinfo=timezone.utc),  # 11:30
+            datetime(2024, 1, 1, 12, 30, tzinfo=timezone.utc),  # 12:30
+            datetime(2024, 1, 1, 13, 30, tzinfo=timezone.utc),  # 13:30
+            datetime(2024, 1, 1, 14, 30, tzinfo=timezone.utc),  # 14:30
         ]
-        
-        test_data = pl.DataFrame({
-            "timestamp": timestamps,
-            "open": [100.0, 101.0, 102.0, 103.0, 104.0, 105.0],
-            "high": [100.5, 101.5, 102.5, 103.5, 104.5, 105.5],
-            "low": [99.5, 100.5, 101.5, 102.5, 103.5, 104.5],
-            "close": [100.2, 101.2, 102.2, 103.2, 104.2, 105.2],
-            "volume": [1000, 1100, 1200, 1300, 1400, 1500],
-        })
-        
-        # Test equities with session_start=09:30 and hour_boundary=False
-        agg = Aggregation(
-            target_timeframes=["1h"], 
-            asset_class="equities", 
-            session_start="09:30",
-            hour_boundary=False
+
+        test_data = pl.DataFrame(
+            {
+                "timestamp": timestamps,
+                "open": [100.0, 101.0, 102.0, 103.0, 104.0, 105.0],
+                "high": [100.5, 101.5, 102.5, 103.5, 104.5, 105.5],
+                "low": [99.5, 100.5, 101.5, 102.5, 103.5, 104.5],
+                "close": [100.2, 101.2, 102.2, 103.2, 104.2, 105.2],
+                "volume": [1000, 1100, 1200, 1300, 1400, 1500],
+            }
         )
-        
+
+        # Test equities with session_start=09:30 and hour_boundary=False
+        agg = Aggregation(target_timeframes=["1h"], asset_class="equities", session_start="09:30", hour_boundary=False)
+
         result = agg.process(test_data)
-        
+
         assert isinstance(result, pl.DataFrame)
         assert len(result) > 0
-        
+
         # For equities with hour_boundary=False, bars should align with session_start (09:30)
         # So we should get bars at 9:30, 10:30, 11:30, etc.
         result_timestamps = result["timestamp"].to_list()
@@ -1373,7 +1370,7 @@ class TestAggregationEdgeCases:
         data = data.head(60)  # 1 hour of data
 
         agg = Aggregation(target_timeframes=["5min"])
-        
+
         # This should work normally first
         result = agg.process(data)
         assert len(result) > 0
@@ -1383,8 +1380,8 @@ class TestAggregationEdgeCases:
         with pytest.raises(ValueError) as exc_info:
             agg._process_single_timeframe(data, "")
         assert "Unsupported timeframe" in str(exc_info.value)
-        
-        # None makes get_polars_format return None (falsy) 
+
+        # None makes get_polars_format return None (falsy)
         with pytest.raises(ValueError) as exc_info:
             agg._process_single_timeframe(data, None)
         assert "Unsupported timeframe" in str(exc_info.value)
@@ -1392,26 +1389,23 @@ class TestAggregationEdgeCases:
     def test_input_validation_failure_raises_valueerror(self):
         """Test that input validation failure raises ValueError."""
         agg = Aggregation(target_timeframes=["5min"])
-        
+
         # Test with invalid data structure (missing required columns)
-        invalid_data = pl.DataFrame({
-            "wrong_column": [1, 2, 3],
-            "another_wrong": ["a", "b", "c"]
-        })
-        
+        invalid_data = pl.DataFrame({"wrong_column": [1, 2, 3], "another_wrong": ["a", "b", "c"]})
+
         with pytest.raises(ValueError) as exc_info:
             agg.process(invalid_data)
         assert "Input data validation failed" in str(exc_info.value)
 
 
-@pytest.mark.unit 
+@pytest.mark.unit
 class TestAggregationPrivateMethods:
     """Test cases for Aggregation private helper methods."""
 
     def test_should_use_hour_boundary_supported_timeframes(self):
         """Test _should_use_hour_boundary with supported timeframe strings."""
         agg = Aggregation(target_timeframes=["1h"])
-        
+
         # Test supported hourly and higher timeframes
         assert agg._should_use_hour_boundary("1h") is True
         assert agg._should_use_hour_boundary("4h") is True
@@ -1424,19 +1418,19 @@ class TestAggregationPrivateMethods:
     def test_should_use_hour_boundary_polars_style_patterns(self):
         """Test _should_use_hour_boundary with polars-style timeframe patterns."""
         agg = Aggregation(target_timeframes=["1h"])
-        
+
         # Test polars-style patterns (case insensitive)
         assert agg._should_use_hour_boundary("2h") is True
         assert agg._should_use_hour_boundary("1d") is True
         assert agg._should_use_hour_boundary("3w") is True
         assert agg._should_use_hour_boundary("2mo") is True
         assert agg._should_use_hour_boundary("1y") is True
-        
+
         # Test case insensitive
         assert agg._should_use_hour_boundary("2H") is True
         assert agg._should_use_hour_boundary("1D") is True
         assert agg._should_use_hour_boundary("1Mo") is True
-        
+
         # Test minute patterns should return False
         assert agg._should_use_hour_boundary("5m") is False
         assert agg._should_use_hour_boundary("15M") is False
@@ -1444,7 +1438,7 @@ class TestAggregationPrivateMethods:
     def test_should_use_hour_boundary_edge_cases(self):
         """Test _should_use_hour_boundary edge cases and invalid patterns."""
         agg = Aggregation(target_timeframes=["1h"])
-        
+
         # Invalid patterns should return False
         assert agg._should_use_hour_boundary("invalid") is False
         assert agg._should_use_hour_boundary("") is False
@@ -1454,33 +1448,33 @@ class TestAggregationPrivateMethods:
     def test_is_hourly_or_higher_various_formats(self):
         """Test _is_hourly_or_higher with various timeframe formats."""
         agg = Aggregation(target_timeframes=["1h"])
-        
-        # Test explicit hourly patterns  
+
+        # Test explicit hourly patterns
         assert agg._is_hourly_or_higher("1h") is True
         assert agg._is_hourly_or_higher("4h") is True
         assert agg._is_hourly_or_higher("12h") is True
         assert agg._is_hourly_or_higher("24h") is True
-        
+
         # Test daily and higher patterns
         assert agg._is_hourly_or_higher("1d") is True
         assert agg._is_hourly_or_higher("7d") is True
         assert agg._is_hourly_or_higher("1w") is True
         assert agg._is_hourly_or_higher("1mo") is True
         assert agg._is_hourly_or_higher("1y") is True
-        
+
         # Test case insensitive
         assert agg._is_hourly_or_higher("1H") is True
         assert agg._is_hourly_or_higher("1D") is True
         assert agg._is_hourly_or_higher("1W") is True
         assert agg._is_hourly_or_higher("1Mo") is True
         assert agg._is_hourly_or_higher("1Y") is True
-        
+
         # Test minute patterns - note: "1m" is treated as monthly, not minutes
         # This appears to be current behavior where "1m" = 1 month
         assert agg._is_hourly_or_higher("1m") is True  # 1 month
         assert agg._is_hourly_or_higher("5m") is True  # 5 months
         assert agg._is_hourly_or_higher("15M") is True  # 15 months (case insensitive)
-        
+
         # Test actual minute patterns that should return False
         assert agg._is_hourly_or_higher("30min") is False
         assert agg._is_hourly_or_higher("invalid") is False
