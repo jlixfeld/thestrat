@@ -5,14 +5,15 @@ Tests OHLC timeframe aggregation with timezone handling and boundary alignment.
 """
 
 from datetime import datetime
+from typing import Any, cast
 
 import pandas as pd
 import polars as pl
 import pytest
+from pydantic import ValidationError
 
 from thestrat.aggregation import Aggregation
 from thestrat.schemas import ASSET_CLASS_CONFIGS, AggregationConfig, TimeframeConfig
-from pydantic import ValidationError
 
 from .utils.thestrat_data_utils import (
     create_crypto_data,
@@ -388,7 +389,9 @@ class TestTimezoneHandling:
         result = agg.normalize_timezone(aware_data)
 
         # Should preserve timezone-aware format
-        assert result.schema["timestamp"].time_zone == "UTC"
+        # Check timezone - cast to Any to avoid Pylance type checking issues
+        timestamp_dtype = cast(Any, result.schema["timestamp"])
+        assert timestamp_dtype.time_zone == "UTC"
 
 
 @pytest.mark.unit

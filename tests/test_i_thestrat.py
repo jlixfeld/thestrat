@@ -5,6 +5,7 @@ Tests end-to-end workflows and component interactions.
 """
 
 from datetime import datetime
+from typing import Any, cast
 
 import polars as pl
 import pytest
@@ -145,7 +146,9 @@ class TestTheStratIntegration:
 
         assert isinstance(analyzed, pl.DataFrame)
         assert len(analyzed) == 12  # 48 hours / 4 hours per bar
-        assert analyzed.schema["timestamp"].time_zone == "UTC"
+        # Check timezone - cast to Any to avoid Pylance type checking issues with Polars
+        timestamp_dtype = cast(Any, analyzed.schema["timestamp"])
+        assert timestamp_dtype.time_zone == "UTC"
 
     def test_forex_utc_workflow(self):
         """Test workflow with forex UTC market data."""
