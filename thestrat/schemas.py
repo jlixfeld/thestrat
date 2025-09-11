@@ -431,7 +431,7 @@ class AggregationConfig(BaseModel):
             data["timezone"] = "UTC"
         elif "timezone" not in data or data["timezone"] is None:
             data["timezone"] = asset_config.timezone
-            
+
         # Apply other defaults only if fields are not provided or are None
         if "hour_boundary" not in data or data["hour_boundary"] is None:
             data["hour_boundary"] = asset_config.hour_boundary
@@ -548,9 +548,11 @@ class SchemaDocGenerator:
                 # Convert Polars data types to string representations for serialization
                 if "polars_dtype" in metadata:
                     polars_type = metadata["polars_dtype"]
-                    metadata["polars_dtype"] = (
-                        polars_type.__name__ if hasattr(polars_type, "__name__") else str(polars_type)
-                    )
+                    # Convert Polars type to string representation for JSON serialization
+                    try:
+                        metadata["polars_dtype"] = getattr(polars_type, "__name__", str(polars_type))
+                    except (AttributeError, TypeError):
+                        metadata["polars_dtype"] = str(polars_type)
                 field_doc["metadata"] = metadata
 
             field_docs[field_name] = field_doc
