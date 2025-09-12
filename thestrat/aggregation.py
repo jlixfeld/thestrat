@@ -69,12 +69,18 @@ class Aggregation(Component):
         self.hour_boundary = config.hour_boundary
 
         # Validate all timeframes
+        from .schemas import TimeframeConfig
+
         for tf in self.target_timeframes:
-            self._validate_timeframe(tf)
+            if not TimeframeConfig.validate_timeframe(tf):
+                raise ValueError(
+                    f"Invalid timeframe '{tf}'. Supported timeframes: {sorted(TimeframeConfig.TIMEFRAME_METADATA.keys())}"
+                )
 
     def process(self, data: PolarsDataFrame | PandasDataFrame) -> PolarsDataFrame:
         """
         Convert OHLC data to target timeframes with boundary alignment.
+        Supports both single-timeframe and multi-timeframe source data.
 
         Args:
             data: Input DataFrame with OHLC data
@@ -85,20 +91,73 @@ class Aggregation(Component):
         if not self.validate_input(data):
             raise ValueError("Input data validation failed")
 
-        # Convert to Polars if needed
         df = self._convert_to_polars(data)
-
-        # Normalize timezone
         df = self.normalize_timezone(df)
 
+        # Auto-detect mode
+        is_multi_timeframe = "timeframe" in df.columns
+
+        if is_multi_timeframe:
+            return self._process_multi_timeframe_source(df)
+        else:
+            return self._process_single_timeframe_source(df)
+
+    def _process_single_timeframe_source(self, data: PolarsDataFrame) -> PolarsDataFrame:
+        """Process single-timeframe source data."""
         # Process each timeframe and collect results
         results = []
         for timeframe in self.target_timeframes:
-            # Process this specific timeframe
-            timeframe_result = self._process_single_timeframe(df, timeframe)
+            timeframe_result = self._process_single_timeframe(data, timeframe)
             results.append(timeframe_result)
 
-        # Concatenate all results
+        # Concatenate and sort results
+        final_df = results[0]
+        for result in results[1:]:
+            final_df = final_df.vstack(result)
+
+        sort_cols = []
+        if "symbol" in final_df.columns:
+            sort_cols.append("symbol")
+        sort_cols.extend(["timeframe", "timestamp"])
+
+        return final_df.sort(sort_cols)
+
+    def _process_multi_timeframe_source(self, data: PolarsDataFrame) -> PolarsDataFrame:
+        """
+        Process multi-timeframe source data.
+        Intelligently selects optimal source timeframe for each target.
+        """
+        from .schemas import TimeframeConfig
+
+        # Get available source timeframes
+        available_timeframes = data["timeframe"].unique().to_list()
+
+        results = []
+        for target_tf in self.target_timeframes:
+            # Get optimal source for this target
+            source_tf = TimeframeConfig.get_optimal_source_timeframe(target_tf, available_timeframes)
+
+            if source_tf == target_tf:
+                # Pass-through: target already exists in source
+                target_data = data.filter(col("timeframe") == target_tf)
+                results.append(target_data)
+            elif source_tf:
+                # Aggregate from optimal source
+                source_data = data.filter(col("timeframe") == source_tf).drop("timeframe")
+                aggregated = self._process_single_timeframe(source_data, target_tf)
+                results.append(aggregated)
+            else:
+                # No valid source available for this target - log warning but continue
+                import logging
+
+                logging.warning(
+                    f"No valid source timeframe available for target '{target_tf}'. Available: {available_timeframes}"
+                )
+
+        if not results:
+            raise ValueError("No valid aggregations could be performed")
+
+        # Combine all results
         final_df = results[0]
         for result in results[1:]:
             final_df = final_df.vstack(result)
@@ -218,10 +277,26 @@ class Aggregation(Component):
         """Validate input data format."""
         df = self._convert_to_polars(data)
 
-        # Check required columns
-        required_cols = ["timestamp", "open", "high", "low", "close"]
+        # Check required columns using schema-driven approach
+        from .schemas import IndicatorSchema
+
+        required_cols = IndicatorSchema.get_required_input_columns()
+
+        # Remove timeframe if not in multi-timeframe mode
+        if "timeframe" not in df.columns and "timeframe" in required_cols:
+            required_cols = [col for col in required_cols if col != "timeframe"]
+
         if not all(col in df.columns for col in required_cols):
             return False
+
+        # Validate timeframes if in multi-timeframe mode
+        if "timeframe" in df.columns:
+            from .schemas import TimeframeConfig
+
+            unique_timeframes = df["timeframe"].unique().to_list()
+            for tf in unique_timeframes:
+                if not TimeframeConfig.validate_timeframe(tf):
+                    return False
 
         # Check for minimum data points
         if len(df) < 2:
@@ -265,18 +340,3 @@ class Aggregation(Component):
             return True
 
         return False
-
-    def _validate_timeframe(self, timeframe: str) -> None:
-        """Validate that the timeframe is supported."""
-        if not isinstance(timeframe, str):
-            raise TypeError(f"Timeframe must be a string, got {type(timeframe)}")
-
-        if not timeframe:
-            raise ValueError("Timeframe cannot be empty")
-
-        from .schemas import TimeframeConfig
-
-        if not TimeframeConfig.validate_timeframe(timeframe):
-            raise ValueError(
-                f"Invalid timeframe '{timeframe}'. Supported timeframes: {sorted(TimeframeConfig.TIMEFRAME_TO_POLARS.keys())}"
-            )

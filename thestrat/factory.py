@@ -165,7 +165,7 @@ class Factory:
         # Pre-compute timeframes with their durations for efficient sorting
         timeframes_with_duration = [
             (tf, TimeframeConfig.TIMEFRAME_METADATA.get(tf, {}).get("seconds", float("inf")))
-            for tf in TimeframeConfig.TIMEFRAME_TO_POLARS.keys()
+            for tf in TimeframeConfig.TIMEFRAME_METADATA.keys()
         ]
 
         # Sort by duration and return just the timeframe strings
@@ -260,8 +260,8 @@ class Factory:
         """
         from .schemas import TimeframeConfig
 
-        if timeframe not in TimeframeConfig.TIMEFRAME_TO_POLARS:
-            supported = sorted(TimeframeConfig.TIMEFRAME_TO_POLARS.keys())
+        if timeframe not in TimeframeConfig.TIMEFRAME_METADATA:
+            supported = sorted(TimeframeConfig.TIMEFRAME_METADATA.keys())
             raise ValueError(f"Unsupported timeframe: '{timeframe}'. Supported timeframes are: {supported}")
 
         metadata = TimeframeConfig.TIMEFRAME_METADATA.get(timeframe)
@@ -276,18 +276,3 @@ class Factory:
             }
 
         return metadata
-
-    @staticmethod
-    def validate_timeframe_format(timeframe: str) -> bool:
-        """
-        Validate timeframe format against supported timeframes.
-
-        Args:
-            timeframe: Timeframe string to validate
-
-        Returns:
-            True if format is valid, False otherwise
-        """
-        from .schemas import TimeframeConfig
-
-        return TimeframeConfig.validate_timeframe(timeframe)

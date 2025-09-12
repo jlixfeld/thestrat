@@ -63,7 +63,7 @@ class AssetClassConfig(BaseModel):
             raise ValueError("session_start must be in HH:MM format")
         return v
 
-    # Registry pattern - similar to TimeframeConfig.TIMEFRAME_TO_POLARS
+    # Registry pattern - similar to TimeframeConfig.TIMEFRAME_METADATA
     REGISTRY: ClassVar[dict[str, "AssetClassConfig"]] = {}
 
     @classmethod
@@ -95,24 +95,7 @@ ASSET_CLASS_CONFIGS = AssetClassConfig.REGISTRY
 class TimeframeConfig(BaseModel):
     """Configuration and validation for timeframes with comprehensive metadata."""
 
-    # Timeframe mappings for aggregation
-    TIMEFRAME_TO_POLARS: ClassVar[dict[str, str]] = {
-        "1min": "1m",
-        "5min": "5m",
-        "15min": "15m",
-        "30min": "30m",
-        "1h": "1h",
-        "4h": "4h",
-        "6h": "6h",
-        "12h": "12h",
-        "1d": "1d",
-        "1w": "1w",
-        "1m": "1mo",  # 1 month
-        "1q": "3mo",  # 1 quarter = 3 months
-        "1y": "1y",
-    }
-
-    # Comprehensive timeframe metadata
+    # Comprehensive timeframe metadata (includes Polars format mapping)
     TIMEFRAME_METADATA: ClassVar[dict[str, dict[str, Any]]] = {
         "1min": {
             "category": "sub-hourly",
@@ -120,6 +103,7 @@ class TimeframeConfig(BaseModel):
             "description": "1-minute bars for high-frequency analysis",
             "typical_use": "Scalping, entry timing, tick analysis",
             "data_volume": "very_high",
+            "polars_format": "1m",
         },
         "5min": {
             "category": "sub-hourly",
@@ -127,6 +111,7 @@ class TimeframeConfig(BaseModel):
             "description": "5-minute bars for short-term patterns",
             "typical_use": "Day trading, quick reversals",
             "data_volume": "high",
+            "polars_format": "5m",
         },
         "15min": {
             "category": "sub-hourly",
@@ -134,6 +119,7 @@ class TimeframeConfig(BaseModel):
             "description": "15-minute bars for intraday structure",
             "typical_use": "Swing entries, session analysis",
             "data_volume": "medium",
+            "polars_format": "15m",
         },
         "30min": {
             "category": "sub-hourly",
@@ -141,6 +127,7 @@ class TimeframeConfig(BaseModel):
             "description": "30-minute bars for session structure",
             "typical_use": "Half-hourly patterns, session transitions",
             "data_volume": "medium",
+            "polars_format": "30m",
         },
         "1h": {
             "category": "hourly",
@@ -148,6 +135,7 @@ class TimeframeConfig(BaseModel):
             "description": "1-hour bars for daily structure analysis",
             "typical_use": "Day trading context, hourly levels",
             "data_volume": "low",
+            "polars_format": "1h",
         },
         "4h": {
             "category": "multi-hourly",
@@ -155,6 +143,7 @@ class TimeframeConfig(BaseModel):
             "description": "4-hour bars for swing trading",
             "typical_use": "Swing trading, multi-day holds",
             "data_volume": "very_low",
+            "polars_format": "4h",
         },
         "6h": {
             "category": "multi-hourly",
@@ -162,6 +151,7 @@ class TimeframeConfig(BaseModel):
             "description": "6-hour bars for extended swing analysis",
             "typical_use": "Position trading context",
             "data_volume": "very_low",
+            "polars_format": "6h",
         },
         "12h": {
             "category": "multi-hourly",
@@ -169,6 +159,7 @@ class TimeframeConfig(BaseModel):
             "description": "12-hour bars for daily session analysis",
             "typical_use": "Asian/Western session splits",
             "data_volume": "very_low",
+            "polars_format": "12h",
         },
         "1d": {
             "category": "daily",
@@ -176,6 +167,7 @@ class TimeframeConfig(BaseModel):
             "description": "Daily bars for trend analysis",
             "typical_use": "Trend identification, position trading",
             "data_volume": "minimal",
+            "polars_format": "1d",
         },
         "1w": {
             "category": "weekly",
@@ -183,6 +175,7 @@ class TimeframeConfig(BaseModel):
             "description": "Weekly bars for long-term structure",
             "typical_use": "Major trend analysis, portfolio allocation",
             "data_volume": "minimal",
+            "polars_format": "1w",
         },
         "1m": {
             "category": "monthly",
@@ -190,6 +183,7 @@ class TimeframeConfig(BaseModel):
             "description": "Monthly bars for macro analysis",
             "typical_use": "Long-term investing, macro trends",
             "data_volume": "minimal",
+            "polars_format": "1mo",
         },
         "1q": {
             "category": "quarterly",
@@ -197,6 +191,7 @@ class TimeframeConfig(BaseModel):
             "description": "Quarterly bars for fundamental analysis",
             "typical_use": "Business cycle analysis, long-term allocation",
             "data_volume": "minimal",
+            "polars_format": "3mo",
         },
         "1y": {
             "category": "yearly",
@@ -204,31 +199,59 @@ class TimeframeConfig(BaseModel):
             "description": "Yearly bars for multi-year analysis",
             "typical_use": "Multi-year trends, generational analysis",
             "data_volume": "minimal",
+            "polars_format": "1y",
         },
     }
 
     @classmethod
     def validate_timeframe(cls, timeframe: str) -> bool:
-        """Validate that the timeframe is supported."""
-        if timeframe in cls.TIMEFRAME_TO_POLARS:
-            return True
-
-        # For backward compatibility, also check polars-style patterns
-        pattern = r"^(\d+)([a-zA-Z]+)$"
-        match = re.match(pattern, timeframe)
-
-        if not match:
-            return False
-
-        # Check if it matches a polars-style format that could be valid
-        unit = match.group(2).lower()
-        valid_polars_units = ["m", "h", "d", "w", "mo", "y"]
-        return unit in valid_polars_units
+        """Validate that the timeframe is supported (strict mode only)."""
+        return timeframe in cls.TIMEFRAME_METADATA
 
     @classmethod
     def get_polars_format(cls, timeframe: str) -> str:
         """Get the Polars format for a timeframe."""
-        return cls.TIMEFRAME_TO_POLARS.get(timeframe, timeframe)
+        metadata = cls.TIMEFRAME_METADATA.get(timeframe)
+        if metadata:
+            return metadata.get("polars_format", timeframe)
+        return timeframe
+
+    @classmethod
+    def get_optimal_source_timeframe(cls, target_timeframe: str, available_timeframes: list[str]) -> str | None:
+        """
+        Get optimal source timeframe for aggregating to target.
+
+        Args:
+            target_timeframe: Target timeframe to aggregate to
+            available_timeframes: List of available source timeframes
+
+        Returns:
+            Optimal source timeframe or None if target already exists or no valid source
+        """
+        # If target exists, use it directly (pass-through)
+        if target_timeframe in available_timeframes:
+            return target_timeframe
+
+        target_metadata = cls.TIMEFRAME_METADATA.get(target_timeframe)
+        if not target_metadata:
+            return None
+
+        target_seconds = target_metadata["seconds"]
+
+        # Find all mathematically valid sources (those that divide evenly into target)
+        valid_sources = []
+        for source_tf in available_timeframes:
+            source_metadata = cls.TIMEFRAME_METADATA.get(source_tf)
+            if source_metadata:
+                source_seconds = source_metadata["seconds"]
+                if target_seconds % source_seconds == 0:
+                    valid_sources.append((source_tf, source_seconds))
+
+        if not valid_sources:
+            return None
+
+        # Return the source with the largest duration (minimize aggregation operations)
+        return max(valid_sources, key=lambda x: x[1])[0]
 
 
 class SwingPointsConfig(BaseModel):
@@ -296,7 +319,7 @@ class TimeframeItemConfig(BaseModel):
         json_schema_extra={
             "special_values": {"all": "Apply to all available timeframes"},
             "validation": "Cannot mix 'all' with specific timeframes",
-            "supported_timeframes": list(TimeframeConfig.TIMEFRAME_TO_POLARS.keys()),
+            "supported_timeframes": list(TimeframeConfig.TIMEFRAME_METADATA.keys()),
         },
     )
     swing_points: SwingPointsConfig | None = Field(
@@ -355,7 +378,7 @@ class AggregationConfig(BaseModel):
         min_length=1,
         examples=[["5m"], ["1h", "4h"], ["5m", "15m", "1h", "1d"]],
         json_schema_extra={
-            "supported_formats": list(TimeframeConfig.TIMEFRAME_TO_POLARS.keys()),
+            "supported_formats": list(TimeframeConfig.TIMEFRAME_METADATA.keys()),
             "multi_timeframe": "Process multiple timeframes in single operation",
             "validation": "All timeframes must be valid and supported",
         },
@@ -400,19 +423,34 @@ class AggregationConfig(BaseModel):
 
     @field_validator("target_timeframes")
     @classmethod
-    def validate_target_timeframes(cls, v: list[str]) -> list[str]:
-        if not v:
+    def validate_and_expand_target_timeframes(cls, target_timeframes: list[str]) -> list[str]:
+        """
+        Validate target_timeframes field and expand 'all' keyword.
+
+        This Pydantic field validator is automatically called when AggregationConfig
+        is instantiated. It validates individual timeframes and expands ['all'] to
+        all supported timeframes.
+        """
+        if not target_timeframes:
             raise ValueError("target_timeframes cannot be empty")
 
-        for i, tf in enumerate(v):
-            if not isinstance(tf, str) or not tf.strip():
+        # Check for 'all' keyword
+        if "all" in target_timeframes:
+            if len(target_timeframes) > 1:
+                raise ValueError("'all' cannot be combined with specific timeframes")
+            # Expand to all supported timeframes
+            return list(TimeframeConfig.TIMEFRAME_METADATA.keys())
+
+        # Validate each specific timeframe
+        for i, timeframe in enumerate(target_timeframes):
+            if not isinstance(timeframe, str) or not timeframe.strip():
                 raise ValueError(f"target_timeframes[{i}] must be a non-empty string")
 
             # Validate timeframe format using TimeframeConfig
-            if not TimeframeConfig.validate_timeframe(tf):
-                raise ValueError(f"Invalid timeframe '{tf}'")
+            if not TimeframeConfig.validate_timeframe(timeframe):
+                raise ValueError(f"Invalid timeframe '{timeframe}'")
 
-        return v
+        return target_timeframes
 
     @model_validator(mode="before")
     @classmethod
@@ -826,13 +864,6 @@ class SchemaDocGenerator:
         classvars = {}
 
         # Check for known ClassVars using getattr to avoid type checker issues
-        timeframe_to_polars = getattr(model, "TIMEFRAME_TO_POLARS", None)
-        if timeframe_to_polars:
-            classvars["TIMEFRAME_TO_POLARS"] = {
-                "description": "Mapping of timeframe strings to Polars format strings",
-                "keys": list(timeframe_to_polars.keys()),
-            }
-
         timeframe_metadata = getattr(model, "TIMEFRAME_METADATA", None)
         if timeframe_metadata:
             classvars["TIMEFRAME_METADATA"] = {
@@ -944,14 +975,16 @@ class IndicatorSchema(BaseModel):
         gt=0,
         json_schema_extra={"polars_dtype": Float64, "input": True, "category": "base_ohlc"},
     )
-    symbol: str = Field(
+    symbol: str | None = Field(
+        default=None,
         description="Trading symbol or ticker (e.g., 'AAPL', 'BTC-USD')",
-        json_schema_extra={"polars_dtype": String, "input": True, "category": "base_ohlc"},
+        json_schema_extra={"polars_dtype": String, "input": True, "category": "base_ohlc", "optional": True},
     )
-    volume: float = Field(
+    volume: float | None = Field(
+        default=None,
         description="Trading volume for the time period",
         ge=0,
-        json_schema_extra={"polars_dtype": Float64, "input": True, "category": "base_ohlc"},
+        json_schema_extra={"polars_dtype": Float64, "input": True, "category": "base_ohlc", "optional": True},
     )
     timeframe: str = Field(
         description="Timeframe identifier (e.g., '5min', '1h', '1d')",
@@ -1380,3 +1413,58 @@ class IndicatorSchema(BaseModel):
             categories[category].sort()
 
         return categories
+
+    @classmethod
+    def get_required_input_columns(cls) -> list[str]:
+        """
+        Get list of required input columns based on schema definition.
+
+        Returns:
+            List of column names that are required for input data
+        """
+        from pydantic_core import PydanticUndefined
+
+        required_columns = []
+        for field_name, field_info in cls.model_fields.items():
+            json_extra = getattr(field_info, "json_schema_extra", {}) or {}
+            if (
+                json_extra.get("input") is True  # Is an input column
+                and not json_extra.get("optional", False)  # Not marked as optional
+                and getattr(field_info, "default", PydanticUndefined)
+                is PydanticUndefined  # No default value (required)
+            ):
+                required_columns.append(field_name)
+        return sorted(required_columns)
+
+    @classmethod
+    def get_optional_input_columns(cls) -> list[str]:
+        """
+        Get list of optional input columns based on schema definition.
+
+        Returns:
+            List of column names that are optional for input data
+        """
+        from pydantic_core import PydanticUndefined
+
+        optional_columns = []
+        for field_name, field_info in cls.model_fields.items():
+            json_extra = getattr(field_info, "json_schema_extra", {}) or {}
+            if (
+                json_extra.get("input") is True  # Is an input column
+                and (
+                    json_extra.get("optional", False)  # Marked as optional
+                    or getattr(field_info, "default", PydanticUndefined) is not PydanticUndefined
+                )  # Has default value
+            ):
+                optional_columns.append(field_name)
+        return sorted(optional_columns)
+
+    @classmethod
+    def get_all_input_columns(cls) -> list[str]:
+        """
+        Get list of all input columns (required + optional).
+
+        Returns:
+            List of all input column names
+        """
+        return cls.get_required_input_columns() + cls.get_optional_input_columns()
