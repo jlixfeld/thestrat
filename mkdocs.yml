@@ -6,6 +6,7 @@ repo_name: jlixfeld/thestrat
 
 theme:
   name: material
+  custom_dir: docs/theme
   palette:
     # Palette toggle for automatic mode
     - media: "(prefers-color-scheme)"
@@ -44,6 +45,9 @@ theme:
     - content.code.select
     - navigation.footer
     - content.tooltips
+
+hooks:
+  - docs/hooks.py
 
 plugins:
   - search
