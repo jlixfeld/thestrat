@@ -307,6 +307,92 @@ class TestUtilityMethods:
         with pytest.raises(ValueError, match="Unsupported asset class"):
             Factory.get_asset_class_config("invalid")
 
+    def test_get_supported_timeframes(self):
+        """Test getting list of supported timeframes in chronological order."""
+        timeframes = Factory.get_supported_timeframes()
+
+        # Check it returns a list
+        assert isinstance(timeframes, list)
+        assert len(timeframes) > 0
+
+        # Check expected timeframes are present
+        expected_timeframes = ["1min", "5min", "15min", "30min", "1h", "4h", "1d", "1w"]
+        for tf in expected_timeframes:
+            assert tf in timeframes
+
+        # Check list is in chronological order (shortest to longest duration)
+        expected_order = ["1min", "5min", "15min", "30min", "1h", "4h", "6h", "12h", "1d", "1w", "1m", "1q", "1y"]
+        assert timeframes == expected_order
+
+        # Verify it matches TimeframeConfig
+        from thestrat.schemas import TimeframeConfig
+
+        assert set(timeframes) == set(TimeframeConfig.TIMEFRAME_TO_POLARS.keys())
+
+        # Verify chronological ordering by checking durations are increasing
+        durations = [Factory.get_timeframe_metadata(tf)["seconds"] for tf in timeframes]
+        assert durations == sorted(durations)  # Should be in ascending order
+
+    def test_get_timeframe_metadata_valid(self):
+        """Test getting metadata for valid timeframes."""
+        test_cases = [
+            ("1h", "hourly", 3600),
+            ("5min", "sub-hourly", 300),
+            ("1d", "daily", 86400),
+        ]
+
+        for timeframe, expected_category, expected_seconds in test_cases:
+            metadata = Factory.get_timeframe_metadata(timeframe)
+
+            assert isinstance(metadata, dict)
+            assert metadata["category"] == expected_category
+            assert metadata["seconds"] == expected_seconds
+            assert "description" in metadata
+            assert "typical_use" in metadata
+            assert "data_volume" in metadata
+
+    def test_get_timeframe_metadata_invalid(self):
+        """Test getting metadata for invalid timeframe raises error."""
+        with pytest.raises(ValueError, match="Unsupported timeframe: 'invalid'"):
+            Factory.get_timeframe_metadata("invalid")
+
+        with pytest.raises(ValueError, match="Supported timeframes are:"):
+            Factory.get_timeframe_metadata("2hours")
+
+    def test_get_timeframe_metadata_immutable(self):
+        """Test that returned metadata cannot modify original."""
+        metadata1 = Factory.get_timeframe_metadata("1h")
+        metadata1["category"] = "modified"
+
+        metadata2 = Factory.get_timeframe_metadata("1h")
+        assert metadata2["category"] == "hourly"  # Should be unchanged
+
+    def test_method_caching_performance(self):
+        """Test that methods are properly cached for performance."""
+        # Test get_supported_timeframes caching
+        timeframes1 = Factory.get_supported_timeframes()
+        timeframes2 = Factory.get_supported_timeframes()
+
+        # Should return the same list object due to caching
+        assert timeframes1 is timeframes2
+        assert timeframes1 == timeframes2
+
+        # Test get_timeframe_metadata returns copies (for immutability)
+        metadata1 = Factory.get_timeframe_metadata("1h")
+        metadata2 = Factory.get_timeframe_metadata("1h")
+
+        # Should return different objects (copies) but same content
+        assert metadata1 is not metadata2  # Different objects
+        assert metadata1 == metadata2  # Same content
+
+        # Verify modifying one doesn't affect the other
+        metadata1["test"] = "modified"
+        assert "test" not in metadata2
+
+        # Verify different timeframes have different metadata
+        metadata_5min = Factory.get_timeframe_metadata("5min")
+        assert metadata1 != metadata_5min  # Different content
+
     def test_validate_timeframe_format_valid(self):
         """Test timeframe format validation for valid formats."""
         valid_timeframes = [
