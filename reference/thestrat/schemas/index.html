@@ -1837,7 +1837,7 @@ All columns are required as the indicators component creates them all.</p>
 </span><span id="__span-0-1467"><a id="__codelineno-0-1467" name="__codelineno-0-1467"></a><span class="sd">    Returns:</span>
 </span><span id="__span-0-1468"><a id="__codelineno-0-1468" name="__codelineno-0-1468"></a><span class="sd">        List of all input column names</span>
 </span><span id="__span-0-1469"><a id="__codelineno-0-1469" name="__codelineno-0-1469"></a><span class="sd">    &quot;&quot;&quot;</span>
-</span><span id="__span-0-1470"><a id="__codelineno-0-1470" name="__codelineno-0-1470"></a>    <span class="k">return</span> <span class="bp">cls</span><span class="o">.</span><span class="n">get_required_input_columns</span><span class="p">()</span> <span class="o">+</span> <span class="bp">cls</span><span class="o">.</span><span class="n">get_optional_input_columns</span><span class="p">()</span>
+</span><span id="__span-0-1470"><a id="__codelineno-0-1470" name="__codelineno-0-1470"></a>    <span class="k">return</span> <span class="nb">sorted</span><span class="p">(</span><span class="bp">cls</span><span class="o">.</span><span class="n">get_required_input_columns</span><span class="p">()</span> <span class="o">+</span> <span class="bp">cls</span><span class="o">.</span><span class="n">get_optional_input_columns</span><span class="p">())</span>
 </span></code></pre></div></td></tr></table></div>
             </details>
     </div>
