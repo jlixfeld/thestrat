@@ -154,10 +154,10 @@ class TestAggregationInit:
             assert agg.target_timeframes[0] == tf
 
     def test_timeframe_validation_polars_formats(self):
-        """Test that supported timeframes from TIMEFRAME_TO_POLARS are accepted."""
+        """Test that supported timeframes from TIMEFRAME_METADATA are accepted."""
 
         # Test all supported timeframes from the mapping
-        for tf in TimeframeConfig.TIMEFRAME_TO_POLARS.keys():
+        for tf in TimeframeConfig.TIMEFRAME_METADATA.keys():
             # Should not raise any exception
             agg = Aggregation(AggregationConfig(target_timeframes=[tf]))
             assert agg.target_timeframes[0] == tf
@@ -1205,9 +1205,9 @@ class TestAllTimeframes:
     """Test all supported timeframes for aggregation."""
 
     def test_all_timeframe_mappings_exist(self):
-        """Test that all timeframes in TIMEFRAME_TO_POLARS are valid."""
+        """Test that all timeframes in TIMEFRAME_METADATA are valid."""
         # Test that we can create Aggregation objects for all timeframes
-        for input_tf in TimeframeConfig.TIMEFRAME_TO_POLARS.keys():
+        for input_tf in TimeframeConfig.TIMEFRAME_METADATA.keys():
             agg = Aggregation(AggregationConfig(target_timeframes=[input_tf]))
             assert agg.target_timeframes[0] == input_tf
 

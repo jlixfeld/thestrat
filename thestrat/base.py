@@ -10,12 +10,6 @@ from pandas import DataFrame as PandasDataFrame
 from polars import DataFrame as PolarsDataFrame
 from polars import from_pandas
 
-# Required columns for OHLC data
-REQUIRED_COLUMNS = ["timestamp", "open", "high", "low", "close"]
-
-# Optional columns
-OPTIONAL_COLUMNS = ["symbol", "volume"]
-
 # Supported input formats
 SUPPORTED_INPUT_TYPES = [
     "polars.DataFrame",  # Native format (preferred)

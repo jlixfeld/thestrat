@@ -327,7 +327,7 @@ class TestUtilityMethods:
         # Verify it matches TimeframeConfig
         from thestrat.schemas import TimeframeConfig
 
-        assert set(timeframes) == set(TimeframeConfig.TIMEFRAME_TO_POLARS.keys())
+        assert set(timeframes) == set(TimeframeConfig.TIMEFRAME_METADATA.keys())
 
         # Verify chronological ordering by checking durations are increasing
         durations = [Factory.get_timeframe_metadata(tf)["seconds"] for tf in timeframes]
@@ -393,38 +393,19 @@ class TestUtilityMethods:
         metadata_5min = Factory.get_timeframe_metadata("5min")
         assert metadata1 != metadata_5min  # Different content
 
-    def test_validate_timeframe_format_valid(self):
-        """Test timeframe format validation for valid formats."""
-        valid_timeframes = [
-            "1m",
-            "5min",
-            "15min",
-            "30m",
-            "1h",
-            "2h",
-            "4h",
-            "8h",
-            "1h",
-            "2H",
-            "4H",
-            "6H",
-            "1d",
-            "1d",
-            "7D",
-            "14D",
-            "1w",
-            "1W",
-            "2W",
-            "1M",
-            "3M",
-            "6M",
-        ]
+    def test_timeframe_validation_strict_mode(self):
+        """Test strict timeframe validation - only exact supported formats."""
+        from thestrat.schemas import TimeframeConfig
 
-        for timeframe in valid_timeframes:
-            assert Factory.validate_timeframe_format(timeframe) is True
+        # Test exact supported timeframes (strict mode)
+        supported_timeframes = ["1min", "5min", "15min", "30min", "1h", "4h", "6h", "12h", "1d", "1w", "1m", "1q", "1y"]
+        for timeframe in supported_timeframes:
+            assert TimeframeConfig.validate_timeframe(timeframe) is True
 
-    def test_validate_timeframe_format_invalid(self):
-        """Test timeframe format validation for invalid formats."""
+    def test_timeframe_validation_invalid_formats(self):
+        """Test strict timeframe validation rejects invalid and unsupported formats."""
+        from thestrat.schemas import TimeframeConfig
+
         invalid_timeframes = [
             "invalid",
             "1",
@@ -432,28 +413,44 @@ class TestUtilityMethods:
             "1x",
             "1.5m",
             "",
-            "10mins",  # Not in supported units
+            "2h",  # Not exactly supported
+            "2d",  # Not exactly supported
+            "10mins",
         ]
 
         for timeframe in invalid_timeframes:
-            assert Factory.validate_timeframe_format(timeframe) is False
+            assert TimeframeConfig.validate_timeframe(timeframe) is False
 
-    def test_validate_timeframe_format_supported_units(self):
-        """Test that supported timeframes and polars-style variations work."""
-        # Test exact supported timeframes from TIMEFRAME_TO_POLARS
-        supported_timeframes = ["1min", "5min", "15min", "30min", "1h", "4h", "1d", "1w", "1m", "1q", "1y"]
+    def test_timeframe_validation_complete_coverage(self):
+        """Test that all timeframes in TIMEFRAME_METADATA are valid and no others."""
+        from thestrat.schemas import TimeframeConfig
+
+        # Test all exact supported timeframes from TIMEFRAME_METADATA
+        supported_timeframes = list(TimeframeConfig.TIMEFRAME_METADATA.keys())
         for timeframe in supported_timeframes:
-            assert Factory.validate_timeframe_format(timeframe) is True
+            assert TimeframeConfig.validate_timeframe(timeframe) is True
 
-        # Test polars-style patterns that should work
-        polars_patterns = ["1m", "5m", "15m", "30m", "2h", "3h", "2d", "3d", "2w", "1mo", "3mo", "2y"]
-        for timeframe in polars_patterns:
-            assert Factory.validate_timeframe_format(timeframe) is True
+        # Test that polars-style patterns are now rejected (strict mode)
+        # Note: avoid "1m" which is actually supported (1 month)
+        rejected_patterns = ["5m", "15m", "30m", "2h", "3h", "2d", "3d", "2w", "1mo", "3mo", "2y"]
+        for timeframe in rejected_patterns:
+            assert TimeframeConfig.validate_timeframe(timeframe) is False
 
-        # Test unsupported patterns that should fail
+        # Test completely invalid patterns
         invalid_patterns = ["1minutes", "1hour", "1hours", "1day", "1days", "1week", "1weeks", "1month", "1months"]
         for timeframe in invalid_patterns:
-            assert Factory.validate_timeframe_format(timeframe) is False
+            assert TimeframeConfig.validate_timeframe(timeframe) is False
+
+    def test_aggregation_config_rejects_old_formats(self):
+        """Test that AggregationConfig rejects previously valid but now unsupported formats."""
+        from thestrat.schemas import AggregationConfig
+
+        # Formats that might have worked before but should now be rejected
+        old_formats = ["2h", "3h", "8h", "2d", "3d", "5d", "2w", "3w", "1mo", "3mo", "6mo", "2y"]
+
+        for old_format in old_formats:
+            with pytest.raises(ValueError, match=f"Invalid timeframe '{old_format}'"):
+                AggregationConfig(target_timeframes=[old_format], asset_class="crypto")
 
 
 @pytest.mark.unit
