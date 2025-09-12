@@ -3,6 +3,7 @@ name: Auto-close external issues
 on:
   issues:
     types: [opened]
+  # Explicitly exclude push events to prevent unnecessary workflow evaluations
 
 permissions:
   issues: write
