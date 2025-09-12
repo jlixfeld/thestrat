@@ -18,9 +18,8 @@ def on_config(config, **kwargs):
             config["extra"] = {}
         config["extra"]["version"] = version
 
-        # Add version to site name
-        base_site_name = "TheStrat Documentation"
-        config["site_name"] = f"{base_site_name} v{version}"
+        # Keep site name clean without version
+        config["site_name"] = "TheStrat Documentation"
 
     except Exception as e:
         print(f"Warning: Could not read version from pyproject.toml: {e}")

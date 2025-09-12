@@ -2,6 +2,7 @@
 
 [![Tests](https://github.com/jlixfeld/thestrat/actions/workflows/tests.yml/badge.svg)](https://github.com/jlixfeld/thestrat/actions/workflows/tests.yml)
 [![Python Versions](https://img.shields.io/badge/python-3.11%20%7C%203.12-blue)](https://github.com/jlixfeld/thestrat)
+![Version](https://img.shields.io/badge/dynamic/toml?url=https://raw.githubusercontent.com/jlixfeld/thestrat/main/pyproject.toml&query=project.version&label=version&color=green)
 
 A Python module for financial data aggregation and technical analysis using **#TheStrat** methodology.
 
@@ -120,6 +121,5 @@ Ready to implement #TheStrat in your trading system?
 
 ## Project Status
 
-![Version](https://img.shields.io/github/v/tag/jlixfeld/thestrat?label=version&sort=semver)
 **Python**: 3.11+
 **License**: Private - All rights reserved
