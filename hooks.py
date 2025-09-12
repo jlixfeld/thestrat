@@ -5,7 +5,7 @@ from pathlib import Path
 
 
 def on_config(config, **kwargs):
-    """Hook to inject version from pyproject.toml into config.extra."""
+    """Hook to inject version from pyproject.toml into config.extra and site_name."""
     pyproject_path = Path(__file__).parent.parent / "pyproject.toml"
 
     try:
@@ -18,8 +18,13 @@ def on_config(config, **kwargs):
             config["extra"] = {}
         config["extra"]["version"] = version
 
+        # Add version to site name
+        base_site_name = "TheStrat Documentation"
+        config["site_name"] = f"{base_site_name} v{version}"
+
     except Exception as e:
         print(f"Warning: Could not read version from pyproject.toml: {e}")
         config["extra"]["version"] = "unknown"
+        config["site_name"] = "TheStrat Documentation"
 
     return config
