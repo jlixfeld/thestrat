@@ -5,6 +5,8 @@ This module provides vectorized OHLC aggregation across different timeframes wit
 support for asset class-specific timezone handling and boundary alignment.
 """
 
+import logging
+
 from pandas import DataFrame as PandasDataFrame
 from polars import (
     DataFrame as PolarsDataFrame,
@@ -148,8 +150,6 @@ class Aggregation(Component):
                 results.append(aggregated)
             else:
                 # No valid source available for this target - log warning but continue
-                import logging
-
                 logging.warning(
                     f"No valid source timeframe available for target '{target_tf}'. Available: {available_timeframes}"
                 )

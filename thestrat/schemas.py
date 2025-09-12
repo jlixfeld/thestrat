@@ -1467,4 +1467,4 @@ class IndicatorSchema(BaseModel):
         Returns:
             List of all input column names
         """
-        return cls.get_required_input_columns() + cls.get_optional_input_columns()
+        return sorted(cls.get_required_input_columns() + cls.get_optional_input_columns())

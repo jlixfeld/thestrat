@@ -441,6 +441,17 @@ class TestUtilityMethods:
         for timeframe in invalid_patterns:
             assert TimeframeConfig.validate_timeframe(timeframe) is False
 
+    def test_aggregation_config_rejects_old_formats(self):
+        """Test that AggregationConfig rejects previously valid but now unsupported formats."""
+        from thestrat.schemas import AggregationConfig
+
+        # Formats that might have worked before but should now be rejected
+        old_formats = ["2h", "3h", "8h", "2d", "3d", "5d", "2w", "3w", "1mo", "3mo", "6mo", "2y"]
+
+        for old_format in old_formats:
+            with pytest.raises(ValueError, match=f"Invalid timeframe '{old_format}'"):
+                AggregationConfig(target_timeframes=[old_format], asset_class="crypto")
+
 
 @pytest.mark.unit
 class TestPydanticIntegration:
