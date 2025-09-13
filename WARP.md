@@ -187,6 +187,20 @@ Tests are organized with pytest markers:
 @pytest.mark.integration # End-to-end workflow tests
 ```
 
+### Test Naming Convention
+
+Tests should be named `test_i_*.py` for integration tests and `test_u_*.py` for unit tests, where `*` is the filename of the codebase being tested.
+
+**Examples:**
+- `test_u_factory.py` - Unit tests for `factory.py`
+- `test_u_indicators.py` - Unit tests for `indicators.py`
+- `test_u_schemas.py` - Unit tests for `schemas.py`
+- `test_i_thestrat.py` - Integration tests for the overall `thestrat` module
+
+**Incorrect naming:**
+- `test_u_processor_validator.py` (describes functionality, not the file being tested)
+- `test_schema_validation.py` (missing u/i prefix and doesn't match source file)
+
 ### Coverage Requirements
 
 - **Minimum coverage**: 95%
