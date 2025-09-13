@@ -826,8 +826,8 @@ class TestFullProcessing:
             "gapper",
         ]
 
-        for col in core_columns:
-            assert col in result.columns, f"Missing core column: {col}"
+        for column in core_columns:
+            assert column in result.columns, f"Missing core column: {column}"
 
         # Market structure columns may not all be present if no swings detected
         market_structure_options = ["higher_high", "lower_high", "higher_low", "lower_low"]
@@ -1618,8 +1618,8 @@ class TestFullCorrectedPipeline:
             "motherbar_problems",  # Full breakout tracking
         ]
 
-        for col in expected_corrected_columns:
-            assert col in result.columns, f"Missing corrected column: {col}"
+        for column in expected_corrected_columns:
+            assert column in result.columns, f"Missing corrected column: {column}"
 
         # Verify data types
         assert result["continuity"].dtype == Int32  # 1, 0, -1
@@ -2250,8 +2250,8 @@ class TestPerTimeframeIndicators:
 
         # Verify key indicator columns are present
         expected_indicator_cols = ["swing_high", "swing_low", "scenario", "continuity", "in_force", "hammer", "shooter"]
-        for col in expected_indicator_cols:
-            assert col in result.columns
+        for column in expected_indicator_cols:
+            assert column in result.columns
 
     def test_all_timeframe_without_timeframe_column(self):
         """Test that 'all' timeframe works when no timeframe column is present."""
@@ -2288,8 +2288,8 @@ class TestPerTimeframeIndicators:
 
         # Should have all standard indicator columns
         expected_cols = ["swing_high", "swing_low", "scenario"]
-        for col in expected_cols:
-            assert col in result.columns
+        for column in expected_cols:
+            assert column in result.columns
 
     def test_config_resolution_fallback(self):
         """Test that timeframes without specific config raise error (no fallback in new API)."""
