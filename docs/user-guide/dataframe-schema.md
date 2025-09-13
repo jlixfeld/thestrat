@@ -6,7 +6,7 @@ The `IndicatorSchema` class provides comprehensive DataFrame validation and sche
 
 ```python
 from thestrat import IndicatorSchema
-import polars as pl
+from polars import DataFrame
 from datetime import datetime
 
 # Validate input DataFrame
@@ -16,7 +16,7 @@ data = {
     "symbol": ["AAPL"], "volume": [1000000.0], "timeframe": ["5min"]
 }
 
-df = pl.DataFrame(data, schema=IndicatorSchema.get_polars_dtypes())
+df = DataFrame(data, schema=IndicatorSchema.get_polars_dtypes())
 result = IndicatorSchema.validate_dataframe(df)
 
 print(f"Valid: {result['valid']}")
@@ -33,12 +33,14 @@ descriptions = IndicatorSchema.get_column_descriptions()
 polars_types = IndicatorSchema.get_polars_dtypes()
 
 # Map Polars types to SQL types
+from polars import Datetime, Float64, String, Boolean, Int32
+
 type_mapping = {
-    pl.Datetime: "TIMESTAMP",
-    pl.Float64: "DOUBLE PRECISION",
-    pl.String: "VARCHAR(50)",
-    pl.Boolean: "BOOLEAN",
-    pl.Int32: "INTEGER"
+    Datetime: "TIMESTAMP",
+    Float64: "DOUBLE PRECISION",
+    String: "VARCHAR(50)",
+    Boolean: "BOOLEAN",
+    Int32: "INTEGER"
 }
 
 # Generate CREATE TABLE statement
@@ -163,9 +165,10 @@ def insert_row(conn, row_data, type_info):
     placeholders = ", ".join(["?" for _ in columns])
 
     # Convert values based on schema
+    from polars import Datetime
     values = []
     for col, value in row_data.items():
-        if col in type_info and type_info[col] == pl.Datetime:
+        if col in type_info and type_info[col] == Datetime:
             values.append(value.isoformat() if value else None)
         else:
             values.append(value)
@@ -177,9 +180,11 @@ def insert_row(conn, row_data, type_info):
 ### API Response Validation
 
 ```python
-def validate_api_response(json_data: list) -> pl.DataFrame:
+from polars import DataFrame
+
+def validate_api_response(json_data: list) -> DataFrame:
     """Convert and validate API data."""
-    df = pl.DataFrame(json_data)
+    df = DataFrame(json_data)
 
     # Validate structure
     result = IndicatorSchema.validate_dataframe(df)
