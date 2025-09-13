@@ -13,8 +13,52 @@ from polars import Boolean, DataFrame, Float64, Int32, Int64, Series, Utf8, col
 from pydantic import ValidationError
 
 from thestrat.indicators import Indicators
-from thestrat.schemas import GapDetectionConfig, IndicatorsConfig, SwingPointsConfig, TimeframeItemConfig
+from thestrat.schemas import (
+    GapDetectionConfig,
+    IndicatorSchema,
+    IndicatorsConfig,
+    SwingPointsConfig,
+    TimeframeItemConfig,
+)
 from thestrat.signals import SIGNALS
+
+
+def validate_result_against_schema(result: DataFrame) -> None:
+    """
+    Helper function to validate that indicator processing results match the IndicatorSchema.
+
+    This ensures that the actual data types returned by indicators processing
+    match what the schema declares, preventing schema inconsistency bugs.
+
+    Args:
+        result: Polars DataFrame from indicators processing
+
+    Raises:
+        AssertionError: If any column type doesn't match schema expectations
+    """
+    from polars import Float64, Int64, Null
+
+    schema_types = IndicatorSchema.get_polars_dtypes()
+
+    # Check each column that exists in both result and schema
+    for column_name in result.columns:
+        if column_name in schema_types:
+            actual_dtype = result[column_name].dtype
+            expected_dtype = schema_types[column_name]
+
+            # Allow compatible numeric types (Int64 can be safely used where Float64 is expected)
+            # This handles cases where test data creates integer prices that should be floats
+            if expected_dtype == Float64 and actual_dtype == Int64:
+                continue  # Int64 -> Float64 is safe
+
+            # Allow Null type for nullable columns (happens when all values are null)
+            # This is common in columns like 'signal', 'type', 'bias' when no patterns are detected
+            if actual_dtype == Null:
+                continue  # All-null columns are acceptable for nullable schema fields
+
+            assert actual_dtype == expected_dtype, (
+                f"Schema mismatch for column '{column_name}': expected {expected_dtype}, got {actual_dtype}"
+            )
 
 
 @pytest.mark.unit
@@ -593,6 +637,9 @@ class TestPriceAnalysis:
         )
         result = indicators.process(price_analysis_data)
 
+        # Validate that all column types match the schema declarations
+        validate_result_against_schema(result)
+
         assert "percent_close_from_high" in result.columns
         assert "percent_close_from_low" in result.columns
 
@@ -629,6 +676,9 @@ class TestPriceAnalysis:
             )
         )
         result = indicators.process(data)
+
+        # Validate that all column types match the schema declarations
+        validate_result_against_schema(result)
 
         # First bar: close at high
         assert result["percent_close_from_high"][0] == 0.0
@@ -721,6 +771,9 @@ class TestATHATL:
         )
         result = indicators.process(ath_atl_data)
 
+        # Validate that all column types match the schema declarations
+        validate_result_against_schema(result)
+
         assert "ath" in result.columns
         assert "atl" in result.columns
         assert "new_ath" in result.columns
@@ -744,6 +797,9 @@ class TestATHATL:
             )
         )
         result = indicators.process(ath_atl_data)
+
+        # Validate that all column types match the schema declarations
+        validate_result_against_schema(result)
 
         new_ath_flags = result["new_ath"].to_list()
         new_atl_flags = result["new_atl"].to_list()
@@ -841,6 +897,9 @@ class TestFullProcessing:
         # Result should be Polars DataFrame
         assert isinstance(result, DataFrame)
 
+        # Validate that all column types match the schema declarations
+        validate_result_against_schema(result)
+
     def test_process_with_pandas_input(self, comprehensive_data):
         """Test processing with pandas DataFrame input."""
         # Convert to pandas
@@ -856,6 +915,9 @@ class TestFullProcessing:
         # Should still return Polars DataFrame
         assert isinstance(result, DataFrame)
         assert len(result) == len(pandas_data)
+
+        # Validate that all column types match the schema declarations
+        validate_result_against_schema(result)
 
     def test_process_validation_failure(self):
         """Test that process raises error on validation failure."""
