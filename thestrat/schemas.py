@@ -1148,10 +1148,6 @@ class IndicatorSchema(BaseModel):
         description="True when price action confirms directional bias",
         json_schema_extra={"polars_dtype": Boolean, "output": True, "category": "thestrat_patterns"},
     )
-    in_force_base: bool = Field(
-        description="Base calculation for in_force determination",
-        json_schema_extra={"polars_dtype": Boolean, "output": True, "category": "thestrat_patterns"},
-    )
     scenario: str = Field(
         description="TheStrat scenario classification (1, 2U, 2D, 3)",
         json_schema_extra={
@@ -1160,14 +1156,6 @@ class IndicatorSchema(BaseModel):
             "category": "thestrat_patterns",
             "values": ["1", "2U", "2D", "3"],
         },
-    )
-    pattern_2bar: str = Field(
-        description="Two-bar TheStrat pattern (e.g., '1-2U', '2D-3')",
-        json_schema_extra={"polars_dtype": String, "output": True, "category": "thestrat_patterns"},
-    )
-    pattern_3bar: str = Field(
-        description="Three-bar TheStrat pattern (e.g., '1-2U-2D', '3-1-2U')",
-        json_schema_extra={"polars_dtype": String, "output": True, "category": "thestrat_patterns"},
     )
 
     # Signal Columns
@@ -1225,20 +1213,6 @@ class IndicatorSchema(BaseModel):
     )
 
     # Mother Bar Analysis Columns
-    is_mother_bar: bool = Field(
-        description="True when bar qualifies as mother bar (scenario = 1)",
-        json_schema_extra={"polars_dtype": Boolean, "output": True, "category": "mother_bar"},
-    )
-    active_mother_high: float = Field(
-        description="Current active mother bar high level",
-        gt=0,
-        json_schema_extra={"polars_dtype": Float64, "output": True, "category": "swing_points"},
-    )
-    active_mother_low: float = Field(
-        description="Current active mother bar low level",
-        gt=0,
-        json_schema_extra={"polars_dtype": Float64, "output": True, "category": "swing_points"},
-    )
     motherbar_problems: bool = Field(
         description="True when mother bar analysis has issues/conflicts",
         json_schema_extra={"polars_dtype": Boolean, "output": True, "category": "mother_bar"},
