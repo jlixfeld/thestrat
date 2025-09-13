@@ -324,6 +324,11 @@ git commit -m "Your commit message"
 - **Docstrings**: Google-style docstrings for all public methods
 - **Line Length**: 120 characters maximum
 - **Import Style**: Use double quotes, organized by ruff
+- **DataFrame Imports**: Never import `pandas as pd` or `polars as pl`. Always import required classes directly:
+  - ✅ `from polars import DataFrame, Series`
+  - ✅ `from pandas import DataFrame as PandasDataFrame`
+  - ❌ `import polars as pl`
+  - ❌ `import pandas as pd`
 - **Testing**: >95% coverage required for all new code
 
 ## Performance Considerations

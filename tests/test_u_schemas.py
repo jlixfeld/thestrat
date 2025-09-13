@@ -237,7 +237,7 @@ class TestIndicatorSchemaClassMethods:
         """Test DataFrame column validation function."""
         from datetime import datetime
 
-        import polars as pl
+        from polars import DataFrame, Datetime, Float64, String
 
         # Create a simple DataFrame with required input columns
         data = {
@@ -250,17 +250,17 @@ class TestIndicatorSchemaClassMethods:
             "volume": [1000.0],
             "timeframe": ["5min"],
         }
-        df = pl.DataFrame(
+        df = DataFrame(
             data,
             schema={
-                "timestamp": pl.Datetime,
-                "open": pl.Float64,
-                "high": pl.Float64,
-                "low": pl.Float64,
-                "close": pl.Float64,
-                "symbol": pl.String,
-                "volume": pl.Float64,
-                "timeframe": pl.String,
+                "timestamp": Datetime,
+                "open": Float64,
+                "high": Float64,
+                "low": Float64,
+                "close": Float64,
+                "symbol": String,
+                "volume": Float64,
+                "timeframe": String,
             },
         )
 
@@ -314,7 +314,7 @@ class TestIndicatorSchemaValidation:
         import random
         from datetime import datetime, timedelta
 
-        import polars as pl
+        from polars import DataFrame
 
         random.seed(42)  # For reproducible results
 
@@ -354,7 +354,7 @@ class TestIndicatorSchemaValidation:
                 }
             )
 
-        return pl.DataFrame(data)
+        return DataFrame(data)
 
     def get_schema_field_categories(self):
         """Extract field names from IndicatorSchema categorized by input/output type."""
@@ -448,7 +448,7 @@ class TestIndicatorSchemaValidation:
 
     def test_motherbar_problems_present(self):
         """Test that motherbar_problems column is present (regression test for the original issue)."""
-        import polars as pl
+        from polars import Boolean
 
         from thestrat.indicators import Indicators
         from thestrat.schemas import GapDetectionConfig, IndicatorsConfig, SwingPointsConfig, TimeframeItemConfig
@@ -473,7 +473,7 @@ class TestIndicatorSchemaValidation:
         )
 
         # Verify it has the correct data type (boolean)
-        assert processed_data["motherbar_problems"].dtype == pl.Boolean, (
+        assert processed_data["motherbar_problems"].dtype == Boolean, (
             f"motherbar_problems should be Boolean type, got {processed_data['motherbar_problems'].dtype}"
         )
 
