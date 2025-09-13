@@ -1266,7 +1266,7 @@ class IndicatorSchema(BaseModel):
             Dictionary with validation results including missing/extra columns, type issues,
             and the converted Polars DataFrame if conversion occurred
         """
-        import polars as pl
+        from polars import from_pandas
 
         # Detect DataFrame type and convert if necessary
         df_type = "unknown"
@@ -1279,7 +1279,7 @@ class IndicatorSchema(BaseModel):
                 df_type = "pandas"
                 try:
                     # Convert Pandas to Polars
-                    converted_df = pl.from_pandas(df)
+                    converted_df = from_pandas(df)
                     df = converted_df  # Use converted DataFrame for validation
                 except Exception as e:
                     conversion_errors.append(f"Failed to convert Pandas to Polars: {str(e)}")

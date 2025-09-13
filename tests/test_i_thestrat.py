@@ -6,8 +6,8 @@ Tests end-to-end workflows and component interactions.
 
 from datetime import datetime
 
-import polars as pl
 import pytest
+from polars import DataFrame, Datetime
 
 from thestrat import Factory
 from thestrat.schemas import (
@@ -56,7 +56,7 @@ class TestTheStratIntegration:
         aggregated = pipeline["aggregation"].process(sample_market_data)
 
         # Verify aggregation results
-        assert isinstance(aggregated, pl.DataFrame)
+        assert isinstance(aggregated, DataFrame)
         assert len(aggregated) == 78  # 390 minutes / 5 minutes per bar
         assert "symbol" in aggregated.columns
         assert aggregated["symbol"][0] == "AAPL"
@@ -65,7 +65,7 @@ class TestTheStratIntegration:
         analyzed = pipeline["indicators"].process(aggregated)
 
         # Verify indicator results
-        assert isinstance(analyzed, pl.DataFrame)
+        assert isinstance(analyzed, DataFrame)
         assert len(analyzed) == len(aggregated)
 
         # Check that all expected indicator columns are present
@@ -110,7 +110,7 @@ class TestTheStratIntegration:
         analyzed = pipeline["indicators"].process(aggregated)
 
         # Should still return Polars DataFrame
-        assert isinstance(analyzed, pl.DataFrame)
+        assert isinstance(analyzed, DataFrame)
         assert len(analyzed) == 26  # 390 minutes / 15 minutes per bar
 
         # Should have all required columns
@@ -145,11 +145,11 @@ class TestTheStratIntegration:
         aggregated = pipeline["aggregation"].process(crypto_data)
         analyzed = pipeline["indicators"].process(aggregated)
 
-        assert isinstance(analyzed, pl.DataFrame)
+        assert isinstance(analyzed, DataFrame)
         assert len(analyzed) == 12  # 48 hours / 4 hours per bar
         # Check timezone - assert it's a Datetime type first
         timestamp_dtype = analyzed.schema["timestamp"]
-        assert isinstance(timestamp_dtype, pl.Datetime)
+        assert isinstance(timestamp_dtype, Datetime)
         assert timestamp_dtype.time_zone == "UTC"
 
     def test_forex_utc_workflow(self):
@@ -176,13 +176,13 @@ class TestTheStratIntegration:
         aggregated = pipeline["aggregation"].process(forex_data)
         analyzed = pipeline["indicators"].process(aggregated)
 
-        assert isinstance(analyzed, pl.DataFrame)
+        assert isinstance(analyzed, DataFrame)
         assert len(analyzed) == 120  # 240 * 30min / 60min per bar
 
     def test_component_validation_integration(self):
         """Test that validation errors are properly handled across components."""
         # Create invalid data (missing required columns)
-        invalid_data = pl.DataFrame(
+        invalid_data = DataFrame(
             {
                 "timestamp": [datetime.now()],
                 "open": [100.0],
@@ -226,7 +226,7 @@ class TestTheStratIntegration:
         aggregated = pipeline["aggregation"].process(large_data)
         analyzed = pipeline["indicators"].process(aggregated)
 
-        assert isinstance(analyzed, pl.DataFrame)
+        assert isinstance(analyzed, DataFrame)
         assert len(analyzed) > 0
         # Should have all indicator columns
         assert "swing_high" in analyzed.columns
@@ -285,7 +285,7 @@ class TestTheStratIntegration:
 
         # Aggregation should work
         aggregated = pipeline["aggregation"].process(small_data)
-        assert isinstance(aggregated, pl.DataFrame)
+        assert isinstance(aggregated, DataFrame)
 
         # Indicators should fail due to insufficient data
         with pytest.raises(ValueError, match="Insufficient data"):

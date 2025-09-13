@@ -7,7 +7,7 @@ This section provides comprehensive examples of using TheStrat for various tradi
 ### Simple 5-Minute Analysis
 
 ```python
-import pandas as pd
+from pandas import DataFrame as PandasDataFrame
 from thestrat import Factory
 from thestrat.schemas import (
     FactoryConfig, AggregationConfig, IndicatorsConfig,
@@ -15,7 +15,7 @@ from thestrat.schemas import (
 )
 
 # Sample market data
-data = pd.DataFrame({
+data = PandasDataFrame({
     'timestamp': pd.date_range('2024-01-01 09:30', periods=300, freq='1min'),
     'open': [100 + i*0.1 for i in range(300)],
     'high': [100.5 + i*0.1 for i in range(300)],
@@ -60,7 +60,7 @@ from thestrat.schemas import (
     FactoryConfig, AggregationConfig, IndicatorsConfig,
     TimeframeItemConfig, SwingPointsConfig
 )
-import pandas as pd
+from pandas import DataFrame as PandasDataFrame
 
 def analyze_multiple_timeframes(data, timeframes=['5m', '15m', '1h']):
     """Analyze data across multiple timeframes using Pydantic models."""

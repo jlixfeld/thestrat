@@ -4,9 +4,10 @@ Unit tests for TheStrat base component.
 Tests the abstract base class and DataFrame conversion functionality.
 """
 
-import pandas as pd
-import polars as pl
 import pytest
+from pandas import DataFrame as PandasDataFrame
+from pandas import date_range
+from polars import DataFrame, Datetime
 
 from thestrat.base import Component
 
@@ -33,9 +34,9 @@ class TestComponent:
     @pytest.fixture
     def sample_pandas_df(self):
         """Create sample pandas DataFrame."""
-        return pd.DataFrame(
+        return PandasDataFrame(
             {
-                "timestamp": pd.date_range("2023-01-01", periods=5, freq="1h"),
+                "timestamp": date_range("2023-01-01", periods=5, freq="1h"),
                 "open": [100.0, 101.0, 102.0, 103.0, 104.0],
                 "high": [100.5, 101.5, 102.5, 103.5, 104.5],
                 "low": [99.5, 100.5, 101.5, 102.5, 103.5],
@@ -50,7 +51,7 @@ class TestComponent:
         from datetime import datetime, timedelta
 
         timestamps = [datetime(2023, 1, 1) + timedelta(hours=i) for i in range(5)]
-        return pl.DataFrame(
+        return DataFrame(
             {
                 "timestamp": timestamps,
                 "open": [100.0, 101.0, 102.0, 103.0, 104.0],
@@ -76,7 +77,7 @@ class TestComponent:
         """Test conversion of pandas DataFrame to Polars."""
         result = component._convert_to_polars(sample_pandas_df)
 
-        assert isinstance(result, pl.DataFrame)
+        assert isinstance(result, DataFrame)
         assert len(result) == 5
         assert result.columns == ["timestamp", "open", "high", "low", "close", "volume"]
 
@@ -88,7 +89,7 @@ class TestComponent:
         """Test that Polars DataFrame passes through unchanged."""
         result = component._convert_to_polars(sample_polars_df)
 
-        assert isinstance(result, pl.DataFrame)
+        assert isinstance(result, DataFrame)
         assert result.equals(sample_polars_df)
 
     def test_convert_invalid_type_raises_error(self, component):
@@ -105,7 +106,7 @@ class TestComponent:
         """Test that process method properly uses DataFrame conversion."""
         result = component.process(sample_pandas_df)
 
-        assert isinstance(result, pl.DataFrame)
+        assert isinstance(result, DataFrame)
         assert len(result) == 5
         assert result.columns == ["timestamp", "open", "high", "low", "close", "volume"]
 
@@ -128,9 +129,9 @@ class TestComponent:
 
     def test_pandas_datetime_conversion_preserves_timezone(self, component):
         """Test that pandas datetime with timezone is preserved."""
-        df = pd.DataFrame(
+        df = PandasDataFrame(
             {
-                "timestamp": pd.date_range("2023-01-01", periods=3, freq="1h", tz="UTC"),
+                "timestamp": date_range("2023-01-01", periods=3, freq="1h", tz="UTC"),
                 "open": [100.0, 101.0, 102.0],
                 "high": [100.5, 101.5, 102.5],
                 "low": [99.5, 100.5, 101.5],
@@ -141,26 +142,26 @@ class TestComponent:
 
         result = component._convert_to_polars(df)
 
-        assert isinstance(result, pl.DataFrame)
+        assert isinstance(result, DataFrame)
         assert len(result) == 3
         # Timezone information should be preserved in conversion (pandas uses ns precision)
-        assert result.schema["timestamp"] == pl.Datetime("ns", "UTC")
+        assert result.schema["timestamp"] == Datetime("ns", "UTC")
 
     def test_empty_dataframe_conversion(self, component):
         """Test conversion of empty DataFrame."""
-        empty_pandas = pd.DataFrame()
+        empty_pandas = PandasDataFrame()
         result = component._convert_to_polars(empty_pandas)
 
-        assert isinstance(result, pl.DataFrame)
+        assert isinstance(result, DataFrame)
         assert len(result) == 0
 
     def test_large_dataframe_conversion_performance(self, component):
         """Test conversion performance with larger DataFrame."""
         # Create a larger DataFrame for performance testing
         size = 10000
-        large_df = pd.DataFrame(
+        large_df = PandasDataFrame(
             {
-                "timestamp": pd.date_range("2023-01-01", periods=size, freq="1min"),
+                "timestamp": date_range("2023-01-01", periods=size, freq="1min"),
                 "open": range(size),
                 "high": [x + 0.5 for x in range(size)],
                 "low": [x - 0.5 for x in range(size)],
@@ -171,7 +172,7 @@ class TestComponent:
 
         result = component._convert_to_polars(large_df)
 
-        assert isinstance(result, pl.DataFrame)
+        assert isinstance(result, DataFrame)
         assert len(result) == size
         assert result.columns == ["timestamp", "open", "high", "low", "close", "volume"]
 
@@ -263,10 +264,10 @@ class TestAbstractMethods:
 
         # This approach may not work due to ABC implementation, so let's try a different approach
         # We can use object.__new__ to create an instance without calling __init__
-        import polars as pl
+        from polars import DataFrame
 
         # Create minimal test data
-        test_data = pl.DataFrame({"a": [1, 2, 3]})
+        test_data = DataFrame({"a": [1, 2, 3]})
 
         # Try to call abstract methods using unbound method approach
         # This tests the actual pass statement lines in the abstract methods

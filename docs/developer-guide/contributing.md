@@ -77,7 +77,7 @@ All public APIs must include type hints:
 
 ```python
 # Good
-def process_data(data: pd.DataFrame, config: dict) -> pd.DataFrame:
+def process_data(data: PandasDataFrame, config: dict) -> PandasDataFrame:
     """Process market data with configuration."""
     return data
 
@@ -91,7 +91,7 @@ def process_data(data, config):
 **Docstring Style**: Use Google-style docstrings:
 
 ```python
-def aggregate_timeframe(data: pd.DataFrame, timeframe: str) -> pd.DataFrame:
+def aggregate_timeframe(data: PandasDataFrame, timeframe: str) -> PandasDataFrame:
     """Aggregate OHLCV data to specified timeframe.
 
     Args:
@@ -105,7 +105,7 @@ def aggregate_timeframe(data: pd.DataFrame, timeframe: str) -> pd.DataFrame:
         ValueError: If required columns are missing
 
     Example:
-        >>> data = pd.DataFrame(...)
+        >>> data = PandasDataFrame(...)
         >>> result = aggregate_timeframe(data, '5m')
         >>> len(result) < len(data)  # Fewer bars after aggregation
         True
@@ -183,7 +183,7 @@ def test_timeframe_aggregation():
 @pytest.fixture
 def sample_ohlcv():
     """Sample OHLCV data for testing."""
-    return pd.DataFrame({
+    return PandasDataFrame({
         'timestamp': pd.date_range('2024-01-01', periods=100, freq='1min'),
         'open': [100.0] * 100,
         'high': [101.0] * 100,

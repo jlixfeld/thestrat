@@ -6,9 +6,10 @@ Tests OHLC timeframe aggregation with timezone handling and boundary alignment.
 
 from datetime import datetime
 
-import pandas as pd
-import polars as pl
 import pytest
+from pandas import DataFrame as PandasDataFrame
+from pandas import date_range
+from polars import DataFrame, Datetime
 from pydantic import ValidationError
 
 from thestrat.aggregation import Aggregation
@@ -215,7 +216,7 @@ class TestAggregationValidation:
 
     def test_validate_input_missing_columns(self, aggregation):
         """Test validation fails for missing required columns."""
-        incomplete_data = pl.DataFrame(
+        incomplete_data = DataFrame(
             {
                 "timestamp": [datetime.now()],
                 "open": [100.0],
@@ -227,7 +228,7 @@ class TestAggregationValidation:
 
     def test_validate_input_insufficient_data(self, aggregation):
         """Test validation fails for insufficient data points."""
-        single_row = pl.DataFrame(
+        single_row = DataFrame(
             {
                 "timestamp": [datetime.now()],
                 "open": [100.0],
@@ -242,9 +243,9 @@ class TestAggregationValidation:
 
     def test_validate_input_pandas_conversion(self, aggregation):
         """Test validation works with pandas DataFrame input."""
-        pandas_data = pd.DataFrame(
+        pandas_data = PandasDataFrame(
             {
-                "timestamp": pd.date_range("2023-01-01", periods=5, freq="1h"),
+                "timestamp": date_range("2023-01-01", periods=5, freq="1h"),
                 "open": [100.0, 101.0, 102.0, 103.0, 104.0],
                 "high": [100.5, 101.5, 102.5, 103.5, 104.5],
                 "low": [99.5, 100.5, 101.5, 102.5, 103.5],
@@ -272,7 +273,7 @@ class TestAggregationOHLC:
         agg = Aggregation(create_equity_aggregation_config())
         result = agg.process(minute_data)
 
-        assert isinstance(result, pl.DataFrame)
+        assert isinstance(result, DataFrame)
         assert len(result) == 1  # 60 minutes from 09:30-10:30 forms 1 session-aligned bar
 
         # Check the single hour bucket (09:30-10:30 = 60 minutes) with session alignment
@@ -286,7 +287,7 @@ class TestAggregationOHLC:
         from .utils.thestrat_data_utils import create_timestamp_series
 
         timestamps = create_timestamp_series("2023-01-01 09:30:00", 5, 1)  # 1 minute intervals
-        data_with_symbol = pl.DataFrame(
+        data_with_symbol = DataFrame(
             {
                 "timestamp": timestamps,
                 "symbol": ["AAPL"] * 5,
@@ -309,7 +310,7 @@ class TestAggregationOHLC:
         from .utils.thestrat_data_utils import create_timestamp_series
 
         timestamps = create_timestamp_series("2023-01-01 09:30:00", 3, 1)  # 1 minute intervals
-        data_with_volume = pl.DataFrame(
+        data_with_volume = DataFrame(
             {
                 "timestamp": timestamps,
                 "open": [100.0, 101.0, 102.0],
@@ -333,7 +334,7 @@ class TestAggregationOHLC:
         from .utils.thestrat_data_utils import create_timestamp_series
 
         timestamps = create_timestamp_series("2023-01-01 09:30:00", 3, 1)  # 1 minute intervals
-        data_without_volume = pl.DataFrame(
+        data_without_volume = DataFrame(
             {
                 "timestamp": timestamps,
                 "open": [100.0, 101.0, 102.0],
@@ -370,7 +371,7 @@ class TestTimezoneHandling:
 
     def test_normalize_timezone_naive_to_aware(self):
         """Test conversion of naive timestamps to timezone-aware."""
-        naive_data = pl.DataFrame(
+        naive_data = DataFrame(
             {
                 "timestamp": [datetime(2023, 1, 1, 9, 30), datetime(2023, 1, 1, 10, 30)],
                 "open": [100.0, 101.0],
@@ -385,14 +386,14 @@ class TestTimezoneHandling:
         result = agg.normalize_timezone(naive_data)
 
         # Should have timezone-aware timestamps
-        assert result.schema["timestamp"] == pl.Datetime("us", "US/Eastern")
+        assert result.schema["timestamp"] == Datetime("us", "US/Eastern")
 
     def test_normalize_timezone_already_aware_unchanged(self):
         """Test that timezone-aware timestamps pass through unchanged."""
         from .utils.thestrat_data_utils import create_timestamp_series
 
         timestamps = create_timestamp_series("2023-01-01 09:30:00", 2, 60, timezone="UTC")
-        aware_data = pl.DataFrame(
+        aware_data = DataFrame(
             {
                 "timestamp": timestamps,
                 "open": [100.0, 101.0],
@@ -408,7 +409,7 @@ class TestTimezoneHandling:
 
         # Should preserve timezone-aware format
         timestamp_dtype = result.schema["timestamp"]
-        assert isinstance(timestamp_dtype, pl.Datetime)
+        assert isinstance(timestamp_dtype, Datetime)
         assert timestamp_dtype.time_zone == "UTC"
 
 
@@ -443,7 +444,7 @@ class TestAllAssetClasses:
         agg = Aggregation(create_crypto_aggregation_config())
         result = agg.process(crypto_data)
 
-        assert isinstance(result, pl.DataFrame)
+        assert isinstance(result, DataFrame)
         assert len(result) > 0
 
         # Crypto should force UTC timezone
@@ -470,7 +471,7 @@ class TestAllAssetClasses:
         agg = Aggregation(create_equity_aggregation_config())
         result = agg.process(equities_data)
 
-        assert isinstance(result, pl.DataFrame)
+        assert isinstance(result, DataFrame)
         assert len(result) > 0
 
         # Equities should use US/Eastern timezone by default
@@ -489,7 +490,7 @@ class TestAllAssetClasses:
         agg = Aggregation(AggregationConfig(target_timeframes=["30min"], asset_class="fx", timezone="US/Eastern"))
         result = agg.process(fx_data)
 
-        assert isinstance(result, pl.DataFrame)
+        assert isinstance(result, DataFrame)
         assert len(result) > 0
 
         # FX should force UTC timezone regardless of input
@@ -565,7 +566,7 @@ class TestMultiTimezoneConsistency:
 
         # Create naive timestamps
         naive_timestamps = create_timestamp_series("2023-06-15 12:00:00", 24, 60)
-        naive_data = pl.DataFrame(
+        naive_data = DataFrame(
             {
                 "timestamp": naive_timestamps,
                 "open": [100.0 + i for i in range(24)],
@@ -578,7 +579,7 @@ class TestMultiTimezoneConsistency:
 
         # Create timezone-aware timestamps
         aware_timestamps = create_timestamp_series("2023-06-15 12:00:00", 24, 60, "US/Eastern")
-        aware_data = pl.DataFrame(
+        aware_data = DataFrame(
             {
                 "timestamp": aware_timestamps,
                 "open": [100.0 + i for i in range(24)],
@@ -595,8 +596,8 @@ class TestMultiTimezoneConsistency:
         aware_result = agg.process(aware_data)
 
         # Both should work and produce results
-        assert isinstance(naive_result, pl.DataFrame)
-        assert isinstance(aware_result, pl.DataFrame)
+        assert isinstance(naive_result, DataFrame)
+        assert isinstance(aware_result, DataFrame)
         assert len(naive_result) > 0
         assert len(aware_result) > 0
 
@@ -645,7 +646,7 @@ class TestAssetClassSpecificFeatures:
         result = agg.process(fx_data)
 
         # Should handle weekend gaps gracefully
-        assert isinstance(result, pl.DataFrame)
+        assert isinstance(result, DataFrame)
         assert len(result) >= 5  # Should get weekday data
 
     def test_volume_handling_by_asset_class(self):
@@ -685,7 +686,7 @@ class TestDSTSpringForward:
         agg = Aggregation(AggregationConfig(target_timeframes=["1h"], asset_class="equities", timezone="US/Eastern"))
         result = agg.process(spring_data)
 
-        assert isinstance(result, pl.DataFrame)
+        assert isinstance(result, DataFrame)
         assert len(result) > 0
 
         # Check that the 2 AM hour is properly handled (should be missing/skipped)
@@ -715,7 +716,7 @@ class TestDSTSpringForward:
         agg = Aggregation(AggregationConfig(target_timeframes=["1d"], asset_class="equities", timezone="US/Eastern"))
         result = agg.process(spring_data)
 
-        assert isinstance(result, pl.DataFrame)
+        assert isinstance(result, DataFrame)
         assert len(result) >= 1
 
         # Daily aggregation should handle the missing hour gracefully
@@ -737,7 +738,7 @@ class TestDSTSpringForward:
         agg = Aggregation(AggregationConfig(target_timeframes=["30min"], asset_class="equities", timezone="US/Eastern"))
         result = agg.process(spring_data)
 
-        assert isinstance(result, pl.DataFrame)
+        assert isinstance(result, DataFrame)
         assert len(result) > 0
 
         # 30-minute intervals should handle the transition smoothly
@@ -796,7 +797,7 @@ class TestDSTFallBack:
         agg = Aggregation(AggregationConfig(target_timeframes=["1h"], asset_class="equities", timezone="US/Eastern"))
         result = agg.process(fall_data)
 
-        assert isinstance(result, pl.DataFrame)
+        assert isinstance(result, DataFrame)
         assert len(result) > 0
 
         # Check handling of repeated hour
@@ -853,7 +854,7 @@ class TestDSTFallBack:
         agg = Aggregation(AggregationConfig(target_timeframes=["1d"], asset_class="equities", timezone="US/Eastern"))
         result = agg.process(fall_data)
 
-        assert isinstance(result, pl.DataFrame)
+        assert isinstance(result, DataFrame)
         assert len(result) >= 1
 
         # Daily aggregation should handle the extra hour
@@ -910,7 +911,7 @@ class TestDSTFallBack:
         agg = Aggregation(AggregationConfig(target_timeframes=["15min"], asset_class="equities", timezone="US/Eastern"))
         result = agg.process(fall_data)
 
-        assert isinstance(result, pl.DataFrame)
+        assert isinstance(result, DataFrame)
         assert len(result) > 0
 
         # 15-minute intervals should properly handle repeated hour
@@ -942,8 +943,8 @@ class TestDSTTimezoneConsistency:
         result_utc = agg_utc.process(utc_data)
 
         # Both should produce valid results
-        assert isinstance(result_eastern, pl.DataFrame)
-        assert isinstance(result_utc, pl.DataFrame)
+        assert isinstance(result_eastern, DataFrame)
+        assert isinstance(result_utc, DataFrame)
         assert len(result_eastern) > 0
         assert len(result_utc) > 0
 
@@ -970,7 +971,7 @@ class TestDSTTimezoneConsistency:
         assert agg.timezone == "UTC"
 
         # Should produce consistent results without DST complications
-        assert isinstance(result, pl.DataFrame)
+        assert isinstance(result, DataFrame)
         assert len(result) > 0
 
     def test_fx_utc_enforcement_during_dst(self):
@@ -984,7 +985,7 @@ class TestDSTTimezoneConsistency:
         assert agg.timezone == "UTC"
 
         # Should handle FX data consistently
-        assert isinstance(result, pl.DataFrame)
+        assert isinstance(result, DataFrame)
         assert len(result) > 0
 
 
@@ -1081,7 +1082,7 @@ class TestDSTBoundaryAlignment:
 
             # hour_boundary uses equities default (False)
             assert agg.hour_boundary is False  # Equities default
-            assert isinstance(result, pl.DataFrame)
+            assert isinstance(result, DataFrame)
             assert len(result) > 0
 
             # Should handle DST transition without errors
@@ -1114,7 +1115,7 @@ class TestDSTEdgeCases:
         result = agg.process(minimal_data)
 
         # Should handle gracefully even with minimal data
-        assert isinstance(result, pl.DataFrame)
+        assert isinstance(result, DataFrame)
         # Might get 0 results if insufficient data, which is acceptable
 
     @pytest.mark.skip(
@@ -1164,7 +1165,7 @@ class TestDSTEdgeCases:
         agg = Aggregation(AggregationConfig(target_timeframes=["1d"], asset_class="equities", timezone="US/Eastern"))
         result = agg.process(year_data)
 
-        assert isinstance(result, pl.DataFrame)
+        assert isinstance(result, DataFrame)
         assert len(result) > 300  # Should get most days of the year
 
         # Daily aggregation should handle multiple DST transitions
@@ -1182,7 +1183,7 @@ class TestDSTEdgeCases:
             agg = Aggregation(AggregationConfig(target_timeframes=["1h"], asset_class=asset_class))
             result = agg.process(spring_data)
 
-            assert isinstance(result, pl.DataFrame)
+            assert isinstance(result, DataFrame)
             # Some asset classes force UTC, which won't have DST issues
             if asset_class in ["crypto", "fx"]:
                 assert agg.timezone == "UTC"
@@ -1220,7 +1221,7 @@ class TestAllTimeframes:
         test_data = create_long_term_data(days=1, freq_minutes=1, symbol="SPY")
         result = agg.process(test_data)
 
-        assert isinstance(result, pl.DataFrame)
+        assert isinstance(result, DataFrame)
         assert len(result) > 0
         assert all(col in result.columns for col in ["timestamp", "open", "high", "low", "close"])
 
@@ -1235,7 +1236,7 @@ class TestAllTimeframes:
         test_data = create_long_term_data(days=7, freq_minutes=60, symbol="SPY")
         result = agg.process(test_data)
 
-        assert isinstance(result, pl.DataFrame)
+        assert isinstance(result, DataFrame)
         assert len(result) > 0
         assert result["timeframe"][0] == timeframe
 
@@ -1246,9 +1247,9 @@ class TestAllTimeframes:
         """Test that hourly+ timeframes align with session_open when hour_boundary=False."""
         from datetime import datetime, timezone
 
-        import polars as pl
+        from polars import DataFrame
 
-        # Create data with specific timestamps for testing alignment
+        # Test session open alignment
         timestamps = [
             datetime(2024, 1, 1, 9, 30, tzinfo=timezone.utc),  # 9:30
             datetime(2024, 1, 1, 10, 30, tzinfo=timezone.utc),  # 10:30
@@ -1258,7 +1259,7 @@ class TestAllTimeframes:
             datetime(2024, 1, 1, 14, 30, tzinfo=timezone.utc),  # 14:30
         ]
 
-        test_data = pl.DataFrame(
+        test_data = DataFrame(
             {
                 "timestamp": timestamps,
                 "open": [100.0, 101.0, 102.0, 103.0, 104.0, 105.0],
@@ -1278,7 +1279,7 @@ class TestAllTimeframes:
 
         result = agg.process(test_data)
 
-        assert isinstance(result, pl.DataFrame)
+        assert isinstance(result, DataFrame)
         assert len(result) > 0
 
         # For equities with hour_boundary=False, bars should align with session_start (09:30)
@@ -1305,7 +1306,7 @@ class TestTimeframeEdgeCases:
             result = agg.process(minimal_data)
 
             # Should handle gracefully - might produce 0-N results
-            assert isinstance(result, pl.DataFrame)
+            assert isinstance(result, DataFrame)
 
 
 @pytest.mark.unit
@@ -1423,7 +1424,7 @@ class TestAggregationEdgeCases:
         agg = Aggregation(create_aggregation_config(target_timeframes=["5min"]))
 
         # Test with invalid data structure (missing required columns)
-        invalid_data = pl.DataFrame({"wrong_column": [1, 2, 3], "another_wrong": ["a", "b", "c"]})
+        invalid_data = DataFrame({"wrong_column": [1, 2, 3], "another_wrong": ["a", "b", "c"]})
 
         with pytest.raises(ValueError) as exc_info:
             agg.process(invalid_data)

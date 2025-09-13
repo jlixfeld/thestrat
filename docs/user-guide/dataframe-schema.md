@@ -103,10 +103,10 @@ def validate_input_data(df) -> dict:
 ### Auto-conversion from Pandas
 
 ```python
-import pandas as pd
+from pandas import DataFrame as PandasDataFrame
 
 # Pandas DataFrame automatically converts
-df_pandas = pd.DataFrame(data)
+df_pandas = PandasDataFrame(data)
 df_pandas['timestamp'] = pd.to_datetime(df_pandas['timestamp'])
 
 result = IndicatorSchema.validate_dataframe(df_pandas)

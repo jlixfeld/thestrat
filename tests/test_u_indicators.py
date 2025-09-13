@@ -6,9 +6,10 @@ Tests comprehensive Strat technical indicators with vectorized calculations.
 
 from datetime import datetime, timedelta
 
-import pandas as pd
-import polars as pl
 import pytest
+from pandas import DataFrame as PandasDataFrame
+from pandas import date_range
+from polars import Boolean, DataFrame, Float64, Int32, Int64, Series, Utf8, col
 from pydantic import ValidationError
 
 from thestrat.indicators import Indicators
@@ -128,7 +129,7 @@ class TestIndicatorsValidation:
 
     def test_validate_input_missing_columns(self, indicators):
         """Test validation fails for missing required columns."""
-        incomplete_data = pl.DataFrame(
+        incomplete_data = DataFrame(
             {
                 "timestamp": [datetime.now()],
                 "open": [100.0],
@@ -142,7 +143,7 @@ class TestIndicatorsValidation:
 
     def test_validate_input_insufficient_data(self, indicators):
         """Test validation fails when data is too small for swing analysis."""
-        small_data = pl.DataFrame(
+        small_data = DataFrame(
             {
                 "timestamp": [datetime.now()],
                 "open": [100.0],
@@ -162,7 +163,7 @@ class TestIndicatorsValidation:
         from .utils.thestrat_data_utils import create_timestamp_series
 
         timestamps = create_timestamp_series("2023-01-01", 20, 60)
-        invalid_data = pl.DataFrame(
+        invalid_data = DataFrame(
             {
                 "timestamp": timestamps,
                 "open": [100.0] * 20,
@@ -178,9 +179,9 @@ class TestIndicatorsValidation:
 
     def test_validate_input_pandas_conversion(self, indicators):
         """Test validation works with pandas DataFrame."""
-        pandas_data = pd.DataFrame(
+        pandas_data = PandasDataFrame(
             {
-                "timestamp": pd.date_range("2023-01-01", periods=20, freq="1h"),
+                "timestamp": date_range("2023-01-01", periods=20, freq="1h"),
                 "open": [100.0 + i * 0.1 for i in range(20)],
                 "high": [101.0 + i * 0.1 for i in range(20)],
                 "low": [99.0 + i * 0.1 for i in range(20)],
@@ -227,14 +228,14 @@ class TestSwingPoints:
 
         # Check that we have swing point data (even if no points found)
         # The columns should exist and have proper types (can be Int64 or Float64 depending on input data)
-        assert result["swing_high"].dtype in [pl.Int64, pl.Float64]
-        assert result["swing_low"].dtype in [pl.Int64, pl.Float64]
-        assert result["pivot_high"].dtype in [pl.Int64, pl.Float64]
-        assert result["pivot_low"].dtype in [pl.Int64, pl.Float64]
-        assert result["new_swing_high"].dtype == pl.Boolean
-        assert result["new_swing_low"].dtype == pl.Boolean
-        assert result["new_pivot_high"].dtype == pl.Boolean
-        assert result["new_pivot_low"].dtype == pl.Boolean
+        assert result["swing_high"].dtype in [Int64, Float64]
+        assert result["swing_low"].dtype in [Int64, Float64]
+        assert result["pivot_high"].dtype in [Int64, Float64]
+        assert result["pivot_low"].dtype in [Int64, Float64]
+        assert result["new_swing_high"].dtype == Boolean
+        assert result["new_swing_low"].dtype == Boolean
+        assert result["new_pivot_high"].dtype == Boolean
+        assert result["new_pivot_low"].dtype == Boolean
 
     def test_pivot_values_at_swings(self, trending_data):
         """Test that pivot values are set correctly at swing points."""
@@ -247,7 +248,7 @@ class TestSwingPoints:
         result = indicators._calculate_swing_points(trending_data, config)
 
         # Pivot high should be set where new_swing_high is True
-        swing_high_rows = result.filter(pl.col("new_swing_high"))
+        swing_high_rows = result.filter(col("new_swing_high"))
         for row in swing_high_rows.iter_rows(named=True):
             assert row["pivot_high"] is not None
             assert row["pivot_high"] == row["high"]
@@ -255,7 +256,7 @@ class TestSwingPoints:
             assert row["swing_high"] == row["high"]
 
         # Pivot low should be set where new_swing_low is True
-        swing_low_rows = result.filter(pl.col("new_swing_low"))
+        swing_low_rows = result.filter(col("new_swing_low"))
         for row in swing_low_rows.iter_rows(named=True):
             assert row["pivot_low"] is not None
             assert row["pivot_low"] == row["low"]
@@ -268,7 +269,7 @@ class TestSwingPoints:
         from .utils.thestrat_data_utils import create_timestamp_series
 
         timestamps = create_timestamp_series("2023-01-01", 10, 60)
-        data = pl.DataFrame(
+        data = DataFrame(
             {
                 "timestamp": timestamps,
                 "open": [100.0, 100.1, 100.2, 100.1, 100.0, 100.1, 100.2, 100.1, 100.0, 100.1],
@@ -301,8 +302,8 @@ class TestSwingPoints:
         config = indicators_loose.config.timeframe_configs[0]
         result_loose = indicators_loose._calculate_swing_points(data, config)
 
-        strict_swings = len(result_strict.filter(pl.col("new_swing_high") | pl.col("new_swing_low")))
-        loose_swings = len(result_loose.filter(pl.col("new_swing_high") | pl.col("new_swing_low")))
+        strict_swings = len(result_strict.filter(col("new_swing_high") | col("new_swing_low")))
+        loose_swings = len(result_loose.filter(col("new_swing_high") | col("new_swing_low")))
 
         assert strict_swings <= loose_swings
 
@@ -317,7 +318,7 @@ class TestMarketStructure:
         from .utils.thestrat_data_utils import create_timestamp_series
 
         timestamps = create_timestamp_series("2023-01-01", 12, 1440)  # Daily
-        return pl.DataFrame(
+        return DataFrame(
             {
                 "timestamp": timestamps,
                 "open": [100, 102, 101, 103, 102, 105, 104, 106, 105, 108, 107, 109],
@@ -351,14 +352,14 @@ class TestMarketStructure:
         assert "new_lower_low" in result.columns
 
         # Check column types (can be Int64 or Float64 depending on input data)
-        assert result["higher_high"].dtype in [pl.Int64, pl.Float64]
-        assert result["lower_high"].dtype in [pl.Int64, pl.Float64]
-        assert result["higher_low"].dtype in [pl.Int64, pl.Float64]
-        assert result["lower_low"].dtype in [pl.Int64, pl.Float64]
-        assert result["new_higher_high"].dtype == pl.Boolean
-        assert result["new_lower_high"].dtype == pl.Boolean
-        assert result["new_higher_low"].dtype == pl.Boolean
-        assert result["new_lower_low"].dtype == pl.Boolean
+        assert result["higher_high"].dtype in [Int64, Float64]
+        assert result["lower_high"].dtype in [Int64, Float64]
+        assert result["higher_low"].dtype in [Int64, Float64]
+        assert result["lower_low"].dtype in [Int64, Float64]
+        assert result["new_higher_high"].dtype == Boolean
+        assert result["new_lower_high"].dtype == Boolean
+        assert result["new_higher_low"].dtype == Boolean
+        assert result["new_lower_low"].dtype == Boolean
 
     def test_higher_high_detection(self, market_structure_data):
         """Test higher high detection."""
@@ -372,7 +373,7 @@ class TestMarketStructure:
         result = indicators._calculate_market_structure(with_swings)
 
         # Should detect higher highs in uptrending data
-        higher_highs = result.filter(pl.col("new_higher_high"))
+        higher_highs = result.filter(col("new_higher_high"))
         assert len(higher_highs) >= 0  # May not detect any due to swing detection criteria
 
     def test_market_structure_mutually_exclusive(self, market_structure_data):
@@ -387,11 +388,11 @@ class TestMarketStructure:
         result = indicators._calculate_market_structure(with_swings)
 
         # A swing high cannot be both HH and LH (boolean flags should be mutually exclusive)
-        hh_and_lh = result.filter(pl.col("new_higher_high") & pl.col("new_lower_high"))
+        hh_and_lh = result.filter(col("new_higher_high") & col("new_lower_high"))
         assert len(hh_and_lh) == 0
 
         # A swing low cannot be both HL and LL (boolean flags should be mutually exclusive)
-        hl_and_ll = result.filter(pl.col("new_higher_low") & pl.col("new_lower_low"))
+        hl_and_ll = result.filter(col("new_higher_low") & col("new_lower_low"))
         assert len(hl_and_ll) == 0
 
 
@@ -418,7 +419,7 @@ class TestStratPatterns:
 
         assert "continuity" in result.columns
         # Should be Int32 column with values 0, 1, -1
-        assert result["continuity"].dtype == pl.Int32
+        assert result["continuity"].dtype == Int32
 
     def test_in_force_pattern(self, pattern_data):
         """Test in-force pattern detection."""
@@ -431,7 +432,7 @@ class TestStratPatterns:
         result = indicators._calculate_strat_patterns(pattern_data, config)
 
         assert "in_force" in result.columns
-        assert result["in_force"].dtype == pl.Boolean
+        assert result["in_force"].dtype == Boolean
 
     def test_scenario_classification(self, pattern_data):
         """Test scenario classification (1, 2, 3)."""
@@ -462,11 +463,11 @@ class TestStratPatterns:
         assert "type" in result.columns
         assert "bias" in result.columns
         # Signal should be pattern string or None
-        assert result["signal"].dtype == pl.Utf8
+        assert result["signal"].dtype == Utf8
         # Type should be "reversal", "continuation", "context", or None
-        assert result["type"].dtype == pl.Utf8
+        assert result["type"].dtype == Utf8
         # Bias should be "long", "short", or None
-        assert result["bias"].dtype == pl.Utf8
+        assert result["bias"].dtype == Utf8
 
     def test_hammer_shooter_patterns(self):
         """Test hammer and shooter pattern detection."""
@@ -474,7 +475,7 @@ class TestStratPatterns:
         from .utils.thestrat_data_utils import create_timestamp_series
 
         timestamps = create_timestamp_series("2023-01-01", 4, 1440)  # Daily
-        data = pl.DataFrame(
+        data = DataFrame(
             {
                 "timestamp": timestamps,
                 "open": [100, 100, 100, 100],
@@ -524,7 +525,7 @@ class TestAdvancedPatterns:
         result = indicators._calculate_advanced_patterns(with_basic, config)
 
         assert "kicker" in result.columns
-        assert result["kicker"].dtype == pl.Int32  # Changed from Boolean to Int32 (0/1/null)
+        assert result["kicker"].dtype == Int32  # Changed from Boolean to Int32 (0/1/null)
 
     def test_f23_patterns(self, advanced_pattern_data):
         """Test F23 pattern detection."""
@@ -539,7 +540,7 @@ class TestAdvancedPatterns:
         result = indicators._calculate_advanced_patterns(with_basic, config)
 
         assert "f23" in result.columns
-        assert result["f23"].dtype == pl.Boolean
+        assert result["f23"].dtype == Boolean
 
     def test_pmg_patterns(self, advanced_pattern_data):
         """Test PMG (Pivot Machine Gun) pattern detection."""
@@ -554,7 +555,7 @@ class TestAdvancedPatterns:
         result = indicators._calculate_advanced_patterns(with_basic, config)
 
         assert "pmg" in result.columns
-        assert result["pmg"].dtype == pl.Int32
+        assert result["pmg"].dtype == Int32
 
     def test_motherbar_problems(self, advanced_pattern_data):
         """Test motherbar problems detection."""
@@ -569,7 +570,7 @@ class TestAdvancedPatterns:
         result = indicators._calculate_advanced_patterns(with_basic, config)
 
         assert "motherbar_problems" in result.columns
-        assert result["motherbar_problems"].dtype == pl.Boolean
+        assert result["motherbar_problems"].dtype == Boolean
 
 
 @pytest.mark.unit
@@ -611,7 +612,7 @@ class TestPriceAnalysis:
         from .utils.thestrat_data_utils import create_timestamp_series
 
         timestamps = create_timestamp_series("2023-01-01", 8, 1440)  # Daily - increased to 8 rows
-        data = pl.DataFrame(
+        data = DataFrame(
             {
                 "timestamp": timestamps,
                 "open": [100, 100, 100, 100, 100, 100, 100, 100],
@@ -838,7 +839,7 @@ class TestFullProcessing:
         assert len(result) == len(comprehensive_data)
 
         # Result should be Polars DataFrame
-        assert isinstance(result, pl.DataFrame)
+        assert isinstance(result, DataFrame)
 
     def test_process_with_pandas_input(self, comprehensive_data):
         """Test processing with pandas DataFrame input."""
@@ -853,12 +854,12 @@ class TestFullProcessing:
         result = indicators.process(pandas_data)
 
         # Should still return Polars DataFrame
-        assert isinstance(result, pl.DataFrame)
+        assert isinstance(result, DataFrame)
         assert len(result) == len(pandas_data)
 
     def test_process_validation_failure(self):
         """Test that process raises error on validation failure."""
-        invalid_data = pl.DataFrame(
+        invalid_data = DataFrame(
             {
                 "timestamp": [datetime.now()],
                 "open": [100.0],
@@ -890,7 +891,7 @@ class TestCorrectedScenarioClassification:
     def scenario_test_data(self):
         """Create specific data to test scenario classification."""
         # Create data with known high/low relationships to previous bars
-        return pl.DataFrame(
+        return DataFrame(
             {
                 "timestamp": [datetime(2023, 1, 1) + timedelta(days=i) for i in range(6)],
                 "open": [100, 101, 101, 102, 101, 103],
@@ -940,7 +941,7 @@ class TestCorrectedContinuity:
     @pytest.fixture
     def continuity_test_data(self):
         """Create data with specific open/close relationships."""
-        return pl.DataFrame(
+        return DataFrame(
             {
                 "timestamp": [datetime(2023, 1, 1) + timedelta(hours=i) for i in range(5)],
                 "open": [100, 100, 100, 100, 100],
@@ -987,7 +988,7 @@ class TestCorrectedInForce:
     @pytest.fixture
     def in_force_test_data(self):
         """Create data to test in_force breakout logic."""
-        return pl.DataFrame(
+        return DataFrame(
             {
                 "timestamp": [datetime(2023, 1, 1) + timedelta(hours=i) for i in range(4)],
                 "open": [100, 101, 100, 99],
@@ -1034,7 +1035,7 @@ class TestCorrectedHammerShooter:
     @pytest.fixture
     def hammer_shooter_test_data(self):
         """Create data with specific hammer and shooter patterns."""
-        return pl.DataFrame(
+        return DataFrame(
             {
                 "timestamp": [datetime(2023, 1, 1) + timedelta(days=i) for i in range(4)],
                 # Hammer: range > 3*body, close & open > 60% from low
@@ -1065,7 +1066,7 @@ class TestCorrectedHammerShooter:
         assert hammers[3] is False
 
         # Let me create a proper hammer pattern
-        hammer_data = pl.DataFrame(
+        hammer_data = DataFrame(
             {
                 "timestamp": [datetime(2023, 1, 1)],
                 "open": [100],
@@ -1093,7 +1094,7 @@ class TestCorrectedHammerShooter:
         )
 
         # Create proper shooter pattern
-        shooter_data = pl.DataFrame(
+        shooter_data = DataFrame(
             {
                 "timestamp": [datetime(2023, 1, 1)],
                 "open": [100],
@@ -1120,7 +1121,7 @@ class TestCorrectedF23Pattern:
     @pytest.fixture
     def f23_test_data(self):
         """Create data for F23 pattern testing."""
-        return pl.DataFrame(
+        return DataFrame(
             {
                 "timestamp": [datetime(2023, 1, 1) + timedelta(days=i) for i in range(3)],
                 "open": [100, 101, 100],
@@ -1160,7 +1161,7 @@ class TestCorrectedF23Pattern:
         )
 
         # F23D: 2U scenario but close < f23_trigger
-        f23d_data = pl.DataFrame(
+        f23d_data = DataFrame(
             {
                 "timestamp": [datetime(2023, 1, 1) + timedelta(days=i) for i in range(2)],
                 "open": [100, 101],
@@ -1178,7 +1179,7 @@ class TestCorrectedF23Pattern:
         assert f23x_values[1] == "F23D"
 
         # F23U: 2D scenario but close > f23_trigger
-        f23u_data = pl.DataFrame(
+        f23u_data = DataFrame(
             {
                 "timestamp": [datetime(2023, 1, 1) + timedelta(days=i) for i in range(2)],
                 "open": [100, 101],
@@ -1210,7 +1211,7 @@ class TestCorrectedKicker:
         )
 
         # Gap up: open > high1 * (1 + gap_threshold)
-        gap_up_data = pl.DataFrame(
+        gap_up_data = DataFrame(
             {
                 "timestamp": [datetime(2023, 1, 1) + timedelta(days=i) for i in range(2)],
                 "open": [100.0, 101.11],  # Gap up opening
@@ -1231,7 +1232,7 @@ class TestCorrectedKicker:
         assert gappers[1] == 1
 
         # Gap down: open < low1 * (1 - gap_threshold)
-        gap_down_data = pl.DataFrame(
+        gap_down_data = DataFrame(
             {
                 "timestamp": [datetime(2023, 1, 1) + timedelta(days=i) for i in range(2)],
                 "open": [100.0, 98.89],  # Gap down opening
@@ -1260,7 +1261,7 @@ class TestCorrectedKicker:
         )
 
         # Bullish kicker: continuity1=0 & gapper=1 & continuity=1
-        bullish_kicker_data = pl.DataFrame(
+        bullish_kicker_data = DataFrame(
             {
                 "timestamp": [datetime(2023, 1, 1) + timedelta(days=i) for i in range(2)],
                 "open": [100, 106],  # Gap up
@@ -1283,7 +1284,7 @@ class TestCorrectedKicker:
         assert kickers[1] == 1  # Bullish kicker
 
         # Bearish kicker: continuity1=1 & gapper=0 & continuity=0
-        bearish_kicker_data = pl.DataFrame(
+        bearish_kicker_data = DataFrame(
             {
                 "timestamp": [datetime(2023, 1, 1) + timedelta(days=i) for i in range(2)],
                 "open": [100, 96],  # Gap down
@@ -1319,7 +1320,7 @@ class TestCorrectedPMG:
         )
 
         # Create data with specific high/low patterns
-        pmg_data = pl.DataFrame(
+        pmg_data = DataFrame(
             {
                 "timestamp": [datetime(2023, 1, 1) + timedelta(days=i) for i in range(6)],
                 "open": [100, 101, 102, 101, 103, 102],
@@ -1366,7 +1367,7 @@ class TestMotherbarProblems:
         # Bar 3: Breaks above Bar 0 high - breakout
         # Bar 4: Regular bar
         # Bar 5: Inside bar (within Bar 4 range) - Bar 4 becomes mother bar
-        motherbar_data = pl.DataFrame(
+        motherbar_data = DataFrame(
             {
                 "timestamp": [datetime(2023, 1, 1) + timedelta(days=i) for i in range(6)],
                 "open": [100.0, 101.0, 101.5, 103.0, 105.0, 105.5],
@@ -1424,7 +1425,7 @@ class TestMotherbarProblems:
         )
 
         # Create simple scenario: Regular bar -> Inside bar -> Breakout
-        simple_data = pl.DataFrame(
+        simple_data = DataFrame(
             {
                 "timestamp": [datetime(2023, 1, 1) + timedelta(days=i) for i in range(3)],
                 "open": [100.0, 100.5, 105.0],
@@ -1455,7 +1456,7 @@ class TestMotherbarProblems:
         )
 
         # Create compound inside bar scenario
-        compound_data = pl.DataFrame(
+        compound_data = DataFrame(
             {
                 "timestamp": [datetime(2023, 1, 1) + timedelta(days=i) for i in range(5)],
                 "open": [100.0, 101.0, 100.5, 101.2, 105.0],
@@ -1488,7 +1489,7 @@ class TestMotherbarProblems:
         )
 
         # Create data with no inside bars - all directional or outside bars
-        no_inside_data = pl.DataFrame(
+        no_inside_data = DataFrame(
             {
                 "timestamp": [datetime(2023, 1, 1) + timedelta(days=i) for i in range(4)],
                 "open": [100.0, 102.0, 104.0, 101.0],
@@ -1516,7 +1517,7 @@ class TestMotherbarProblems:
             )
         )
 
-        immediate_breakout_data = pl.DataFrame(
+        immediate_breakout_data = DataFrame(
             {
                 "timestamp": [datetime(2023, 1, 1) + timedelta(days=i) for i in range(3)],
                 "open": [100.0, 100.5, 103.0],
@@ -1547,7 +1548,7 @@ class TestMotherbarProblems:
         )
 
         # Mix of 1, 2U, 2D, and 3 scenarios
-        mixed_data = pl.DataFrame(
+        mixed_data = DataFrame(
             {
                 "timestamp": [datetime(2023, 1, 1) + timedelta(days=i) for i in range(7)],
                 "open": [100.0, 100.5, 103.0, 101.0, 99.0, 100.2, 104.0],
@@ -1581,7 +1582,7 @@ class TestFullCorrectedPipeline:
     @pytest.fixture
     def comprehensive_test_data(self):
         """Create comprehensive data for full pipeline testing."""
-        return pl.DataFrame(
+        return DataFrame(
             {
                 "timestamp": [datetime(2023, 1, 1) + timedelta(days=i) for i in range(10)],
                 "open": [100, 101, 102, 101, 103, 104, 103, 105, 104, 106],
@@ -1621,11 +1622,11 @@ class TestFullCorrectedPipeline:
             assert col in result.columns, f"Missing corrected column: {col}"
 
         # Verify data types
-        assert result["continuity"].dtype == pl.Int32  # 1, 0, -1
-        assert result["scenario"].dtype == pl.Utf8  # "1", "2U", "2D", "3"
-        assert result["in_force"].dtype == pl.Boolean  # True/False
-        assert result["f23x"].dtype == pl.Utf8  # "F23U", "F23D", None
-        assert result["pmg"].dtype == pl.Int32  # Integer cumulative
+        assert result["continuity"].dtype == Int32  # 1, 0, -1
+        assert result["scenario"].dtype == Utf8  # "1", "2U", "2D", "3"
+        assert result["in_force"].dtype == Boolean  # True/False
+        assert result["f23x"].dtype == Utf8  # "F23U", "F23D", None
+        assert result["pmg"].dtype == Int32  # Integer cumulative
 
     def test_corrected_calculations_validate(self, comprehensive_test_data):
         """Test that corrected calculations produce expected results."""
@@ -1670,7 +1671,7 @@ class TestScenarioCalculations:
 
     def test_scenario_1_calculation(self):
         """Test scenario 1: Inside bar (H <= prev_H and L >= prev_L)."""
-        data = pl.DataFrame(
+        data = DataFrame(
             {
                 "timestamp": [datetime.now() - timedelta(hours=i) for i in range(2, 0, -1)],
                 "open": [100.0, 101.0],
@@ -1693,7 +1694,7 @@ class TestScenarioCalculations:
 
     def test_scenario_2u_calculation(self):
         """Test scenario 2U: Higher high, same or higher low (H > prev_H and L >= prev_L)."""
-        data = pl.DataFrame(
+        data = DataFrame(
             {
                 "timestamp": [datetime.now() - timedelta(hours=i) for i in range(2, 0, -1)],
                 "open": [100.0, 101.0],
@@ -1716,7 +1717,7 @@ class TestScenarioCalculations:
 
     def test_scenario_2d_calculation(self):
         """Test scenario 2D: Lower low, same or lower high (L < prev_L and H <= prev_H)."""
-        data = pl.DataFrame(
+        data = DataFrame(
             {
                 "timestamp": [datetime.now() - timedelta(hours=i) for i in range(2, 0, -1)],
                 "open": [100.0, 101.0],
@@ -1739,7 +1740,7 @@ class TestScenarioCalculations:
 
     def test_scenario_3_calculation(self):
         """Test scenario 3: Outside bar (H > prev_H and L < prev_L)."""
-        data = pl.DataFrame(
+        data = DataFrame(
             {
                 "timestamp": [datetime.now() - timedelta(hours=i) for i in range(2, 0, -1)],
                 "open": [100.0, 101.0],
@@ -1767,7 +1768,7 @@ class TestContinuityCalculations:
 
     def test_continuity_bullish(self):
         """Test bullish continuity: close > open."""
-        data = pl.DataFrame(
+        data = DataFrame(
             {
                 "timestamp": [datetime.now()],
                 "open": [100.0],
@@ -1789,7 +1790,7 @@ class TestContinuityCalculations:
 
     def test_continuity_bearish(self):
         """Test bearish continuity: close < open."""
-        data = pl.DataFrame(
+        data = DataFrame(
             {
                 "timestamp": [datetime.now()],
                 "open": [100.0],
@@ -1811,7 +1812,7 @@ class TestContinuityCalculations:
 
     def test_continuity_doji(self):
         """Test doji: close = open."""
-        data = pl.DataFrame(
+        data = DataFrame(
             {
                 "timestamp": [datetime.now()],
                 "open": [100.0],
@@ -1838,7 +1839,7 @@ class TestInForceCalculations:
 
     def test_in_force_bullish_breakout(self):
         """Test bullish in-force: bullish bar closing above previous high."""
-        data = pl.DataFrame(
+        data = DataFrame(
             {
                 "timestamp": [datetime.now() - timedelta(hours=i) for i in range(2, 0, -1)],
                 "open": [100.0, 102.0],
@@ -1860,7 +1861,7 @@ class TestInForceCalculations:
 
     def test_in_force_bearish_breakout(self):
         """Test bearish in-force: bearish bar closing below previous low."""
-        data = pl.DataFrame(
+        data = DataFrame(
             {
                 "timestamp": [datetime.now() - timedelta(hours=i) for i in range(2, 0, -1)],
                 "open": [100.0, 98.0],
@@ -1888,7 +1889,7 @@ class TestSignalCalculations:
     def test_2d_2u_reversal_signal(self):
         """Test 2D-2U reversal pattern detection."""
         # Create exact 2D followed by 2U pattern
-        data = pl.DataFrame(
+        data = DataFrame(
             {
                 "timestamp": [datetime.now() - timedelta(hours=i) for i in range(3, 0, -1)],
                 "open": [100.0, 98.0, 102.0],
@@ -1914,7 +1915,7 @@ class TestSignalCalculations:
     def test_3_2u_context_reversal(self):
         """Test 3-2U context reversal pattern."""
         # Create exact 3 followed by 2U pattern
-        data = pl.DataFrame(
+        data = DataFrame(
             {
                 "timestamp": [datetime.now() - timedelta(hours=i) for i in range(3, 0, -1)],
                 "open": [100.0, 102.0, 104.0],
@@ -1944,7 +1945,7 @@ class TestSignalCalculations:
     def test_2u_2u_continuation_signal(self):
         """Test 2U-2U continuation pattern."""
         # Create exact 2U followed by 2U pattern
-        data = pl.DataFrame(
+        data = DataFrame(
             {
                 "timestamp": [datetime.now() - timedelta(hours=i) for i in range(3, 0, -1)],
                 "open": [100.0, 102.0, 104.0],
@@ -1979,7 +1980,7 @@ class TestHammerShooterCalculations:
     def test_hammer_pattern_calculation(self):
         """Test hammer pattern: long lower shadow, small body near top."""
         # Create exact hammer: range > 3 * body, close/open > 60% from bottom
-        data = pl.DataFrame(
+        data = DataFrame(
             {
                 "timestamp": [datetime.now()],
                 "open": [108.0],  # Near top
@@ -2006,7 +2007,7 @@ class TestHammerShooterCalculations:
     def test_shooter_pattern_calculation(self):
         """Test shooter pattern: long upper shadow, small body near bottom."""
         # Create exact shooter: range > 3 * body, close/open > 60% from top
-        data = pl.DataFrame(
+        data = DataFrame(
             {
                 "timestamp": [datetime.now()],
                 "open": [92.0],  # Near bottom
@@ -2038,7 +2039,7 @@ class TestGapCalculations:
     def test_gap_up_detection(self):
         """Test gap up detection with percentage threshold."""
         # Use default gap_threshold = 0.001 (0.1%) and create enough data for swing detection
-        data = pl.DataFrame(
+        data = DataFrame(
             {
                 "timestamp": [datetime.now() - timedelta(hours=i) for i in range(15, 0, -1)],
                 "open": [100.0] * 14 + [110.2],  # Last bar gaps up: 110.2 > 105 * 1.001 = 105.105 ✓
@@ -2060,7 +2061,7 @@ class TestGapCalculations:
     def test_gap_down_detection(self):
         """Test gap down detection with percentage threshold."""
         # Use default gap_threshold = 0.001 (0.1%)
-        data = pl.DataFrame(
+        data = DataFrame(
             {
                 "timestamp": [datetime.now() - timedelta(hours=i) for i in range(15, 0, -1)],
                 "open": [100.0] * 14 + [94.9],  # Last bar gaps down: 94.9 < 95 * 0.999 = 94.905 ✓
@@ -2085,7 +2086,7 @@ class TestGapCalculations:
         timeframe_configs = [TimeframeItemConfig(timeframes=["all"], gap_detection=GapDetectionConfig(threshold=0.01))]
         indicators = Indicators(IndicatorsConfig(timeframe_configs=timeframe_configs))
 
-        data = pl.DataFrame(
+        data = DataFrame(
             {
                 "timestamp": [datetime.now() - timedelta(hours=i) for i in range(15, 0, -1)],
                 "open": [100.0] * 14 + [110.5],  # 110.5 > 105 * 1.01 = 106.05? Yes, 110.5 > 106.05 ✓
@@ -2103,7 +2104,7 @@ class TestGapCalculations:
     def test_gap_asset_class_independence(self):
         """Test gap detection works across different asset classes."""
         # Test with crypto-like prices (high values)
-        crypto_data = pl.DataFrame(
+        crypto_data = DataFrame(
             {
                 "timestamp": [datetime.now() - timedelta(hours=i) for i in range(15, 0, -1)],
                 "open": [50000.0] * 14 + [50100.0],  # 50100 > 50500 * 1.001? No, need proper gap
@@ -2115,12 +2116,12 @@ class TestGapCalculations:
         # Fix: 50100 > 50500 * 1.001 = 50550.5? No. Let's make a real gap:
         crypto_data = crypto_data.with_columns(
             [
-                pl.Series("open", [50000.0] * 14 + [50551.0])  # 50551 > 50500 * 1.001 = 50550.5 ✓
+                Series("open", [50000.0] * 14 + [50551.0])  # 50551 > 50500 * 1.001 = 50550.5 ✓
             ]
         )
 
         # Test with forex-like prices (low values)
-        forex_data = pl.DataFrame(
+        forex_data = DataFrame(
             {
                 "timestamp": [datetime.now() - timedelta(hours=i) for i in range(15, 0, -1)],
                 "open": [1.2000] * 14 + [1.2061],  # 1.2061 > 1.2050 * 1.001 = 1.206205? No, 1.2061 < 1.206205
@@ -2132,7 +2133,7 @@ class TestGapCalculations:
         # Fix the forex gap:
         forex_data = forex_data.with_columns(
             [
-                pl.Series("open", [1.2000] * 14 + [1.2063])  # 1.2063 > 1.2050 * 1.001 = 1.206205 ✓
+                Series("open", [1.2000] * 14 + [1.2063])  # 1.2063 > 1.2050 * 1.001 = 1.206205 ✓
             ]
         )
 
@@ -2157,7 +2158,7 @@ class TestSignalMetadataIntegration:
     def test_signal_object_creation_with_target(self):
         """Test signal object creation for reversal patterns with targets."""
         # Create 3-bar pattern with enough history for target calculation
-        data = pl.DataFrame(
+        data = DataFrame(
             {
                 "timestamp": [datetime.now() - timedelta(hours=i) for i in range(5, 0, -1)],
                 "open": [100.0, 102.0, 98.0, 104.0, 106.0],
@@ -2220,7 +2221,7 @@ class TestPerTimeframeIndicators:
                     }
                 )
 
-        test_data = pl.DataFrame(data_rows)
+        test_data = DataFrame(data_rows)
 
         # Configure different settings per timeframe
         indicators = Indicators(
@@ -2255,7 +2256,7 @@ class TestPerTimeframeIndicators:
     def test_all_timeframe_without_timeframe_column(self):
         """Test that 'all' timeframe works when no timeframe column is present."""
         # Create simple OHLC data without timeframe column
-        simple_data = pl.DataFrame(
+        simple_data = DataFrame(
             {
                 "timestamp": [datetime(2024, 1, 1, 9, 30) + timedelta(minutes=i) for i in range(10)],
                 "open": [100.0 + i for i in range(10)],
@@ -2310,7 +2311,7 @@ class TestPerTimeframeIndicators:
                     }
                 )
 
-        test_data = pl.DataFrame(data_rows)
+        test_data = DataFrame(data_rows)
 
         # Only configure 5m specifically
         indicators = Indicators(
@@ -2339,7 +2340,7 @@ class TestIndicatorsEdgeCases:
     def test_no_all_config_without_timeframe_column_raises_error(self):
         """Test ValueError when data has no timeframe column and no 'all' config."""
         # Create data without timeframe column
-        data = pl.DataFrame(
+        data = DataFrame(
             {
                 "timestamp": [datetime(2024, 1, 1, 9, 30) + timedelta(minutes=i) for i in range(10)],
                 "open": [100.0 + i for i in range(10)],
@@ -2370,7 +2371,7 @@ class TestIndicatorsEdgeCases:
     def test_get_signal_object_function_retrieval(self):
         """Test the get_signal_object function that's created during signal processing."""
         # Create test data that would generate signals
-        data = pl.DataFrame(
+        data = DataFrame(
             {
                 "timestamp": [datetime(2024, 1, 1, 9, 30) + timedelta(minutes=i * 5) for i in range(20)],
                 "open": [100.0, 102.0, 101.0, 103.0, 100.0] * 4,
@@ -2414,7 +2415,7 @@ class TestIndicatorsTimestampHandling:
         # Create enough data to pass validation but minimal for trigger bar testing
         # Need at least swing_window * 2 = 5 * 2 = 10 bars for validation (default swing_window is 5)
         # Create realistic OHLC data
-        data = pl.DataFrame(
+        data = DataFrame(
             {
                 "timestamp": [datetime(2024, 1, 1, 9, 30) + timedelta(minutes=i) for i in range(12)],
                 "open": [100.0, 100.5, 101.0, 101.5, 101.0, 100.5, 100.0, 99.5, 99.0, 99.5, 100.0, 100.5],
@@ -2447,9 +2448,9 @@ class TestIndicatorsTimestampHandling:
         """Test various timestamp conversion scenarios."""
         from datetime import datetime
 
-        import polars as pl
+        from polars import DataFrame
 
-        # Test data with different timestamp formats
+        # Create inconsistent timestamp formats
         # Need at least 10 bars for validation (swing_window * 2)
         test_cases = [
             # Case 1: Normal datetime objects
@@ -2462,7 +2463,7 @@ class TestIndicatorsTimestampHandling:
         ]
 
         for case in test_cases:
-            data = pl.DataFrame(
+            data = DataFrame(
                 {
                     "timestamp": case["timestamp"],
                     "open": [100.0, 100.5, 101.0, 101.5, 101.0, 100.5, 100.0, 99.5, 99.0, 99.5, 100.0, 100.5],
@@ -2498,7 +2499,7 @@ class TestIndicatorsTimestampHandling:
         # The fallback happens when timestamp is not a datetime and doesn't have to_pydatetime
         # We'll create a scenario where signal processing might encounter this
 
-        data = pl.DataFrame(
+        data = DataFrame(
             {
                 "timestamp": [datetime(2024, 1, 1, 9, 30) + timedelta(minutes=i * 5) for i in range(10)],
                 "open": [100.0] * 10,

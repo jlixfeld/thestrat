@@ -6,7 +6,7 @@ Provides consistent data generation functions across all test modules.
 
 from datetime import datetime, timedelta
 
-import polars as pl
+from polars import DataFrame
 
 
 def create_timestamp_series(
@@ -47,7 +47,7 @@ def create_ohlc_data(
     freq_minutes: int = 60,
     symbol: str | None = None,
     timezone: str | None = None,
-) -> pl.DataFrame:
+) -> DataFrame:
     """
     Create realistic OHLC test data.
 
@@ -77,10 +77,10 @@ def create_ohlc_data(
     if symbol:
         data["symbol"] = [symbol] * periods
 
-    return pl.DataFrame(data)
+    return DataFrame(data)
 
 
-def create_trend_data(periods: int = 10) -> pl.DataFrame:
+def create_trend_data(periods: int = 10) -> DataFrame:
     """Create trending data with clear swing points."""
     timestamps = create_timestamp_series("2023-01-01", periods, freq_minutes=1440)  # Daily
 
@@ -88,7 +88,7 @@ def create_trend_data(periods: int = 10) -> pl.DataFrame:
     # Pattern: up-up-down-down-up-up-peak-down-down-up
     base_prices = [100, 102, 104, 103, 101, 103, 105, 110, 107, 105][:periods]
 
-    return pl.DataFrame(
+    return DataFrame(
         {
             "timestamp": timestamps,
             "open": base_prices,
@@ -100,11 +100,11 @@ def create_trend_data(periods: int = 10) -> pl.DataFrame:
     )
 
 
-def create_pattern_data() -> pl.DataFrame:
+def create_pattern_data() -> DataFrame:
     """Create data with specific pattern characteristics."""
     timestamps = create_timestamp_series("2023-01-01", 15, freq_minutes=1440)  # Daily
 
-    return pl.DataFrame(
+    return DataFrame(
         {
             "timestamp": timestamps,
             "open": [100 + i * 0.5 for i in range(15)],
@@ -116,11 +116,11 @@ def create_pattern_data() -> pl.DataFrame:
     )
 
 
-def create_gap_data() -> pl.DataFrame:
+def create_gap_data() -> DataFrame:
     """Create data with gap patterns."""
     timestamps = create_timestamp_series("2023-01-01", 8, freq_minutes=1440)  # Daily - increased from 5 to 8
 
-    return pl.DataFrame(
+    return DataFrame(
         {
             "timestamp": timestamps,
             "open": [100, 105, 95, 103, 97, 102, 92, 105],  # Gap up, gap down, normal, gap down, more patterns
@@ -132,11 +132,11 @@ def create_gap_data() -> pl.DataFrame:
     )
 
 
-def create_price_analysis_data() -> pl.DataFrame:
+def create_price_analysis_data() -> DataFrame:
     """Create data for price analysis testing."""
     timestamps = create_timestamp_series("2023-01-01", 8, freq_minutes=1440)  # Daily - increased from 5 to 8
 
-    return pl.DataFrame(
+    return DataFrame(
         {
             "timestamp": timestamps,
             "open": [100, 102, 104, 106, 108, 110, 112, 114],
@@ -148,11 +148,11 @@ def create_price_analysis_data() -> pl.DataFrame:
     )
 
 
-def create_ath_atl_data() -> pl.DataFrame:
+def create_ath_atl_data() -> DataFrame:
     """Create data for ATH/ATL testing."""
     timestamps = create_timestamp_series("2023-01-01", 8, freq_minutes=1440)  # Daily
 
-    return pl.DataFrame(
+    return DataFrame(
         {
             "timestamp": timestamps,
             "open": [100, 102, 98, 105, 103, 110, 108, 95],
@@ -164,11 +164,11 @@ def create_ath_atl_data() -> pl.DataFrame:
     )
 
 
-def create_large_dataset(periods: int = 1000, freq_minutes: int = 1) -> pl.DataFrame:
+def create_large_dataset(periods: int = 1000, freq_minutes: int = 1) -> DataFrame:
     """Create large dataset for performance testing."""
     timestamps = create_timestamp_series("2023-01-01", periods, freq_minutes)
 
-    return pl.DataFrame(
+    return DataFrame(
         {
             "timestamp": timestamps,
             "open": [100.0 + i * 0.001 for i in range(periods)],
@@ -180,12 +180,12 @@ def create_large_dataset(periods: int = 1000, freq_minutes: int = 1) -> pl.DataF
     )
 
 
-def create_market_hours_data(symbol: str = "AAPL") -> pl.DataFrame:
+def create_market_hours_data(symbol: str = "AAPL") -> DataFrame:
     """Create realistic market hours data."""
     # 6.5 hours of market data (9:30 AM - 4:00 PM)
     timestamps = create_timestamp_series("2023-01-03 09:30:00", 390, freq_minutes=1)
 
-    return pl.DataFrame(
+    return DataFrame(
         {
             "timestamp": timestamps,
             "symbol": [symbol] * 390,
@@ -198,12 +198,12 @@ def create_market_hours_data(symbol: str = "AAPL") -> pl.DataFrame:
     )
 
 
-def create_crypto_data(symbol: str = "BTC-USD") -> pl.DataFrame:
+def create_crypto_data(symbol: str = "BTC-USD") -> DataFrame:
     """Create 24/7 crypto data."""
     # 2 days * 24 hours
     timestamps = create_timestamp_series("2023-01-01", 48, freq_minutes=60, timezone="UTC")
 
-    return pl.DataFrame(
+    return DataFrame(
         {
             "timestamp": timestamps,
             "symbol": [symbol] * 48,
@@ -216,12 +216,12 @@ def create_crypto_data(symbol: str = "BTC-USD") -> pl.DataFrame:
     )
 
 
-def create_forex_data(symbol: str = "EUR/USD") -> pl.DataFrame:
+def create_forex_data(symbol: str = "EUR/USD") -> DataFrame:
     """Create forex market data."""
     # 5 days * 48 half-hour bars per day
     timestamps = create_timestamp_series("2023-01-02", 240, freq_minutes=30)
 
-    return pl.DataFrame(
+    return DataFrame(
         {
             "timestamp": timestamps,
             "symbol": [symbol] * 240,
@@ -234,7 +234,7 @@ def create_forex_data(symbol: str = "EUR/USD") -> pl.DataFrame:
     )
 
 
-def create_dst_transition_data(transition_type: str = "spring_forward", timezone: str = "US/Eastern") -> pl.DataFrame:
+def create_dst_transition_data(transition_type: str = "spring_forward", timezone: str = "US/Eastern") -> DataFrame:
     """
     Create data spanning DST transition periods for aggregation testing.
 
@@ -302,7 +302,7 @@ def create_dst_transition_data(transition_type: str = "spring_forward", timezone
     num_bars = len(timestamps)
     base_price = 150.0
 
-    return pl.DataFrame(
+    return DataFrame(
         {
             "timestamp": timestamps,
             "open": [base_price + i * 0.01 for i in range(num_bars)],
@@ -335,7 +335,7 @@ def create_multi_timezone_data(timezones: list = None) -> dict:
     for tz_str in timezones:
         timestamps = create_timestamp_series("2023-06-15 12:00:00", num_bars, freq_minutes=60, timezone=tz_str)
 
-        timezone_data[tz_str] = pl.DataFrame(
+        timezone_data[tz_str] = DataFrame(
             {
                 "timestamp": timestamps,
                 "timezone": [tz_str] * num_bars,
@@ -350,7 +350,7 @@ def create_multi_timezone_data(timezones: list = None) -> dict:
     return timezone_data
 
 
-def create_edge_case_data(case_type: str = "identical_prices") -> pl.DataFrame:
+def create_edge_case_data(case_type: str = "identical_prices") -> DataFrame:
     """
     Create specific edge case scenarios for testing.
 
@@ -365,7 +365,7 @@ def create_edge_case_data(case_type: str = "identical_prices") -> pl.DataFrame:
     if case_type == "identical_prices":
         # All bars have identical OHLC - no price movement
         price = 100.0
-        return pl.DataFrame(
+        return DataFrame(
             {
                 "timestamp": timestamps,
                 "open": [price] * 10,
@@ -378,7 +378,7 @@ def create_edge_case_data(case_type: str = "identical_prices") -> pl.DataFrame:
 
     elif case_type == "extreme_gaps":
         # Large gaps between bars
-        return pl.DataFrame(
+        return DataFrame(
             {
                 "timestamp": timestamps,
                 "open": [100, 200, 50, 300, 25, 400, 10, 500, 5, 600],
@@ -391,7 +391,7 @@ def create_edge_case_data(case_type: str = "identical_prices") -> pl.DataFrame:
 
     elif case_type == "single_bar":
         # Minimal dataset with just one bar
-        return pl.DataFrame(
+        return DataFrame(
             {
                 "timestamp": [timestamps[0]],
                 "open": [100.0],
@@ -404,7 +404,7 @@ def create_edge_case_data(case_type: str = "identical_prices") -> pl.DataFrame:
 
     elif case_type == "missing_volume":
         # Dataset without volume column
-        return pl.DataFrame(
+        return DataFrame(
             {
                 "timestamp": timestamps,
                 "open": [100.0 + i for i in range(10)],
@@ -418,7 +418,7 @@ def create_edge_case_data(case_type: str = "identical_prices") -> pl.DataFrame:
         raise ValueError(f"Unknown edge case type: {case_type}")
 
 
-def create_long_term_data(days: int = 365, freq_minutes: int = 60, symbol: str = "SPY") -> pl.DataFrame:
+def create_long_term_data(days: int = 365, freq_minutes: int = 60, symbol: str = "SPY") -> DataFrame:
     """
     Create long-term dataset for aggregation testing across multiple timeframes.
 
@@ -482,7 +482,7 @@ def create_long_term_data(days: int = 365, freq_minutes: int = 60, symbol: str =
         lows.append(low)
         volumes.append(volume)
 
-    return pl.DataFrame(
+    return DataFrame(
         {
             "timestamp": timestamps[1:],  # Skip first timestamp since we use prices[1:]
             "symbol": [symbol] * len(opens),

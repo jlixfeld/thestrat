@@ -16,7 +16,7 @@ TheStrat follows a simple workflow:
 Let's start with a complete example using sample market data:
 
 ```python
-import pandas as pd
+from pandas import DataFrame as PandasDataFrame
 from thestrat import Factory
 from thestrat.schemas import (
     FactoryConfig, AggregationConfig, IndicatorsConfig,
@@ -24,7 +24,7 @@ from thestrat.schemas import (
 )
 
 # Sample OHLCV data (1-minute bars)
-sample_data = pd.DataFrame({
+sample_data = PandasDataFrame({
     'timestamp': pd.date_range('2024-01-01 09:30', periods=100, freq='1min'),
     'open': [100.0] * 100,
     'high': [101.0] * 100,
