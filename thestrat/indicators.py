@@ -156,6 +156,9 @@ class Indicators(Component):
         # Group 4: Strat patterns (depends on continuity which is calculated first)
         df = self._calculate_strat_patterns(df, config)
 
+        # Round all numeric indicator outputs to 5 decimal places for consistent storage
+        df = self._round_numeric_outputs(df)
+
         return df
 
     def _calculate_independent_indicators(self, data: PolarsDataFrame, config: TimeframeItemConfig) -> PolarsDataFrame:
@@ -940,6 +943,46 @@ class Indicators(Component):
                     .alias("in_force")
                 ]
             )
+
+        return df
+
+    def _round_numeric_outputs(self, data: PolarsDataFrame) -> PolarsDataFrame:
+        """
+        Round all Float64 indicator outputs to 5 decimal places for consistent database storage.
+
+        Dynamically detects Float64 columns from the schema and rounds them to prevent
+        excessive precision in float calculations from cluttering database storage.
+
+        Args:
+            data: DataFrame with calculated indicators
+
+        Returns:
+            DataFrame with Float64 columns rounded to 5 decimal places
+        """
+        from polars import Float64
+
+        from .schemas import IndicatorSchema
+
+        df = data.clone()
+
+        # Get all Float64 columns from the schema dynamically
+        schema_types = IndicatorSchema.get_polars_dtypes()
+        float64_columns = [
+            column_name for column_name, expected_dtype in schema_types.items() if expected_dtype == Float64
+        ]
+
+        # Create rounding expressions for Float64 columns that exist in the DataFrame
+        rounding_expressions = []
+        for column_name in float64_columns:
+            if column_name in df.columns:
+                # Verify the column is actually numeric (handles edge cases)
+                column_dtype = df[column_name].dtype
+                if str(column_dtype) in ["Float64", "Int64", "Float32", "Int32"]:
+                    rounding_expressions.append(col(column_name).round(5).alias(column_name))
+
+        # Apply rounding if there are any Float64 columns to round
+        if rounding_expressions:
+            df = df.with_columns(rounding_expressions)
 
         return df
 

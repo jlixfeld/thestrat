@@ -982,7 +982,7 @@ class IndicatorSchema(BaseModel):
     )
     volume: float | None = Field(
         default=None,
-        description="Trading volume for the time period",
+        description="Trading volume for the time period (supports fractional shares/units)",
         ge=0,
         json_schema_extra={"polars_dtype": Float64, "input": True, "category": "base_ohlc", "optional": True},
     )
@@ -1051,9 +1051,9 @@ class IndicatorSchema(BaseModel):
         description="True when gap_up OR gap_down is true",
         json_schema_extra={"polars_dtype": Boolean, "output": True, "category": "gap_detection"},
     )
-    advanced_gapper: bool = Field(
-        description="Enhanced gap detection with threshold requirements",
-        json_schema_extra={"polars_dtype": Boolean, "output": True, "category": "gap_detection"},
+    advanced_gapper: int = Field(
+        description="Enhanced gap detection with threshold requirements (1=gap up, 0=gap down, null=no gap)",
+        json_schema_extra={"polars_dtype": Int32, "output": True, "category": "gap_detection"},
     )
 
     # Swing Point Detection Columns
@@ -1185,9 +1185,9 @@ class IndicatorSchema(BaseModel):
         description="True when shooting star pattern detected",
         json_schema_extra={"polars_dtype": Boolean, "output": True, "category": "special_patterns"},
     )
-    kicker: bool = Field(
-        description="True when kicker pattern detected",
-        json_schema_extra={"polars_dtype": Boolean, "output": True, "category": "special_patterns"},
+    kicker: int = Field(
+        description="Kicker pattern detection (1=bullish kicker, 0=bearish kicker, null=no kicker)",
+        json_schema_extra={"polars_dtype": Int32, "output": True, "category": "special_patterns"},
     )
     f23: bool = Field(
         description="True when F23 pattern detected",
@@ -1207,9 +1207,9 @@ class IndicatorSchema(BaseModel):
         gt=0,
         json_schema_extra={"polars_dtype": Float64, "output": True, "category": "special_patterns"},
     )
-    pmg: str = Field(
-        description="Price Magnitude Gap pattern result",
-        json_schema_extra={"polars_dtype": String, "output": True, "category": "special_patterns"},
+    pmg: int = Field(
+        description="Price Magnitude Gap pattern result - cumulative directional count",
+        json_schema_extra={"polars_dtype": Int32, "output": True, "category": "special_patterns"},
     )
 
     # Mother Bar Analysis Columns
