@@ -40,7 +40,7 @@ I don't provide support for this code. The Strat community has many great resour
 
 ---
 
-[![Version](https://img.shields.io/github/v/tag/jlixfeld/thestrat?label=version&sort=semver)](https://github.com/jlixfeld/thestrat/releases)
+[![Version](https://img.shields.io/badge/dynamic/toml?url=https://raw.githubusercontent.com/jlixfeld/thestrat/main/pyproject.toml&query=project.version&label=version&color=green)](https://github.com/jlixfeld/thestrat/releases)
 [![Tests](https://github.com/jlixfeld/thestrat/actions/workflows/tests.yml/badge.svg)](https://github.com/jlixfeld/thestrat/actions/workflows/tests.yml)
 [![Coverage](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/jlixfeld/c383059dafef5a6c070532174f3f0ba8/raw/coverage.json)](https://github.com/jlixfeld/thestrat/actions/workflows/coverage.yml)
 [![Documentation](https://github.com/jlixfeld/thestrat/actions/workflows/docs.yml/badge.svg)](https://jlixfeld.github.io/thestrat/)

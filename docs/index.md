@@ -1,9 +1,10 @@
 # TheStrat Documentation
 
+[![Version](https://img.shields.io/badge/dynamic/toml?url=https://raw.githubusercontent.com/jlixfeld/thestrat/main/pyproject.toml&query=project.version&label=version&color=green)](https://github.com/jlixfeld/thestrat/releases)
 [![Tests](https://github.com/jlixfeld/thestrat/actions/workflows/tests.yml/badge.svg)](https://github.com/jlixfeld/thestrat/actions/workflows/tests.yml)
+[![Coverage](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/jlixfeld/c383059dafef5a6c070532174f3f0ba8/raw/coverage.json)](https://github.com/jlixfeld/thestrat/actions/workflows/coverage.yml)
+[![Documentation](https://github.com/jlixfeld/thestrat/actions/workflows/docs.yml/badge.svg)](https://jlixfeld.github.io/thestrat/)
 [![Python Versions](https://img.shields.io/badge/python-3.11%20%7C%203.12-blue)](https://github.com/jlixfeld/thestrat)
-![Version](https://img.shields.io/badge/dynamic/toml?url=https://raw.githubusercontent.com/jlixfeld/thestrat/main/pyproject.toml&query=project.version&label=version&color=green)
-![License](https://img.shields.io/badge/license-Private-red)
 
 A Python module for financial data aggregation and technical analysis using **#TheStrat** methodology.
 
