@@ -431,15 +431,16 @@ class SignalMetadata:
         ]
 
         # Dynamically determine float fields from dataclass annotations
+        import types
         import typing
         from dataclasses import fields
 
         float_fields = []
         for field_info in fields(cls):
             field_type = field_info.type
-            # Handle Union types like float | None
+            # Handle Union types like float | None (both typing.Union and types.UnionType)
             origin = typing.get_origin(field_type)
-            if origin is typing.Union:
+            if origin is typing.Union or origin is types.UnionType:
                 args = typing.get_args(field_type)
                 # Check if float is in the union (e.g., float | None)
                 if float in args:
