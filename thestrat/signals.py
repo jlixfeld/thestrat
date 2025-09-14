@@ -391,26 +391,9 @@ class SignalMetadata:
             {**asdict(change), "timestamp": change.timestamp.isoformat()} for change in self.change_history
         ]
 
-        # Convert floats to strings for precision (optional)
-        float_fields = [
-            "entry_price",
-            "stop_price",
-            "target_price",
-            "original_stop",
-            "original_target",
-            "risk_amount",
-            "reward_amount",
-            "risk_reward_ratio",
-            "entry_filled_price",
-            "exit_price",
-            "pnl",
-            "max_favorable_excursion",
-            "max_adverse_excursion",
-        ]
-
-        for float_field in float_fields:
-            if data.get(float_field) is not None:
-                data[float_field] = str(data[float_field])
+        # Keep numeric fields as numbers for database compatibility
+        # No float-to-string conversion needed - JSON natively supports numbers
+        # This preserves proper types for database insertion
 
         return data
 
@@ -447,26 +430,30 @@ class SignalMetadata:
             for ch in data.get("change_history", [])
         ]
 
-        # Convert string prices back to floats
-        float_fields = [
-            "entry_price",
-            "stop_price",
-            "target_price",
-            "original_stop",
-            "original_target",
-            "risk_amount",
-            "reward_amount",
-            "risk_reward_ratio",
-            "entry_filled_price",
-            "exit_price",
-            "pnl",
-            "max_favorable_excursion",
-            "max_adverse_excursion",
-        ]
+        # Dynamically determine float fields from dataclass annotations
+        import typing
+        from dataclasses import fields
+
+        float_fields = []
+        for field_info in fields(cls):
+            field_type = field_info.type
+            # Handle Union types like float | None
+            origin = typing.get_origin(field_type)
+            if origin is typing.Union:
+                args = typing.get_args(field_type)
+                # Check if float is in the union (e.g., float | None)
+                if float in args:
+                    float_fields.append(field_info.name)
+            # Handle direct float type
+            elif field_type is float:
+                float_fields.append(field_info.name)
 
         for float_field in float_fields:
-            if data.get(float_field) is not None and isinstance(data[float_field], str):
-                data[float_field] = float(data[float_field])
+            if data.get(float_field) is not None:
+                value = data[float_field]
+                # Ensure numeric values are floats (not int)
+                if isinstance(value, (int, float)):
+                    data[float_field] = float(value)
 
         # Remove fields that are calculated in __post_init__ and shouldn't be passed to constructor
         calculated_fields = ["original_stop", "original_target", "risk_amount", "reward_amount", "risk_reward_ratio"]

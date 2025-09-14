@@ -271,9 +271,9 @@ class TestSignalMetadata:
         # Check timestamp conversion
         assert data["timestamp"] == "2024-01-15T10:30:00"
 
-        # Check price fields are strings
-        assert isinstance(data["entry_price"], str)
-        assert data["entry_price"] == "150.0"
+        # Check price fields are numeric (not strings)
+        assert isinstance(data["entry_price"], float)
+        assert data["entry_price"] == 150.0
 
         # Check change history
         assert len(data["change_history"]) == 1
