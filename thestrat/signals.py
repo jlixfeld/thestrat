@@ -163,15 +163,15 @@ SIGNALS = {
         "description": "Context reversal - 3-2D with opposite continuity",
     },
     # Special Rev Strat signals
-    "1-3": {
-        "category": "reversal",
-        "bias": None,  # Determined by 1-bar type
-        "bar_count": 2,
-        "entry_bar_offset": 0,
-        "trigger_bar_offset": 1,
-        "target_bar_offset": 2,  # Requires 3rd bar for target
-        "description": "1-bar Rev Strat signal",
-    },
+    # "1-3": {
+    #     "category": "reversal",
+    #     "bias": None,  # Determined by 1-bar type
+    #     "bar_count": 2,
+    #     "entry_bar_offset": 0,
+    #     "trigger_bar_offset": 1,
+    #     "target_bar_offset": 2,  # Requires 3rd bar for target
+    #     "description": "1-bar Rev Strat signal",
+    # },
 }
 
 
