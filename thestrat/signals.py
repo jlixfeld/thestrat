@@ -163,7 +163,7 @@ SIGNALS = {
         "description": "Context reversal - 3-2D with opposite continuity",
     },
     # Special Rev Strat signals
-    # "1-3": {
+    # "1-3": {  # too complex to implement properly. Can be inferred by looking for inside bar followed by a gapping directional 2 that changes continuity before the low (or high) of the inside bar
     #     "category": "reversal",
     #     "bias": None,  # Determined by 1-bar type
     #     "bar_count": 2,
