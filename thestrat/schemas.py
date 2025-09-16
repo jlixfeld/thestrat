@@ -291,17 +291,18 @@ class GapDetectionConfig(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True, validate_default=True, extra="forbid")
 
     threshold: float = Field(
-        default=0.001,
+        default=0.0,
         ge=0,  # Replaces manual validator
-        description="Minimum gap size as decimal percentage (0.01 = 1% gap)",
-        examples=[0.001, 0.005, 0.01, 0.02],
+        description="Minimum gap size as decimal percentage (0.01 = 1% gap, 0 = any gap)",
+        examples=[0.0, 0.001, 0.005, 0.01, 0.02],
         json_schema_extra={
             "unit": "decimal_percentage",
-            "conversion": "0.01 = 1%, 0.001 = 0.1%",
+            "conversion": "0.01 = 1%, 0.001 = 0.1%, 0 = any gap",
             "asset_class_recommendations": {
                 "crypto": "0.005-0.02 (larger gaps expected)",
                 "equities": "0.001-0.005 (smaller gaps typical)",
                 "fx": "0.0001-0.001 (very small gaps)",
+                "any_gap": "0 (detects all gaps regardless of size)",
             },
         },
     )

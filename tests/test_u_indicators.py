@@ -723,8 +723,8 @@ class TestGapAnalysis:
         highs = result["high"].to_list()
         lows = result["low"].to_list()
 
-        # Default gap_threshold = 0.001 (0.1%)
-        gap_threshold = 0.001
+        # Default gap_threshold = 0.0 (any gap)
+        gap_threshold = 0.0
 
         # First bar has no previous bar, should be None
         assert gappers[0] is None
@@ -766,7 +766,7 @@ class TestGapAnalysis:
         opens = result["open"].to_list()
         highs = result["high"].to_list()
         lows = result["low"].to_list()
-        gap_threshold = 0.001  # Default threshold
+        gap_threshold = 0.0  # Default threshold
 
         # First bar has no previous bar
         assert gappers[0] is None, "First bar should have no gap detection"
@@ -1301,7 +1301,7 @@ class TestCorrectedKicker:
 
     def test_gapper_detection(self):
         """Test gap detection logic with percentage-based calculation."""
-        # Use default gap_threshold of 0.001 (0.1%)
+        # Use default gap_threshold of 0.0 (any gap)
         indicators = Indicators(
             IndicatorsConfig(
                 timeframe_configs=[TimeframeItemConfig(timeframes=["all"], swing_points=SwingPointsConfig(window=3))]
@@ -2249,7 +2249,7 @@ class TestGapCalculations:
 
     def test_gapper_up_detection(self):
         """Test gap up detection with percentage threshold."""
-        # Use default gap_threshold = 0.001 (0.1%) and create enough data for swing detection
+        # Use default gap_threshold = 0.0 (any gap) and create enough data for swing detection
         data = DataFrame(
             {
                 "timestamp": [datetime.now() - timedelta(hours=i) for i in range(15, 0, -1)],
@@ -2271,7 +2271,7 @@ class TestGapCalculations:
 
     def test_gapper_down_detection(self):
         """Test gap down detection with percentage threshold."""
-        # Use default gap_threshold = 0.001 (0.1%)
+        # Use default gap_threshold = 0.0 (any gap)
         data = DataFrame(
             {
                 "timestamp": [datetime.now() - timedelta(hours=i) for i in range(15, 0, -1)],
