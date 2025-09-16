@@ -1040,7 +1040,7 @@ class IndicatorSchema(BaseModel):
 
     # Gap Detection Columns
     gapper: int = Field(
-        description="Gap detection with threshold requirements (1=gap up, 0=gap down, null=no gap)",
+        description="Threshold-based gap detection: 1=gap up above threshold, 0=gap down below threshold, null=no significant gap",
         json_schema_extra={"polars_dtype": Int32, "output": True, "category": "gap_detection"},
     )
 
