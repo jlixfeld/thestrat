@@ -713,28 +713,46 @@ class TestGapAnalysis:
         )
         result = indicators.process(gap_data)
 
-        assert "gap_up" in result.columns
-        assert "gap_down" in result.columns
         assert "gapper" in result.columns
 
-        # Check specific gaps
-        gap_ups = result["gap_up"].to_list()
-        gap_downs = result["gap_down"].to_list()
+        # Check specific gaps with threshold calculations
+        gappers = result["gapper"].to_list()
 
-        # First bar has no previous bar, should be False
-        assert gap_ups[0] is False
-        assert gap_downs[0] is False
+        # Get actual OHLC data for precise threshold calculations
+        opens = result["open"].to_list()
+        highs = result["high"].to_list()
+        lows = result["low"].to_list()
 
-        # Second bar: open (105) > previous high (102) = gap up
-        assert gap_ups[1] is True
-        assert gap_downs[1] is False
+        # Default gap_threshold = 0.001 (0.1%)
+        gap_threshold = 0.001
 
-        # Third bar: open (95) < previous low (103) = gap down
-        assert gap_ups[2] is False
-        assert gap_downs[2] is True
+        # First bar has no previous bar, should be None
+        assert gappers[0] is None
+
+        # Second bar: open (105) > previous high (102) * 1.001 = 102.102? Yes -> Gap up = 1
+        prev_high_threshold = highs[0] * (1 + gap_threshold)  # 102 * 1.001 = 102.102
+        assert opens[1] > prev_high_threshold, f"Open {opens[1]} should be > {prev_high_threshold}"
+        assert gappers[1] == 1, "Should detect gap up"
+
+        # Third bar: open (95) < previous low (103) * 0.999 = 102.897? Yes -> Gap down = 0
+        prev_low_threshold = lows[1] * (1 - gap_threshold)  # 103 * 0.999 = 102.897
+        assert opens[2] < prev_low_threshold, f"Open {opens[2]} should be < {prev_low_threshold}"
+        assert gappers[2] == 0, "Should detect gap down"
+
+        # Fourth bar: open (103) - check if it's within threshold (no gap)
+        prev_high_threshold_4 = highs[2] * (1 + gap_threshold)  # 97 * 1.001 = 97.097
+        prev_low_threshold_4 = lows[2] * (1 - gap_threshold)  # 93 * 0.999 = 92.907
+        if prev_low_threshold_4 <= opens[3] <= prev_high_threshold_4:
+            assert gappers[3] is None, "Should detect no significant gap"
+        else:
+            # If outside threshold, should detect appropriate gap direction
+            if opens[3] > prev_high_threshold_4:
+                assert gappers[3] == 1, "Should detect gap up"
+            else:
+                assert gappers[3] == 0, "Should detect gap down"
 
     def test_gapper_indicator(self, gap_data):
-        """Test combined gapper indicator."""
+        """Test gapper indicator with threshold detection."""
         indicators = Indicators(
             IndicatorsConfig(
                 timeframe_configs=[TimeframeItemConfig(timeframes=["all"], swing_points=SwingPointsConfig(window=3))]
@@ -743,12 +761,32 @@ class TestGapAnalysis:
         result = indicators.process(gap_data)
 
         gappers = result["gapper"].to_list()
-        gap_ups = result["gap_up"].to_list()
-        gap_downs = result["gap_down"].to_list()
 
-        # Gapper should be true when either gap_up or gap_down is true
-        for i in range(len(gappers)):
-            assert gappers[i] == (gap_ups[i] or gap_downs[i])
+        # Comprehensive validation of gapper logic
+        opens = result["open"].to_list()
+        highs = result["high"].to_list()
+        lows = result["low"].to_list()
+        gap_threshold = 0.001  # Default threshold
+
+        # First bar has no previous bar
+        assert gappers[0] is None, "First bar should have no gap detection"
+
+        # Validate each subsequent bar against threshold logic
+        for i in range(1, len(gappers)):
+            prev_high_threshold = highs[i - 1] * (1 + gap_threshold)
+            prev_low_threshold = lows[i - 1] * (1 - gap_threshold)
+            current_open = opens[i]
+
+            if current_open > prev_high_threshold:
+                assert gappers[i] == 1, (
+                    f"Bar {i}: open {current_open} > threshold {prev_high_threshold}, should be gap up (1)"
+                )
+            elif current_open < prev_low_threshold:
+                assert gappers[i] == 0, (
+                    f"Bar {i}: open {current_open} < threshold {prev_low_threshold}, should be gap down (0)"
+                )
+            else:
+                assert gappers[i] is None, f"Bar {i}: open {current_open} within thresholds, should be None"
 
 
 @pytest.mark.unit
@@ -877,8 +915,6 @@ class TestFullProcessing:
             "new_ath",
             "new_atl",
             # Gap analysis
-            "gap_up",
-            "gap_down",
             "gapper",
         ]
 
@@ -1273,7 +1309,7 @@ class TestCorrectedKicker:
         )
 
         # Gap up: open > high1 * (1 + gap_threshold)
-        gap_up_data = DataFrame(
+        gap_data = DataFrame(
             {
                 "timestamp": [datetime(2023, 1, 1) + timedelta(days=i) for i in range(2)],
                 "open": [100.0, 101.11],  # Gap up opening
@@ -1285,16 +1321,16 @@ class TestCorrectedKicker:
         )
 
         config = indicators.config.timeframe_configs[0]
-        with_basic = indicators._calculate_strat_patterns(gap_up_data, config)
+        with_basic = indicators._calculate_strat_patterns(gap_data, config)
         result = indicators._calculate_advanced_patterns(with_basic, config)
-        gappers = result["advanced_gapper"].to_list()
+        gappers = result["gapper"].to_list()
 
         # Gap threshold = high1 * (1 + 0.001) = 101 * 1.001 = 101.101
         # Open(101.11) > 101.101? Yes -> Gap up = 1
         assert gappers[1] == 1
 
         # Gap down: open < low1 * (1 - gap_threshold)
-        gap_down_data = DataFrame(
+        gap_data2 = DataFrame(
             {
                 "timestamp": [datetime(2023, 1, 1) + timedelta(days=i) for i in range(2)],
                 "open": [100.0, 98.89],  # Gap down opening
@@ -1306,9 +1342,9 @@ class TestCorrectedKicker:
         )
 
         config = indicators.config.timeframe_configs[0]
-        with_basic = indicators._calculate_strat_patterns(gap_down_data, config)
+        with_basic = indicators._calculate_strat_patterns(gap_data2, config)
         result = indicators._calculate_advanced_patterns(with_basic, config)
-        gappers = result["advanced_gapper"].to_list()
+        gappers = result["gapper"].to_list()
 
         # Gap threshold = low1 * (1 - 0.001) = 99 * 0.999 = 98.901
         # Open(98.89) < 98.901? Yes -> Gap down = 0
@@ -1367,6 +1403,119 @@ class TestCorrectedKicker:
         assert continuity[0] == 1  # Bullish (close > open)
         assert continuity[1] == 0  # Bearish (close < open)
         assert kickers[1] == 0  # Bearish kicker
+
+    def test_gapper_kicker_integration_workflow(self):
+        """Integration test: verify complete gapper -> kicker workflow with new field."""
+        indicators = Indicators(
+            IndicatorsConfig(
+                timeframe_configs=[
+                    TimeframeItemConfig(
+                        timeframes=["all"],
+                        swing_points=SwingPointsConfig(window=3),
+                        gap_detection=GapDetectionConfig(threshold=0.005),  # 0.5% threshold
+                    )
+                ]
+            )
+        )
+
+        # Create comprehensive test data with multiple scenarios (need 8+ rows for swing window=3)
+        integration_data = DataFrame(
+            {
+                "timestamp": [datetime(2023, 1, 1) + timedelta(days=i) for i in range(8)],
+                # Scenario: Setup -> Normal -> Gap Up Bullish Kicker -> Gap Down Bearish Kicker -> Normal -> Gap Up (no kicker) -> End
+                "open": [95.0, 100.0, 106.0, 94.0, 98.0, 103.0, 105.0, 107.0],  # Significant gaps with 0.5% threshold
+                "high": [97.0, 102.0, 108.0, 96.0, 100.0, 105.0, 107.0, 109.0],
+                "low": [93.0, 98.0, 104.0, 92.0, 96.0, 101.0, 103.0, 105.0],
+                "close": [
+                    96.0,
+                    99.5,
+                    107.0,
+                    93.0,
+                    99.0,
+                    104.0,
+                    106.0,
+                    108.0,
+                ],  # continuity: bullish->bearish->bullish->bearish->bullish->bullish->bullish->bullish
+                "volume": [1000] * 8,
+            }
+        )
+
+        result = indicators.process(integration_data)
+
+        # Extract key indicators
+        gappers = result["gapper"].to_list()
+        kickers = result["kicker"].to_list()
+        continuity = result["continuity"].to_list()
+        opens = result["open"].to_list()
+        highs = result["high"].to_list()
+        lows = result["low"].to_list()
+        # closes = result["close"].to_list()  # Available if needed for future assertions
+
+        # Validate gap detection with 0.5% threshold
+        gap_threshold = 0.005
+
+        # Bar 0: No previous bar
+        assert gappers[0] is None
+        assert kickers[0] is None
+
+        # Bar 1: Gap up? open(100) > high[0](97) * 1.005 = 97.485? Yes
+        assert opens[1] > highs[0] * (1 + gap_threshold), "Should detect gap up"
+        assert gappers[1] == 1, "Should be gap up"
+
+        # Bar 2: Gap up? open(106) > high[1](102) * 1.005 = 102.51? Yes
+        assert opens[2] > highs[1] * (1 + gap_threshold), "Should detect gap up"
+        assert gappers[2] == 1, "Should be gap up"
+        # Kicker? continuity[1]=0 (bearish), gapper=1, continuity[2]=1 (bullish) -> Bullish kicker
+        assert continuity[1] == 0, "Previous bar should be bearish"
+        assert continuity[2] == 1, "Current bar should be bullish"
+        assert kickers[2] == 1, "Should be bullish kicker"
+
+        # Bar 3: Gap down? open(94) < low[2](104) * 0.995 = 103.48? Yes
+        assert opens[3] < lows[2] * (1 - gap_threshold), "Should detect gap down"
+        assert gappers[3] == 0, "Should be gap down"
+        # Kicker? continuity[2]=1 (bullish), gapper=0, continuity[3]=0 (bearish) -> Bearish kicker
+        assert continuity[2] == 1, "Previous bar should be bullish"
+        assert continuity[3] == 0, "Current bar should be bearish"
+        assert kickers[3] == 0, "Should be bearish kicker"
+
+        # Bar 4: Gap up? open(98) > high[3](96) * 1.005 = 96.48? Yes
+        assert opens[4] > highs[3] * (1 + gap_threshold), "Should detect gap up"
+        assert gappers[4] == 1, "Should be gap up"
+        # Kicker? continuity[3]=0 (bearish), gapper=1, continuity[4]=1 (bullish) -> Bullish kicker
+        assert continuity[3] == 0, "Previous bar should be bearish"
+        assert continuity[4] == 1, "Current bar should be bullish"
+        assert kickers[4] == 1, "Should be bullish kicker"
+
+        # Bar 5: Gap up? open(103) > high[4](100) * 1.005 = 100.5? Yes
+        assert opens[5] > highs[4] * (1 + gap_threshold), "Should detect gap up"
+        assert gappers[5] == 1, "Should be gap up"
+        # No kicker because continuity[4]=1 and continuity[5]=1 (both bullish, no reversal)
+        assert continuity[4] == 1 and continuity[5] == 1, "Both bars bullish, no reversal"
+        assert kickers[5] is None, "Should have no kicker (no continuity reversal)"
+
+        # Bar 6: No gap? open(105) within thresholds around prev high/low
+        high_threshold_6 = highs[5] * (1 + gap_threshold)  # 105 * 1.005 = 105.525
+        low_threshold_6 = lows[5] * (1 - gap_threshold)  # 101 * 0.995 = 100.495
+        assert low_threshold_6 <= opens[6] <= high_threshold_6, "Should be within gap thresholds"
+        assert gappers[6] is None, "Should detect no significant gap"
+        assert kickers[6] is None, "Should have no kicker (no gap)"
+
+        # Bar 7: No gap? open(107) within thresholds
+        high_threshold_7 = highs[6] * (1 + gap_threshold)  # 107 * 1.005 = 107.535
+        low_threshold_7 = lows[6] * (1 - gap_threshold)  # 103 * 0.995 = 102.485
+        assert low_threshold_7 <= opens[7] <= high_threshold_7, "Should be within gap thresholds"
+        assert gappers[7] is None, "Should detect no significant gap"
+        assert kickers[7] is None, "Should have no kicker (no gap)"
+
+        # Validate data integrity
+        assert len([g for g in gappers if g is not None]) >= 3, "Should have detected multiple gaps"
+        assert len([k for k in kickers if k is not None]) >= 2, "Should have detected multiple kickers"
+
+        # Verify kicker only occurs with both gap and continuity reversal
+        for i in range(1, len(kickers)):
+            if kickers[i] is not None:
+                assert gappers[i] is not None, f"Bar {i}: Kicker without gap detected"
+                assert continuity[i] != continuity[i - 1], f"Bar {i}: Kicker without continuity reversal"
 
 
 @pytest.mark.unit
@@ -2098,7 +2247,7 @@ class TestHammerShooterCalculations:
 class TestGapCalculations:
     """Test gap detection with percentage-based calculations."""
 
-    def test_gap_up_detection(self):
+    def test_gapper_up_detection(self):
         """Test gap up detection with percentage threshold."""
         # Use default gap_threshold = 0.001 (0.1%) and create enough data for swing detection
         data = DataFrame(
@@ -2118,9 +2267,9 @@ class TestGapCalculations:
         )
         result = indicators.process(data)  # Use full process for complete pipeline
 
-        assert result["advanced_gapper"][14] == 1  # Gap up on last bar
+        assert result["gapper"][14] == 1  # Gap up on last bar
 
-    def test_gap_down_detection(self):
+    def test_gapper_down_detection(self):
         """Test gap down detection with percentage threshold."""
         # Use default gap_threshold = 0.001 (0.1%)
         data = DataFrame(
@@ -2140,7 +2289,7 @@ class TestGapCalculations:
         )
         result = indicators.process(data)  # Use full process for complete pipeline
 
-        assert result["advanced_gapper"][14] == 0  # Gap down on last bar
+        assert result["gapper"][14] == 0  # Gap down on last bar
 
     def test_gap_configurable_threshold(self):
         """Test gap detection with custom threshold."""
@@ -2161,7 +2310,7 @@ class TestGapCalculations:
         result = indicators.process(data)
 
         # Should be a gap with 1% threshold since 110.5 > 106.05
-        assert result["advanced_gapper"][14] == 1  # Gap up
+        assert result["gapper"][14] == 1  # Gap up
 
     def test_gap_asset_class_independence(self):
         """Test gap detection works across different asset classes."""
@@ -2209,8 +2358,8 @@ class TestGapCalculations:
         forex_result = indicators.process(forex_data)
 
         # Both should detect gaps appropriately
-        assert crypto_result["advanced_gapper"][14] == 1  # Gap up
-        assert forex_result["advanced_gapper"][14] == 1  # Gap up
+        assert crypto_result["gapper"][14] == 1  # Gap up
+        assert forex_result["gapper"][14] == 1  # Gap up
 
 
 @pytest.mark.unit

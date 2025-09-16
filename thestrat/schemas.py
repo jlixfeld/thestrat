@@ -1039,20 +1039,8 @@ class IndicatorSchema(BaseModel):
     )
 
     # Gap Detection Columns
-    gap_up: bool = Field(
-        description="True when open is above previous bar's high",
-        json_schema_extra={"polars_dtype": Boolean, "output": True, "category": "gap_detection"},
-    )
-    gap_down: bool = Field(
-        description="True when open is below previous bar's low",
-        json_schema_extra={"polars_dtype": Boolean, "output": True, "category": "gap_detection"},
-    )
-    gapper: bool = Field(
-        description="True when gap_up OR gap_down is true",
-        json_schema_extra={"polars_dtype": Boolean, "output": True, "category": "gap_detection"},
-    )
-    advanced_gapper: int = Field(
-        description="Enhanced gap detection with threshold requirements (1=gap up, 0=gap down, null=no gap)",
+    gapper: int = Field(
+        description="Threshold-based gap detection: 1=gap up above threshold, 0=gap down below threshold, null=no significant gap",
         json_schema_extra={"polars_dtype": Int32, "output": True, "category": "gap_detection"},
     )
 
