@@ -225,12 +225,12 @@ class TestIndicatorSchemaClassMethods:
         assert len(polars_types) > 0
 
         # Check some expected mappings
-        from polars import Boolean, Datetime, Float64, String
+        from polars import Datetime, Float64, Int32, String
 
         assert "timestamp" in polars_types
         assert polars_types["timestamp"] == Datetime
         assert polars_types["open"] == Float64
-        assert polars_types["gapper"] == Boolean
+        assert polars_types["gapper"] == Int32
         assert polars_types["signal"] == String
 
     def test_validate_dataframe(self):

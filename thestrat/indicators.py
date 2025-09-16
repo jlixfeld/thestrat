@@ -193,9 +193,6 @@ class Indicators(Component):
                 # ATH/ATL indicators
                 col("high").cum_max().alias("ath"),
                 col("low").cum_min().alias("atl"),
-                # Gap analysis indicators
-                (col("open") > col("high").shift(1)).fill_null(False).alias("gap_up"),
-                (col("open") < col("low").shift(1)).fill_null(False).alias("gap_down"),
             ]
         )
 
@@ -205,8 +202,6 @@ class Indicators(Component):
                 # ATH/ATL new markers
                 (col("high") == col("ath")).fill_null(False).alias("new_ath"),
                 (col("low") == col("atl")).fill_null(False).alias("new_atl"),
-                # Combined gapper indicator
-                (col("gap_up") | col("gap_down")).fill_null(False).alias("gapper"),
             ]
         )
 
@@ -694,18 +689,18 @@ class Indicators(Component):
                 .when(col("open") < (col("low").shift(1) * (1 - gap_threshold)))
                 .then(0)
                 .otherwise(None)
-                .alias("advanced_gapper")
+                .alias("gapper")
             ]
         )
 
         # Kicker: Continuity reversal with gap (corrected from setup_processor.py)
         df = df.with_columns(
             [
-                # Bullish kicker: continuity1=0 & advanced_gapper=1 & continuity=1 (bearish to bullish with gap up)
-                when((col("continuity").shift(1) == 0) & (col("advanced_gapper") == 1) & (col("continuity") == 1))
+                # Bullish kicker: continuity1=0 & gapper=1 & continuity=1 (bearish to bullish with gap up)
+                when((col("continuity").shift(1) == 0) & (col("gapper") == 1) & (col("continuity") == 1))
                 .then(1)  # Bullish kicker = 1
-                # Bearish kicker: continuity1=1 & advanced_gapper=0 & continuity=0 (bullish to bearish with gap down)
-                .when((col("continuity").shift(1) == 1) & (col("advanced_gapper") == 0) & (col("continuity") == 0))
+                # Bearish kicker: continuity1=1 & gapper=0 & continuity=0 (bullish to bearish with gap down)
+                .when((col("continuity").shift(1) == 1) & (col("gapper") == 0) & (col("continuity") == 0))
                 .then(0)  # Bearish kicker = 0
                 .otherwise(None)  # No kicker = None (converted to null)
                 .alias("kicker")
