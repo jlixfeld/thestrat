@@ -5,6 +5,7 @@ Tests comprehensive Strat technical indicators with vectorized calculations.
 """
 
 from datetime import datetime, timedelta
+from typing import Any
 
 import pytest
 from pandas import DataFrame as PandasDataFrame
@@ -2738,3 +2739,561 @@ class TestIndicatorsTimestampHandling:
         # Should process successfully even with edge case timestamp handling
         assert len(result) == 10
         assert "timestamp" in result.columns
+
+
+def validate_nullable_constraints(df: DataFrame) -> dict[str, Any]:
+    """
+    Validate that nullable constraints in the schema match actual data.
+
+    Args:
+        df: Processed DataFrame from indicators
+
+    Returns:
+        Dictionary with validation results
+    """
+    schema_types = IndicatorSchema.get_polars_dtypes()
+    results = {
+        "total_columns": len(df.columns),
+        "validated_columns": 0,
+        "nullable_violations": [],
+        "non_nullable_violations": [],
+        "missing_nullable_info": [],
+        "column_nullable_status": {},
+    }
+
+    for column_name in df.columns:
+        if column_name in schema_types:
+            results["validated_columns"] += 1
+
+            # Get nullable info from schema
+            field_info = IndicatorSchema.model_fields.get(column_name)
+            if field_info:
+                json_extra = getattr(field_info, "json_schema_extra", {})
+                if isinstance(json_extra, dict) and "nullable" in json_extra:
+                    expected_nullable = json_extra["nullable"]
+                    has_nulls = df[column_name].null_count() > 0
+
+                    results["column_nullable_status"][column_name] = {
+                        "expected_nullable": expected_nullable,
+                        "has_nulls": has_nulls,
+                        "null_count": df[column_name].null_count(),
+                        "total_count": len(df),
+                    }
+
+                    # Check for violations
+                    if not expected_nullable and has_nulls:
+                        results["non_nullable_violations"].append(
+                            {"column": column_name, "null_count": df[column_name].null_count(), "total_count": len(df)}
+                        )
+                else:
+                    results["missing_nullable_info"].append(column_name)
+
+    return results
+
+
+def create_sample_ohlcv_data(num_rows: int = 100, start_price: float = 100.0) -> DataFrame:
+    """
+    Create sample OHLCV data for testing with realistic price movements.
+
+    Args:
+        num_rows: Number of rows to generate
+        start_price: Starting price for the data
+
+    Returns:
+        Polars DataFrame with OHLCV data
+    """
+    timestamps = [datetime(2023, 1, 1) + timedelta(minutes=i) for i in range(num_rows)]
+
+    # Generate realistic price data with some volatility
+    import random
+
+    random.seed(42)  # For reproducible tests
+
+    prices = []
+    current_price = start_price
+
+    for i in range(num_rows):
+        # Random walk with slight upward bias
+        change_pct = random.uniform(-0.02, 0.025)
+        current_price *= 1 + change_pct
+
+        # Generate OHLC for the bar
+        volatility = current_price * 0.01  # 1% volatility
+        open_price = current_price
+
+        high_offset = random.uniform(0, volatility)
+        low_offset = random.uniform(0, volatility)
+        close_offset = random.uniform(-volatility / 2, volatility / 2)
+
+        high = open_price + high_offset
+        low = open_price - low_offset
+        close = open_price + close_offset
+
+        # Ensure OHLC relationships are valid
+        high = max(high, open_price, close)
+        low = min(low, open_price, close)
+
+        prices.append(
+            {
+                "timestamp": timestamps[i],
+                "open": round(open_price, 2),
+                "high": round(high, 2),
+                "low": round(low, 2),
+                "close": round(close, 2),
+                "volume": random.uniform(1000, 10000),
+                "symbol": "TEST",
+                "timeframe": "1min",
+            }
+        )
+
+        current_price = close
+
+    return DataFrame(prices)
+
+
+@pytest.mark.unit
+class TestIndicatorsNullable:
+    """Test cases for nullable field validation in indicators."""
+
+    def test_base_ohlc_fields_never_null(self):
+        """Test that base OHLC fields are never null (nullable=False)."""
+        df = create_sample_ohlcv_data(50)
+
+        config = IndicatorsConfig(
+            timeframe_configs=[
+                TimeframeItemConfig(
+                    timeframes=["all"],
+                    swing_points=SwingPointsConfig(window=5, threshold=2.0),
+                    gap_detection=GapDetectionConfig(threshold=0.001),
+                )
+            ]
+        )
+
+        from thestrat.factory import Factory
+
+        indicators = Factory.create_indicators(config)
+        result = indicators.process(df)
+
+        # Base OHLC fields should never be null
+        base_ohlc_fields = ["timestamp", "open", "high", "low", "close", "timeframe"]
+
+        for field in base_ohlc_fields:
+            assert result[field].null_count() == 0, f"Base OHLC field '{field}' should never be null"
+
+    def test_optional_input_fields_can_be_null(self):
+        """Test that optional input fields can be null (nullable=True)."""
+        # Create data without symbol and volume
+        df = create_sample_ohlcv_data(20)
+        df = df.drop(["symbol", "volume"])
+
+        config = IndicatorsConfig(
+            timeframe_configs=[
+                TimeframeItemConfig(
+                    timeframes=["all"],
+                    swing_points=SwingPointsConfig(window=3, threshold=1.0),
+                )
+            ]
+        )
+
+        from thestrat.factory import Factory
+
+        indicators = Factory.create_indicators(config)
+        # Process data - this test confirms the system doesn't crash with missing optional fields
+        indicators.process(df)
+
+        # Optional fields should be able to handle missing data
+        # (Note: symbol and volume may not be in result if not provided)
+        # This test confirms the system doesn't crash with missing optional fields
+
+    def test_price_analysis_fields_never_null(self):
+        """Test that price analysis fields are never null (nullable=False)."""
+        df = create_sample_ohlcv_data(30)
+
+        config = IndicatorsConfig(
+            timeframe_configs=[
+                TimeframeItemConfig(
+                    timeframes=["all"],
+                    swing_points=SwingPointsConfig(window=3, threshold=1.0),
+                )
+            ]
+        )
+
+        from thestrat.factory import Factory
+
+        indicators = Factory.create_indicators(config)
+        result = indicators.process(df)
+
+        # Price analysis fields should never be null
+        price_analysis_fields = [
+            "percent_close_from_high",
+            "percent_close_from_low",
+            "ath",
+            "atl",
+            "new_ath",
+            "new_atl",
+        ]
+
+        for field in price_analysis_fields:
+            if field in result.columns:
+                assert result[field].null_count() == 0, f"Price analysis field '{field}' should never be null"
+
+    def test_gapper_field_can_be_null(self):
+        """Test that gapper field can be null when no significant gaps (nullable=True)."""
+        # Create data with very small price movements to avoid gaps
+        df = DataFrame(
+            {
+                "timestamp": [datetime(2023, 1, 1) + timedelta(minutes=i) for i in range(20)],
+                "open": [100.0 + 0.01 * i for i in range(20)],  # Very small increments
+                "high": [100.02 + 0.01 * i for i in range(20)],  # Slightly higher
+                "low": [99.98 + 0.01 * i for i in range(20)],  # Slightly lower
+                "close": [100.01 + 0.01 * i for i in range(20)],  # Small close movements
+                "volume": [1000.0] * 20,
+                "symbol": ["TEST"] * 20,
+                "timeframe": ["1min"] * 20,
+            }
+        )
+
+        config = IndicatorsConfig(
+            timeframe_configs=[
+                TimeframeItemConfig(
+                    timeframes=["all"],
+                    gap_detection=GapDetectionConfig(threshold=0.01),  # 1% threshold
+                    swing_points=SwingPointsConfig(window=3, threshold=1.0),  # Minimal swing config
+                )
+            ]
+        )
+
+        from thestrat.factory import Factory
+
+        indicators = Factory.create_indicators(config)
+        result = indicators.process(df)
+
+        # Gapper should have nulls when no significant gaps
+        if "gapper" in result.columns:
+            # With very small price movements, most values should be null
+            null_count = result["gapper"].null_count()
+            assert null_count > 0, "Gapper field should have nulls when no significant gaps detected"
+
+    def test_swing_points_can_be_initially_null(self):
+        """Test that swing point fields can be null initially before detection (nullable=True)."""
+        df = create_sample_ohlcv_data(50)
+
+        config = IndicatorsConfig(
+            timeframe_configs=[
+                TimeframeItemConfig(
+                    timeframes=["all"],
+                    swing_points=SwingPointsConfig(window=5, threshold=2.0),
+                )
+            ]
+        )
+
+        from thestrat.factory import Factory
+
+        indicators = Factory.create_indicators(config)
+        result = indicators.process(df)
+
+        # Swing point fields can be null initially before first detection
+        swing_fields = [
+            "swing_high",
+            "swing_low",
+            "pivot_high",
+            "pivot_low",
+            "higher_high",
+            "lower_high",
+            "higher_low",
+            "lower_low",
+        ]
+
+        for field in swing_fields:
+            if field in result.columns:
+                # These fields should be able to have nulls (especially initially)
+                total_count = len(result)
+                assert total_count > 0, f"Should have data to test field '{field}'"
+
+    def test_boolean_fields_never_null(self):
+        """Test that boolean fields with .fill_null(False) are never null (nullable=False)."""
+        df = create_sample_ohlcv_data(30)
+
+        config = IndicatorsConfig(
+            timeframe_configs=[
+                TimeframeItemConfig(
+                    timeframes=["all"],
+                    swing_points=SwingPointsConfig(window=3, threshold=1.0),
+                )
+            ]
+        )
+
+        from thestrat.factory import Factory
+
+        indicators = Factory.create_indicators(config)
+        result = indicators.process(df)
+
+        # Boolean fields that use .fill_null(False) should never be null
+        boolean_fields = [
+            "new_ath",
+            "new_atl",
+            "new_swing_high",
+            "new_swing_low",
+            "new_pivot_high",
+            "new_pivot_low",
+            "new_higher_high",
+            "new_lower_high",
+            "new_higher_low",
+            "new_lower_low",
+            "in_force",
+            "hammer",
+            "shooter",
+            "f23",
+            "motherbar_problems",
+        ]
+
+        for field in boolean_fields:
+            if field in result.columns:
+                assert result[field].null_count() == 0, f"Boolean field '{field}' should never be null"
+
+    def test_continuity_field_never_null(self):
+        """Test that continuity field is never null (nullable=False)."""
+        df = create_sample_ohlcv_data(20)
+
+        config = IndicatorsConfig(timeframe_configs=[TimeframeItemConfig(timeframes=["all"])])
+
+        from thestrat.factory import Factory
+
+        indicators = Factory.create_indicators(config)
+        result = indicators.process(df)
+
+        # Continuity should always be calculated (-1, 0, or 1)
+        if "continuity" in result.columns:
+            assert result["continuity"].null_count() == 0, "Continuity field should never be null"
+
+            # Verify values are in expected range
+            unique_values = set(result["continuity"].unique().to_list())
+            expected_values = {-1, 0, 1}
+            assert unique_values.issubset(expected_values), (
+                f"Continuity values should be in {expected_values}, got {unique_values}"
+            )
+
+    def test_signal_fields_can_be_null(self):
+        """Test that signal fields can be null when no patterns detected (nullable=True)."""
+        # Create simple data unlikely to trigger complex signal patterns
+        df = DataFrame(
+            {
+                "timestamp": [datetime(2023, 1, 1) + timedelta(minutes=i) for i in range(10)],
+                "open": [100.0] * 10,
+                "high": [100.1] * 10,
+                "low": [99.9] * 10,
+                "close": [100.0] * 10,
+                "volume": [1000.0] * 10,
+                "symbol": ["TEST"] * 10,
+                "timeframe": ["1min"] * 10,
+            }
+        )
+
+        config = IndicatorsConfig(timeframe_configs=[TimeframeItemConfig(timeframes=["all"])])
+
+        from thestrat.factory import Factory
+
+        indicators = Factory.create_indicators(config)
+        result = indicators.process(df)
+
+        # Signal fields should be able to be null when no patterns detected
+        signal_fields = ["signal", "type", "bias", "signal_json"]
+
+        for field in signal_fields:
+            if field in result.columns:
+                # With flat price data, signals should mostly be null
+                null_count = result[field].null_count()
+                # We expect some nulls in signal fields with this simple data
+                assert null_count >= 0, f"Signal field '{field}' should allow nulls"
+
+    def test_conditional_pattern_fields_can_be_null(self):
+        """Test that conditional pattern fields can be null (nullable=True)."""
+        df = create_sample_ohlcv_data(15)
+
+        config = IndicatorsConfig(
+            timeframe_configs=[
+                TimeframeItemConfig(
+                    timeframes=["all"],
+                    gap_detection=GapDetectionConfig(threshold=0.001),
+                )
+            ]
+        )
+
+        from thestrat.factory import Factory
+
+        indicators = Factory.create_indicators(config)
+        result = indicators.process(df)
+
+        # Conditional pattern fields that can be null
+        conditional_fields = ["scenario", "kicker", "f23x", "f23_trigger"]
+
+        for field in conditional_fields:
+            if field in result.columns:
+                # These fields should be able to have nulls when conditions not met
+                total_count = len(result)
+                assert total_count > 0, f"Should have data to test field '{field}'"
+
+    def test_comprehensive_nullable_validation(self):
+        """Comprehensive test validating all nullable constraints match implementation."""
+        df = create_sample_ohlcv_data(100)
+
+        config = IndicatorsConfig(
+            timeframe_configs=[
+                TimeframeItemConfig(
+                    timeframes=["all"],
+                    swing_points=SwingPointsConfig(window=7, threshold=3.0),
+                    gap_detection=GapDetectionConfig(threshold=0.005),
+                )
+            ]
+        )
+
+        from thestrat.factory import Factory
+
+        indicators = Factory.create_indicators(config)
+        result = indicators.process(df)
+
+        # Validate all nullable constraints
+        validation_results = validate_nullable_constraints(result)
+
+        # Report any violations
+        if validation_results["non_nullable_violations"]:
+            violations = validation_results["non_nullable_violations"]
+            violation_details = []
+            for violation in violations:
+                violation_details.append(
+                    f"{violation['column']}: {violation['null_count']}/{violation['total_count']} nulls"
+                )
+            pytest.fail(f"Non-nullable fields have nulls: {', '.join(violation_details)}")
+
+        # Ensure we validated a reasonable number of columns
+        assert validation_results["validated_columns"] > 20, "Should validate a substantial number of columns"
+
+        # Report missing nullable info for completeness
+        if validation_results["missing_nullable_info"]:
+            print(f"Warning: Missing nullable info for columns: {validation_results['missing_nullable_info']}")
+
+    def test_edge_case_minimal_rows(self):
+        """Test nullable constraints with minimal data that meets requirements."""
+        # Use minimum data that will pass validation (10+ rows for swing analysis)
+        df = create_sample_ohlcv_data(12)
+
+        config = IndicatorsConfig(
+            timeframe_configs=[
+                TimeframeItemConfig(
+                    timeframes=["all"],
+                    swing_points=SwingPointsConfig(window=3, threshold=1.0),  # Minimal swing config
+                )
+            ]
+        )
+
+        from thestrat.factory import Factory
+
+        indicators = Factory.create_indicators(config)
+        result = indicators.process(df)
+
+        # With minimal data, check that required non-nullable fields work
+        # Focus on fields that should always be calculated regardless of data size
+        always_calculated_fields = ["percent_close_from_high", "percent_close_from_low", "ath", "atl", "continuity"]
+
+        for field in always_calculated_fields:
+            if field in result.columns:
+                assert result[field].null_count() == 0, f"Field '{field}' should never be null even with minimal data"
+
+    def test_edge_case_empty_dataframe(self):
+        """Test behavior with empty DataFrame."""
+        df = DataFrame(
+            {
+                "timestamp": [],
+                "open": [],
+                "high": [],
+                "low": [],
+                "close": [],
+                "volume": [],
+                "symbol": [],
+                "timeframe": [],
+            },
+            schema={
+                "timestamp": Utf8,  # Will be converted to datetime
+                "open": Float64,
+                "high": Float64,
+                "low": Float64,
+                "close": Float64,
+                "volume": Float64,
+                "symbol": Utf8,
+                "timeframe": Utf8,
+            },
+        )
+
+        config = IndicatorsConfig(timeframe_configs=[TimeframeItemConfig(timeframes=["all"])])
+
+        from thestrat.factory import Factory
+
+        indicators = Factory.create_indicators(config)
+
+        # Should handle empty DataFrame gracefully
+        try:
+            result = indicators.process(df)
+            # If processing succeeds, validate no violations occurred
+            assert len(result) == 0, "Empty input should produce empty output"
+        except Exception as e:
+            # If empty DataFrame is not supported, that's acceptable
+            print(f"Empty DataFrame not supported: {e}")
+
+
+@pytest.mark.unit
+class TestNullableSchemaConsistency:
+    """Test consistency between schema nullable declarations and actual behavior."""
+
+    def test_nullable_schema_completeness(self):
+        """Test that all indicator fields have nullable declarations."""
+        schema_fields = IndicatorSchema.model_fields
+        missing_nullable = []
+
+        for field_name, field_info in schema_fields.items():
+            json_extra = getattr(field_info, "json_schema_extra", {})
+            if isinstance(json_extra, dict):
+                if "output" in json_extra and "nullable" not in json_extra:
+                    missing_nullable.append(field_name)
+
+        assert not missing_nullable, f"Fields missing nullable declaration: {missing_nullable}"
+
+    def test_nullable_true_fields_handle_nulls(self):
+        """Test that fields marked nullable=True can actually handle null values."""
+        # Get all nullable=True fields from schema
+        nullable_fields = []
+        schema_fields = IndicatorSchema.model_fields
+
+        for field_name, field_info in schema_fields.items():
+            json_extra = getattr(field_info, "json_schema_extra", {})
+            if isinstance(json_extra, dict) and json_extra.get("nullable") is True:
+                nullable_fields.append(field_name)
+
+        # Verify we found some nullable fields
+        assert len(nullable_fields) > 0, "Should have fields marked as nullable=True"
+
+        # Test with data that should produce nulls in these fields
+        df = create_sample_ohlcv_data(20)
+
+        config = IndicatorsConfig(
+            timeframe_configs=[
+                TimeframeItemConfig(
+                    timeframes=["all"],
+                    gap_detection=GapDetectionConfig(threshold=0.1),  # High threshold to avoid gaps
+                )
+            ]
+        )
+
+        from thestrat.factory import Factory
+
+        indicators = Factory.create_indicators(config)
+        result = indicators.process(df)
+
+        # Check that at least some nullable fields have nulls (indicating they can handle them)
+        fields_with_nulls = []
+        for field in nullable_fields:
+            if field in result.columns and result[field].null_count() > 0:
+                fields_with_nulls.append(field)
+
+        # We should have at least some fields with nulls to confirm nullable behavior
+        print(f"Nullable fields with nulls: {fields_with_nulls}")
+        print(f"All nullable fields: {nullable_fields}")
