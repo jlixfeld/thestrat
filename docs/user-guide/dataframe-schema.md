@@ -170,7 +170,8 @@ def generate_sql_with_constraints(table_name: str) -> str:
     for field_name in IndicatorSchema.model_fields.keys():
         # Get SQL type from Polars type
         polars_type = polars_types.get(field_name)
-        sql_type = type_mapping.get(polars_type.__name__ if polars_type else "String", "TEXT")
+        polars_type_name = polars_type.__name__ if polars_type and hasattr(polars_type, '__name__') else "String"
+        sql_type = type_mapping.get(polars_type_name, "TEXT")
 
         # Get nullable constraint using helper method
         metadata = IndicatorSchema.get_field_metadata(field_name)
