@@ -1068,3 +1068,19 @@ class IndicatorSchema(BaseModel):
             List of all input column names
         """
         return sorted(cls.get_required_input_columns() + cls.get_optional_input_columns())
+
+    @classmethod
+    def get_field_metadata(cls, field_name: str) -> dict[str, Any]:
+        """
+        Get json_schema_extra metadata for a field, safely handling missing data.
+
+        Args:
+            field_name: Name of the field to get metadata for
+
+        Returns:
+            Dictionary of metadata from json_schema_extra, empty dict if not found
+        """
+        field_info = cls.model_fields.get(field_name)
+        if not field_info:
+            return {}
+        return getattr(field_info, "json_schema_extra", {}) or {}

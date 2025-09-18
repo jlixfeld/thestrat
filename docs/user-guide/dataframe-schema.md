@@ -166,15 +166,15 @@ def generate_sql_with_constraints(table_name: str) -> str:
         "Int32": "INTEGER"
     }
 
-    # Examine schema field definitions for nullable constraints
-    for field_name, field_info in IndicatorSchema.model_fields.items():
+    # Process each field using the new helper method
+    for field_name in IndicatorSchema.model_fields.keys():
         # Get SQL type from Polars type
         polars_type = polars_types.get(field_name)
         sql_type = type_mapping.get(polars_type.__name__ if polars_type else "String", "TEXT")
 
-        # Check nullable constraint from schema metadata
-        json_extra = getattr(field_info, 'json_schema_extra', {}) or {}
-        nullable = json_extra.get('nullable', True)
+        # Get nullable constraint using helper method
+        metadata = IndicatorSchema.get_field_metadata(field_name)
+        nullable = metadata.get('nullable', True)
         constraint = "" if nullable else " NOT NULL"
 
         # Add description as comment
@@ -194,23 +194,23 @@ print(schema_sql)
 Organize columns by input/output type and nullable constraints:
 
 ```python
-# Classify fields by their purpose
+# Classify fields by their purpose using the helper method
 input_fields = []
 output_fields = []
 nullable_fields = []
 required_fields = []
 
-for field_name, field_info in IndicatorSchema.model_fields.items():
-    json_extra = getattr(field_info, 'json_schema_extra', {}) or {}
+for field_name in IndicatorSchema.model_fields.keys():
+    metadata = IndicatorSchema.get_field_metadata(field_name)
 
     # Classify by input/output
-    if json_extra.get('input', False):
+    if metadata.get('input', False):
         input_fields.append(field_name)
-    if json_extra.get('output', False):
+    if metadata.get('output', False):
         output_fields.append(field_name)
 
     # Classify by nullable constraint
-    if json_extra.get('nullable', True):
+    if metadata.get('nullable', True):
         nullable_fields.append(field_name)
     else:
         required_fields.append(field_name)
