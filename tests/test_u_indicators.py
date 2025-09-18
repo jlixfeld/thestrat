@@ -3297,3 +3297,164 @@ class TestNullableSchemaConsistency:
         # We should have at least some fields with nulls to confirm nullable behavior
         print(f"Nullable fields with nulls: {fields_with_nulls}")
         print(f"All nullable fields: {nullable_fields}")
+
+    def _create_pattern_triggering_data(self, symbol: str = "TEST") -> "DataFrame":
+        """Create OHLC data designed to trigger patterns for testing."""
+        from datetime import datetime, timedelta
+
+        import polars as pl
+
+        # Create data with extreme price movements to trigger patterns
+        timestamps = [datetime(2023, 1, 1, 9, 30) + timedelta(minutes=5 * i) for i in range(50)]
+
+        # Create patterns: gaps, large ranges, etc.
+        data = {
+            "timestamp": timestamps,
+            "open": [100 + i * 0.5 + (10 if i == 20 else 0) for i in range(50)],  # Gap at bar 20
+            "high": [102 + i * 0.5 + (15 if i == 20 else 0) + (5 if i % 10 == 0 else 0) for i in range(50)],
+            "low": [98 + i * 0.5 + (8 if i == 20 else 0) - (3 if i % 7 == 0 else 0) for i in range(50)],
+            "close": [101 + i * 0.5 + (12 if i == 20 else 0) for i in range(50)],
+            "volume": [1000 + i * 100 for i in range(50)],
+            "symbol": [symbol] * 50,
+            "timeframe": ["5min"] * 50,
+        }
+
+        return pl.DataFrame(data)
+
+    def test_schema_consistency_simple_data(self):
+        """Test schema consistency with simple data that won't trigger patterns."""
+        import polars as pl
+
+        from thestrat.factory import Factory
+        from thestrat.schemas import IndicatorSchema, IndicatorsConfig, TimeframeItemConfig
+
+        from .utils.thestrat_data_utils import create_ohlc_data
+
+        # Create simple data without patterns
+        simple_data = create_ohlc_data(15, symbol="TEST")
+        simple_data = simple_data.with_columns([pl.lit("5min").alias("timeframe")])
+
+        config = IndicatorsConfig(timeframe_configs=[TimeframeItemConfig(timeframes=["all"])])
+        indicators = Factory.create_indicators(config)
+        result = indicators.process(simple_data)
+
+        # Verify all schema columns are present
+        expected_columns = set(IndicatorSchema.model_fields.keys())
+        actual_columns = set(result.columns)
+        missing = expected_columns - actual_columns
+        assert len(missing) == 0, f"Missing columns from IndicatorSchema: {missing}"
+
+        print(f"✅ Simple data schema consistency verified: {len(actual_columns)} columns")
+
+    def test_schema_consistency_pattern_data(self):
+        """Test schema consistency with data designed to trigger patterns."""
+        from thestrat.factory import Factory
+        from thestrat.schemas import IndicatorSchema, IndicatorsConfig, TimeframeItemConfig
+
+        # Create data with patterns
+        pattern_data = self._create_pattern_triggering_data("PATTERN_TEST")
+
+        config = IndicatorsConfig(timeframe_configs=[TimeframeItemConfig(timeframes=["all"])])
+        indicators = Factory.create_indicators(config)
+        result = indicators.process(pattern_data)
+
+        # Verify all schema columns are present
+        expected_columns = set(IndicatorSchema.model_fields.keys())
+        actual_columns = set(result.columns)
+        missing = expected_columns - actual_columns
+        assert len(missing) == 0, f"Missing columns from IndicatorSchema: {missing}"
+
+        print(f"✅ Pattern data schema consistency verified: {len(actual_columns)} columns")
+
+    def test_schema_consistency_multiple_timeframes(self):
+        """Test schema consistency across different timeframes."""
+        import polars as pl
+
+        from thestrat.factory import Factory
+        from thestrat.schemas import IndicatorSchema, IndicatorsConfig, TimeframeItemConfig
+
+        from .utils.thestrat_data_utils import create_ohlc_data
+
+        # Test with multiple timeframes
+        timeframes = ["5min", "1h", "1d"]
+        for timeframe in timeframes:
+            # Create data for this timeframe
+            data = create_ohlc_data(20, symbol="MULTI_TF")
+            data = data.with_columns([pl.lit(timeframe).alias("timeframe")])
+
+            config = IndicatorsConfig(timeframe_configs=[TimeframeItemConfig(timeframes=["all"])])
+            indicators = Factory.create_indicators(config)
+            result = indicators.process(data)
+
+            # Verify schema consistency
+            expected_columns = set(IndicatorSchema.model_fields.keys())
+            actual_columns = set(result.columns)
+            missing = expected_columns - actual_columns
+            assert len(missing) == 0, f"Missing columns for {timeframe}: {missing}"
+
+        print(f"✅ Multi-timeframe schema consistency verified for {timeframes}")
+
+    def test_nullable_fields_behavior(self):
+        """Test that nullable fields can contain None and non-nullable fields never do."""
+        import polars as pl
+
+        from thestrat.factory import Factory
+        from thestrat.schemas import IndicatorSchema, IndicatorsConfig, TimeframeItemConfig
+
+        from .utils.thestrat_data_utils import create_ohlc_data
+
+        # Create test data
+        data = create_ohlc_data(15, symbol="NULL_TEST")
+        data = data.with_columns([pl.lit("5min").alias("timeframe")])
+
+        config = IndicatorsConfig(timeframe_configs=[TimeframeItemConfig(timeframes=["all"])])
+        indicators = Factory.create_indicators(config)
+        result = indicators.process(data)
+
+        # Check nullable vs non-nullable field behavior
+        nullable_fields = []
+        required_fields = []
+
+        for field_name in IndicatorSchema.model_fields.keys():
+            metadata = IndicatorSchema.get_field_metadata(field_name)
+            if metadata.get("nullable", True):
+                nullable_fields.append(field_name)
+            else:
+                required_fields.append(field_name)
+
+        # Verify non-nullable fields never contain null
+        for field_name in required_fields:
+            if field_name in result.columns:
+                null_count = result.select(pl.col(field_name).is_null().sum()).item()
+                assert null_count == 0, f"Non-nullable field '{field_name}' contains {null_count} null values"
+
+        print(f"✅ Nullable field behavior verified: {len(nullable_fields)} nullable, {len(required_fields)} required")
+
+    def test_signal_columns_always_present(self):
+        """Test that signal columns exist even without actual signals."""
+        import polars as pl
+
+        from thestrat.factory import Factory
+        from thestrat.schemas import IndicatorsConfig, TimeframeItemConfig
+
+        from .utils.thestrat_data_utils import create_ohlc_data
+
+        # Create simple data unlikely to trigger signals
+        data = create_ohlc_data(10, symbol="SIGNAL_TEST")
+        data = data.with_columns([pl.lit("5min").alias("timeframe")])
+
+        config = IndicatorsConfig(timeframe_configs=[TimeframeItemConfig(timeframes=["all"])])
+        indicators = Factory.create_indicators(config)
+        result = indicators.process(data)
+
+        # Verify signal columns exist
+        signal_columns = ["signal", "type", "bias", "signal_json"]
+        for column in signal_columns:
+            assert column in result.columns, f"Signal column '{column}' missing - breaks database integration"
+
+        # Verify pattern columns exist
+        pattern_columns = ["kicker", "f23x", "gapper"]
+        for column in pattern_columns:
+            assert column in result.columns, f"Pattern column '{column}' missing - breaks database integration"
+
+        print(f"✅ Signal/pattern columns verified present: {signal_columns + pattern_columns}")

@@ -92,7 +92,7 @@ nav:
     - Configuration: user-guide/configuration.md
     - Examples: user-guide/examples.md
     - Asset Classes: user-guide/asset-classes.md
-    - DataFrame Schema: user-guide/dataframe-schema.md
+    - Database Integration: user-guide/dataframe-schema.md
   - API Reference: reference/
   - Developer Guide:
     - developer-guide/index.md
