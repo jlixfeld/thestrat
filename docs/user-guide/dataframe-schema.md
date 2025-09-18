@@ -1,6 +1,6 @@
-# DataFrame Schema Usage
+# Database Integration Guide
 
-The `IndicatorSchema` class provides comprehensive DataFrame validation and schema information for TheStrat processing pipeline. This is essential for database integration and data validation workflows.
+The `IndicatorSchema` class provides essential schema information for integrating TheStrat output with databases and validation systems. This guide shows how to use the schema to create database tables, validate data, and ensure consistent integration.
 
 ## Quick Start
 
@@ -142,105 +142,83 @@ signal_cols = categories['signals']
 df_signals = df.select(signal_cols)
 ```
 
-### Complete Schema with Metadata
+### Advanced SQL Schema Generation
 
-Access the entire schema including all metadata (nullable constraints, categories, Polars data types, etc.):
+Generate complete SQL DDL with nullable constraints by examining the schema metadata:
 
 ```python
-from thestrat.schemas import SchemaDocGenerator, IndicatorSchema
+from thestrat.schemas import IndicatorSchema
 
-# Get complete schema with all metadata
-complete_schema = SchemaDocGenerator.generate_field_docs(IndicatorSchema)
+# Get schema information
+descriptions = IndicatorSchema.get_column_descriptions()
+polars_types = IndicatorSchema.get_polars_dtypes()
 
-# Access specific field metadata
-timestamp_info = complete_schema["timestamp"]
-print(f"Type: {timestamp_info['type']}")
-print(f"Description: {timestamp_info['description']}")
-print(f"Nullable: {timestamp_info['metadata']['nullable']}")
-print(f"Category: {timestamp_info['metadata']['category']}")
-print(f"Polars Type: {timestamp_info['metadata']['polars_dtype']}")
-
-# Generate database schema with nullable constraints
-def generate_sql_with_nullable(table_name: str) -> str:
+def generate_sql_with_constraints(table_name: str) -> str:
     """Generate SQL schema with proper NULL/NOT NULL constraints."""
     lines = [f"CREATE TABLE {table_name} ("]
 
+    # Map Polars types to SQL types
     type_mapping = {
         "Datetime": "TIMESTAMP",
         "Float64": "DOUBLE PRECISION",
-        "String": "VARCHAR(50)",
+        "String": "VARCHAR(255)",
         "Boolean": "BOOLEAN",
         "Int32": "INTEGER"
     }
 
-    for field_name, field_info in complete_schema.items():
-        # Get SQL type
-        polars_type = field_info['metadata']['polars_dtype']
-        sql_type = type_mapping.get(polars_type, "TEXT")
+    # Examine schema field definitions for nullable constraints
+    for field_name, field_info in IndicatorSchema.model_fields.items():
+        # Get SQL type from Polars type
+        polars_type = polars_types.get(field_name)
+        sql_type = type_mapping.get(polars_type.__name__ if polars_type else "String", "TEXT")
 
-        # Add nullable constraint
-        nullable = field_info['metadata'].get('nullable', True)
+        # Check nullable constraint from schema metadata
+        json_extra = getattr(field_info, 'json_schema_extra', {}) or {}
+        nullable = json_extra.get('nullable', True)
         constraint = "" if nullable else " NOT NULL"
 
         # Add description as comment
-        description = field_info['description'].replace("'", "''")
+        description = descriptions.get(field_name, "").replace("'", "''")
         lines.append(f"  {field_name} {sql_type}{constraint}, -- {description}")
 
     lines.append("  PRIMARY KEY (timestamp, symbol, timeframe)")
     lines.append(");")
     return "\n".join(lines)
 
-schema_sql = generate_sql_with_nullable("thestrat_indicators")
+schema_sql = generate_sql_with_constraints("thestrat_indicators")
 print(schema_sql)
 ```
 
-### JSON Schema Export
+### Field Classification by Type
 
-Generate JSON Schema format for API documentation or validation:
-
-```python
-# Get JSON Schema with complete metadata
-json_schema = SchemaDocGenerator.generate_json_schema(IndicatorSchema)
-
-# Use for API documentation
-import json
-print(json.dumps(json_schema, indent=2))
-
-# Filter nullable fields for conditional validation
-nullable_fields = []
-for field_name, field_schema in json_schema["properties"].items():
-    if field_schema.get("nullable", False):
-        nullable_fields.append(field_name)
-
-print(f"Fields that can be null: {nullable_fields}")
-```
-
-### Field Filtering by Metadata
-
-Filter fields based on their metadata properties:
+Organize columns by input/output type and nullable constraints:
 
 ```python
-# Get all non-nullable fields (required for database constraints)
-non_nullable_fields = []
+# Classify fields by their purpose
 input_fields = []
 output_fields = []
+nullable_fields = []
+required_fields = []
 
-for field_name, field_info in complete_schema.items():
-    metadata = field_info['metadata']
+for field_name, field_info in IndicatorSchema.model_fields.items():
+    json_extra = getattr(field_info, 'json_schema_extra', {}) or {}
 
-    # Collect non-nullable fields
-    if not metadata.get('nullable', True):
-        non_nullable_fields.append(field_name)
-
-    # Separate input vs output fields
-    if metadata.get('input'):
+    # Classify by input/output
+    if json_extra.get('input', False):
         input_fields.append(field_name)
-    elif metadata.get('output'):
+    if json_extra.get('output', False):
         output_fields.append(field_name)
 
-print(f"Non-nullable fields: {non_nullable_fields}")
-print(f"Input fields: {input_fields}")
-print(f"Output fields: {output_fields}")
+    # Classify by nullable constraint
+    if json_extra.get('nullable', True):
+        nullable_fields.append(field_name)
+    else:
+        required_fields.append(field_name)
+
+print(f"Input fields ({len(input_fields)}): {input_fields}")
+print(f"Output fields ({len(output_fields)}): {output_fields}")
+print(f"Nullable fields ({len(nullable_fields)}): {nullable_fields}")
+print(f"Required (non-null) fields ({len(required_fields)}): {required_fields}")
 ```
 
 ## Integration Patterns

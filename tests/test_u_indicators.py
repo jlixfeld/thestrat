@@ -3297,3 +3297,41 @@ class TestNullableSchemaConsistency:
         # We should have at least some fields with nulls to confirm nullable behavior
         print(f"Nullable fields with nulls: {fields_with_nulls}")
         print(f"All nullable fields: {nullable_fields}")
+
+    def test_consistent_output_schema(self):
+        """Verify process() always returns all IndicatorSchema columns for database integration."""
+        import polars as pl
+
+        from thestrat.factory import Factory
+        from thestrat.schemas import IndicatorSchema, IndicatorsConfig, TimeframeItemConfig
+
+        from .utils.thestrat_data_utils import create_ohlc_data
+
+        # Create data that won't trigger signals - include symbol and timeframe
+        simple_data = create_ohlc_data(15, symbol="TEST")
+        # Add timeframe column as required by schema
+        simple_data = simple_data.with_columns([pl.lit("5min").alias("timeframe")])
+
+        config = IndicatorsConfig(timeframe_configs=[TimeframeItemConfig(timeframes=["all"])])
+        indicators = Factory.create_indicators(config)
+        result = indicators.process(simple_data)
+
+        # Get expected columns from schema
+        expected_columns = set(IndicatorSchema.model_fields.keys())
+        actual_columns = set(result.columns)
+
+        # Verify all schema columns are present
+        missing = expected_columns - actual_columns
+        assert len(missing) == 0, f"Missing columns from IndicatorSchema: {missing}"
+
+        # Verify signal columns exist even without signals
+        signal_columns = ["signal", "type", "bias", "signal_json"]
+        for column in signal_columns:
+            assert column in result.columns, f"Signal column '{column}' missing - breaks database integration"
+
+        # Verify special pattern columns exist
+        pattern_columns = ["kicker", "f23x", "gapper"]
+        for column in pattern_columns:
+            assert column in result.columns, f"Pattern column '{column}' missing - breaks database integration"
+
+        print(f"✅ Schema consistency verified: {len(actual_columns)} columns consistently present")
