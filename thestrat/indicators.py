@@ -7,7 +7,7 @@ vectorized calculations using Polars operations.
 
 from pandas import DataFrame as PandasDataFrame
 from polars import DataFrame as PolarsDataFrame
-from polars import Float64, Int32, col, concat_str, lit, when
+from polars import Float64, Int32, String, col, concat_str, lit, when
 
 from .base import Component
 from .schemas import IndicatorsConfig, TimeframeItemConfig
@@ -78,6 +78,10 @@ class Indicators(Component):
 
         # Convert to Polars if needed
         df = self._convert_to_polars(data)
+
+        # Ensure optional schema columns are present
+        if "symbol" not in df.columns:
+            df = df.with_columns(lit(None, dtype=String).alias("symbol"))
 
         # Check if data has timeframe column for per-timeframe processing
         if "timeframe" in df.columns:
