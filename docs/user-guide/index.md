@@ -40,8 +40,24 @@ Core to #TheStrat methodology:
 - **Inside Bar**: High ≤ previous high AND Low ≥ previous low
 - **Outside Bar**: High > previous high AND Low < previous low
 
-### Signals and Pivots
-The indicators component identifies key market structure points and generates actionable signals based on TheStrat rules.
+### Swing Points and Market Structure
+TheStrat uses precise swing point detection to identify market structure:
+
+- **Swing High**: A price peak that is the highest point within its lookback/lookahead window and meets the percentage threshold compared to the previous swing high
+- **Swing Low**: A price trough that is the lowest point within its lookback/lookahead window and meets the percentage threshold compared to the previous swing low
+- **Higher High (HH)**: Each new swing high that is higher than the previous swing high (bullish structure)
+- **Lower High (LH)**: Each new swing high that is lower than the previous swing high (bearish structure)
+- **Higher Low (HL)**: Each new swing low that is higher than the previous swing low (bullish structure)
+- **Lower Low (LL)**: Each new swing low that is lower than the previous swing low (bearish structure)
+
+### Configuration Parameters
+Swing point detection can be configured per timeframe:
+
+- **Window Size**: Number of bars to look back and ahead for peak/valley confirmation (default: 5)
+- **Threshold**: Minimum percentage change required to confirm a new swing point (default: 2.0%)
+
+### Signals and Patterns
+The indicators component identifies key pattern sequences and generates actionable signals based on TheStrat rules.
 
 ## Getting Help
 

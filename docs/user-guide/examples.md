@@ -230,6 +230,245 @@ for tf in ["5m", "15m", "1h", "1d"]:
 print(f"Total: {len(analyzed)} bars across {len(analyzed['timeframe'].unique())} timeframes")
 ```
 
+## Swing Point Analysis
+
+### Understanding Swing Point Detection
+
+Swing points are critical for identifying market structure in TheStrat methodology. The implementation uses precise peak/valley detection with configurable parameters.
+
+```python
+from thestrat import Factory
+from thestrat.schemas import (
+    FactoryConfig, AggregationConfig, IndicatorsConfig,
+    TimeframeItemConfig, SwingPointsConfig
+)
+from pandas import DataFrame as PandasDataFrame
+
+def analyze_swing_points(data):
+    """Demonstrate swing point detection with different configurations."""
+
+    # Configuration with detailed swing point settings
+    config = FactoryConfig(
+        aggregation=AggregationConfig(
+            target_timeframes=["5m"],
+            asset_class="equities",
+            timezone="US/Eastern"
+        ),
+        indicators=IndicatorsConfig(
+            timeframe_configs=[
+                TimeframeItemConfig(
+                    timeframes=["all"],
+                    swing_points=SwingPointsConfig(
+                        window=5,        # Look 5 bars back and ahead
+                        threshold=2.0    # Require 2% price change to confirm
+                    )
+                )
+            ]
+        )
+    )
+
+    # Process the data
+    pipeline = Factory.create_all(config)
+    aggregated = pipeline["aggregation"].process(data)
+    analyzed = pipeline["indicators"].process(aggregated)
+
+    # Analyze swing point results
+    swing_highs = analyzed.filter(analyzed['new_swing_high'] == True)
+    swing_lows = analyzed.filter(analyzed['new_swing_low'] == True)
+
+    print(f"Detected {len(swing_highs)} swing highs")
+    print(f"Detected {len(swing_lows)} swing lows")
+
+    # Market structure analysis
+    higher_highs = analyzed.filter(analyzed['new_higher_high'] == True)
+    lower_lows = analyzed.filter(analyzed['new_lower_low'] == True)
+
+    print(f"Higher highs: {len(higher_highs)} (bullish structure)")
+    print(f"Lower lows: {len(lower_lows)} (bearish structure)")
+
+    return analyzed
+
+# Example usage with trending data
+trending_data = PandasDataFrame({
+    'timestamp': pd.date_range('2024-01-01 09:30', periods=100, freq='5min'),
+    'open': [100 + i*0.5 + (i%10)*0.2 for i in range(100)],    # Trending up with oscillations
+    'high': [101 + i*0.5 + (i%10)*0.3 for i in range(100)],
+    'low': [99 + i*0.5 + (i%10)*0.1 for i in range(100)],
+    'close': [100.5 + i*0.5 + (i%10)*0.25 for i in range(100)],
+    'volume': [1000 + i*10 for i in range(100)]
+})
+
+results = analyze_swing_points(trending_data)
+```
+
+### Swing Point Configuration Strategies
+
+Different market conditions and trading styles require different swing point settings:
+
+```python
+def compare_swing_configurations(data):
+    """Compare different swing point configurations."""
+
+    configurations = [
+        ("Scalping", SwingPointsConfig(window=3, threshold=0.5)),     # Very sensitive
+        ("Day Trading", SwingPointsConfig(window=5, threshold=1.5)),  # Balanced
+        ("Swing Trading", SwingPointsConfig(window=10, threshold=3.0)), # Conservative
+        ("Position Trading", SwingPointsConfig(window=20, threshold=5.0)) # Very conservative
+    ]
+
+    results = {}
+
+    for strategy_name, swing_config in configurations:
+        config = FactoryConfig(
+            aggregation=AggregationConfig(
+                target_timeframes=["5m"],
+                asset_class="equities"
+            ),
+            indicators=IndicatorsConfig(
+                timeframe_configs=[
+                    TimeframeItemConfig(
+                        timeframes=["all"],
+                        swing_points=swing_config
+                    )
+                ]
+            )
+        )
+
+        pipeline = Factory.create_all(config)
+        aggregated = pipeline["aggregation"].process(data)
+        analyzed = pipeline["indicators"].process(aggregated)
+
+        # Count swing points detected
+        swing_count = len(analyzed.filter(
+            (analyzed['new_swing_high'] == True) |
+            (analyzed['new_swing_low'] == True)
+        ))
+
+        results[strategy_name] = {
+            'config': swing_config,
+            'swing_points': swing_count,
+            'frequency': f"{swing_count/len(analyzed)*100:.1f}% of bars"
+        }
+
+        print(f"{strategy_name}: {swing_count} swing points ({results[strategy_name]['frequency']})")
+
+    return results
+
+# Compare configurations
+config_results = compare_swing_configurations(trending_data)
+```
+
+### Market Structure Trend Analysis
+
+Understanding the relationship between swing highs and lows reveals market trends:
+
+```python
+def analyze_market_structure_trend(analyzed_data):
+    """Analyze trend direction using market structure."""
+
+    # Get chronological swing points
+    swing_points = analyzed_data.filter(
+        (analyzed_data['new_swing_high'] == True) |
+        (analyzed_data['new_swing_low'] == True)
+    ).sort('timestamp')
+
+    if len(swing_points) < 4:
+        return "Insufficient swing points for trend analysis"
+
+    # Count recent structure patterns
+    recent_data = analyzed_data.tail(50)  # Last 50 bars
+
+    hh_count = len(recent_data.filter(recent_data['new_higher_high'] == True))
+    hl_count = len(recent_data.filter(recent_data['new_higher_low'] == True))
+    lh_count = len(recent_data.filter(recent_data['new_lower_high'] == True))
+    ll_count = len(recent_data.filter(recent_data['new_lower_low'] == True))
+
+    bullish_signals = hh_count + hl_count
+    bearish_signals = lh_count + ll_count
+
+    print(f"Recent Market Structure (last 50 bars):")
+    print(f"  Higher Highs: {hh_count}")
+    print(f"  Higher Lows: {hl_count}")
+    print(f"  Lower Highs: {lh_count}")
+    print(f"  Lower Lows: {ll_count}")
+    print(f"  Bullish signals: {bullish_signals}")
+    print(f"  Bearish signals: {bearish_signals}")
+
+    if bullish_signals > bearish_signals * 1.5:
+        trend = "Strong Uptrend"
+    elif bearish_signals > bullish_signals * 1.5:
+        trend = "Strong Downtrend"
+    elif bullish_signals > bearish_signals:
+        trend = "Weak Uptrend"
+    elif bearish_signals > bullish_signals:
+        trend = "Weak Downtrend"
+    else:
+        trend = "Sideways/Consolidation"
+
+    print(f"  Trend Assessment: {trend}")
+    return trend
+
+# Analyze the trend
+trend_assessment = analyze_market_structure_trend(results)
+```
+
+### Performance Considerations
+
+TheStrat's swing point detection is fully vectorized for optimal performance:
+
+```python
+import time
+
+def benchmark_swing_detection(data_size=10000):
+    """Benchmark swing point detection performance."""
+
+    # Generate large dataset
+    large_data = PandasDataFrame({
+        'timestamp': pd.date_range('2024-01-01', periods=data_size, freq='1min'),
+        'open': [100 + i*0.01 + (i%100)*0.1 for i in range(data_size)],
+        'high': [100.5 + i*0.01 + (i%100)*0.15 for i in range(data_size)],
+        'low': [99.5 + i*0.01 + (i%100)*0.05 for i in range(data_size)],
+        'close': [100.2 + i*0.01 + (i%100)*0.12 for i in range(data_size)],
+        'volume': [1000 + i for i in range(data_size)]
+    })
+
+    config = FactoryConfig(
+        aggregation=AggregationConfig(
+            target_timeframes=["5m"],
+            asset_class="equities"
+        ),
+        indicators=IndicatorsConfig(
+            timeframe_configs=[
+                TimeframeItemConfig(
+                    timeframes=["all"],
+                    swing_points=SwingPointsConfig(window=5, threshold=2.0)
+                )
+            ]
+        )
+    )
+
+    pipeline = Factory.create_all(config)
+
+    # Benchmark aggregation
+    start_time = time.time()
+    aggregated = pipeline["aggregation"].process(large_data)
+    agg_time = time.time() - start_time
+
+    # Benchmark indicators (including swing points)
+    start_time = time.time()
+    analyzed = pipeline["indicators"].process(aggregated)
+    indicator_time = time.time() - start_time
+
+    print(f"Performance Benchmark ({data_size:,} input rows):")
+    print(f"  Aggregation: {agg_time:.3f}s ({len(large_data)/agg_time:,.0f} rows/sec)")
+    print(f"  Indicators: {indicator_time:.3f}s ({len(aggregated)/indicator_time:,.0f} rows/sec)")
+    print(f"  Total: {agg_time + indicator_time:.3f}s")
+    print(f"  Output: {len(analyzed)} bars with full indicator analysis")
+
+# Run performance benchmark
+benchmark_swing_detection(10000)
+```
+
 ### Cross-Timeframe Signal Correlation
 
 ```python

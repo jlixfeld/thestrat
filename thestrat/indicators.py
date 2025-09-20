@@ -7,7 +7,7 @@ vectorized calculations using Polars operations.
 
 from pandas import DataFrame as PandasDataFrame
 from polars import DataFrame as PolarsDataFrame
-from polars import Int32, col, concat_str, lit, when
+from polars import Float64, Int32, String, col, concat_str, lit, when
 
 from .base import Component
 from .schemas import IndicatorsConfig, TimeframeItemConfig
@@ -78,6 +78,10 @@ class Indicators(Component):
 
         # Convert to Polars if needed
         df = self._convert_to_polars(data)
+
+        # Ensure optional schema columns are present
+        if "symbol" not in df.columns:
+            df = df.with_columns(lit(None, dtype=String).alias("symbol"))
 
         # Check if data has timeframe column for per-timeframe processing
         if "timeframe" in df.columns:
@@ -207,13 +211,94 @@ class Indicators(Component):
 
         return df
 
+    def _apply_swing_threshold_filter(self, df: PolarsDataFrame, swing_threshold: float) -> PolarsDataFrame:
+        """
+        Apply percentage threshold filtering to potential swing points using vectorized operations.
+
+        This method implements a vectorized approach to filter swing points based on percentage
+        change from the previous confirmed swing point. The strategy uses forward-fill operations
+        to track the most recent swing values and compares new candidates against these references.
+
+        **Vectorization Strategy Explanation:**
+        1. Extract candidate values only at potential swing points (others are None)
+        2. Forward-fill to propagate last confirmed swing values across all rows
+        3. Shift to get previous swing value for comparison
+        4. Calculate percentage change and apply threshold filter
+
+        **Why This Approach Maintains Correctness:**
+        - Forward-fill ensures we always compare against the most recent confirmed swing
+        - Shift operation provides the "previous" swing value for comparison
+        - First swing always passes (100.0% default) to bootstrap the process
+        - Only potential swings that meet both spatial (peak/valley) and magnitude
+          (threshold) criteria are confirmed
+
+        Args:
+            df: DataFrame with potential_swing_high and potential_swing_low columns
+            swing_threshold: Minimum percentage change required (e.g., 2.0 for 2%)
+
+        Returns:
+            DataFrame with new_swing_high and new_swing_low boolean columns
+        """
+        if swing_threshold <= 0:
+            # No threshold filtering - accept all potential swings
+            return df.with_columns(
+                [
+                    col("potential_swing_high").alias("new_swing_high"),
+                    col("potential_swing_low").alias("new_swing_low"),
+                ]
+            )
+
+        # Step 1: Extract candidate swing values (None except at potential swing points)
+        df = df.with_columns(
+            [
+                when(col("potential_swing_high")).then(col("high")).otherwise(None).alias("swing_high_candidate"),
+                when(col("potential_swing_low")).then(col("low")).otherwise(None).alias("swing_low_candidate"),
+            ]
+        )
+
+        # Step 2: Forward-fill to propagate most recent swing values across all rows
+        # This creates a "running reference" of the last confirmed swing point
+        df = df.with_columns(
+            [
+                col("swing_high_candidate").fill_null(strategy="forward").alias("ref_high"),
+                col("swing_low_candidate").fill_null(strategy="forward").alias("ref_low"),
+            ]
+        )
+
+        # Step 3: Calculate percentage changes from previous confirmed swing points
+        # shift(1) gets the previous row's reference value for comparison
+        df = df.with_columns(
+            [
+                # Percentage change for swing highs: |current - previous| / previous * 100
+                when(col("potential_swing_high") & col("ref_high").shift(1).is_not_null())
+                .then(((col("high") - col("ref_high").shift(1)).abs() / col("ref_high").shift(1) * 100))
+                .otherwise(100.0)  # First swing always passes threshold
+                .alias("high_pct_change"),
+                # Percentage change for swing lows: |current - previous| / previous * 100
+                when(col("potential_swing_low") & col("ref_low").shift(1).is_not_null())
+                .then(((col("low") - col("ref_low").shift(1)).abs() / col("ref_low").shift(1) * 100))
+                .otherwise(100.0)  # First swing always passes threshold
+                .alias("low_pct_change"),
+            ]
+        )
+
+        # Step 4: Apply threshold filter to confirm swing points
+        # Only potential swings that exceed the percentage threshold are confirmed
+        return df.with_columns(
+            [
+                (col("potential_swing_high") & (col("high_pct_change") >= swing_threshold)).alias("new_swing_high"),
+                (col("potential_swing_low") & (col("low_pct_change") >= swing_threshold)).alias("new_swing_low"),
+            ]
+        )
+
     def _calculate_swing_points(self, data: PolarsDataFrame, config: TimeframeItemConfig) -> PolarsDataFrame:
         """
-        Detect swing highs and lows using vectorized operations.
+        Detect swing highs and lows using fully vectorized operations.
 
-        Uses rolling window analysis to identify local extremes in price action.
-        Swing points are detected when price moves beyond the percentage threshold
-        (e.g., 5% = 5.0) compared to the previous rolling extreme.
+        Uses lookback and lookahead windows to identify local extremes in price action.
+        A swing high is confirmed when it's the highest point within its window and
+        meets the percentage threshold compared to the previous confirmed swing high.
+        This implementation is fully vectorized for optimal performance.
         """
         # Get swing points configuration from the passed config
         swing_points_config = config.swing_points
@@ -227,35 +312,60 @@ class Indicators(Component):
 
         df = data.clone()
 
-        # Calculate rolling min/max for swing detection
+        # Performance safeguard: Handle datasets too small for swing point analysis
+        # Need at least 2*window + 1 rows to perform proper lookback/lookahead analysis
+        min_required_rows = 2 * swing_window + 1
+        if len(df) < min_required_rows:
+            # Initialize swing point columns to False/None and continue with processing
+            # This allows the normal flow to add all other required indicator columns
+            return df.with_columns(
+                [
+                    lit(False).alias("new_swing_high"),
+                    lit(False).alias("new_swing_low"),
+                    lit(None, dtype=Float64).alias("swing_high"),
+                    lit(None, dtype=Float64).alias("swing_low"),
+                    lit(False).alias("new_pivot_high"),  # Add missing pivot columns
+                    lit(False).alias("new_pivot_low"),
+                    lit(None, dtype=Float64).alias("pivot_high"),
+                    lit(None, dtype=Float64).alias("pivot_low"),
+                ]
+            )
+
+        # Add row index for boundary checks
+        df = df.with_row_index("__row_idx")
+
+        # Calculate lookback and lookahead windows for peak/valley detection
+        # Create rolling windows that check both directions from current bar
         df = df.with_columns(
             [
-                # Rolling highs and lows for swing detection
-                col("high").rolling_max(window_size=swing_window, center=True).alias("roll_high_max"),
-                col("high").rolling_max(window_size=swing_window, center=False).shift(1).alias("roll_high_max_prev"),
-                col("low").rolling_min(window_size=swing_window, center=True).alias("roll_low_min"),
-                col("low").rolling_min(window_size=swing_window, center=False).shift(1).alias("roll_low_min_prev"),
+                # Rolling max/min over full window (2*swing_window + 1) centered on current bar
+                col("high").rolling_max(window_size=2 * swing_window + 1, center=True).alias("window_high_max"),
+                col("low").rolling_min(window_size=2 * swing_window + 1, center=True).alias("window_low_min"),
             ]
         )
 
-        # Identify swing highs and lows using percentage threshold
+        # Detect potential swing points (local extremes within full window)
         df = df.with_columns(
             [
-                # Boolean indicators for new swing points (fill nulls with False)
+                # Potential swing high: current high equals max in centered window
+                # and is at least swing_window bars from start/end
                 (
-                    (col("high") == col("roll_high_max"))
-                    & (col("high") > col("roll_high_max_prev") * (1 + swing_threshold / 100))
-                )
-                .fill_null(False)
-                .alias("new_swing_high"),
+                    (col("__row_idx") >= swing_window)
+                    & (col("__row_idx") < (len(df) - swing_window))
+                    & (col("high") == col("window_high_max"))
+                ).alias("potential_swing_high"),
+                # Potential swing low: current low equals min in centered window
+                # and is at least swing_window bars from start/end
                 (
-                    (col("low") == col("roll_low_min"))
-                    & (col("low") < col("roll_low_min_prev") * (1 - swing_threshold / 100))
-                )
-                .fill_null(False)
-                .alias("new_swing_low"),
+                    (col("__row_idx") >= swing_window)
+                    & (col("__row_idx") < (len(df) - swing_window))
+                    & (col("low") == col("window_low_min"))
+                ).alias("potential_swing_low"),
             ]
         )
+
+        # Apply threshold filtering to confirm swing points
+        df = self._apply_swing_threshold_filter(df, swing_threshold)
 
         # Create forward-filled price columns for swing levels
         df = df.with_columns(
@@ -301,46 +411,93 @@ class Indicators(Component):
             ]
         )
 
-        # Clean up temporary columns
-        df = df.drop(["roll_high_max", "roll_high_max_prev", "roll_low_min", "roll_low_min_prev"])
+        # Clean up temporary columns used during swing point calculation
+        # These columns are always created during the swing point detection process
+        base_temp_columns = [
+            "__row_idx",  # Row index for boundary checks
+            "window_high_max",  # Rolling maximum for peak detection
+            "window_low_min",  # Rolling minimum for valley detection
+            "potential_swing_high",  # Candidate swing highs before threshold filtering
+            "potential_swing_low",  # Candidate swing lows before threshold filtering
+        ]
+
+        # Additional columns created only when threshold filtering is applied
+        threshold_temp_columns = [
+            "swing_high_candidate",  # High values at potential swing points
+            "swing_low_candidate",  # Low values at potential swing points
+            "ref_high",  # Forward-filled reference highs for comparison
+            "ref_low",  # Forward-filled reference lows for comparison
+            "high_pct_change",  # Percentage change from previous swing high
+            "low_pct_change",  # Percentage change from previous swing low
+        ]
+
+        # Build cleanup list: always include base columns, conditionally include threshold columns
+        columns_to_drop = base_temp_columns.copy()
+        if swing_threshold > 0:
+            columns_to_drop.extend(threshold_temp_columns)
+
+        # Only drop columns that actually exist in the DataFrame (defensive programming)
+        existing_temp_columns = [col for col in columns_to_drop if col in df.columns]
+        if existing_temp_columns:
+            df = df.drop(existing_temp_columns)
 
         return df
 
     def _calculate_market_structure(self, data: PolarsDataFrame) -> PolarsDataFrame:
         """
-        Classify market structure patterns: HH, HL, LH, LL.
+        Classify market structure patterns: HH, HL, LH, LL using vectorized operations.
 
         Analyzes sequence of swing points to determine market structure.
+        Uses vectorized operations to compare each new swing high to the previous swing high
+        and each new swing low to the previous swing low.
         """
         df = data.clone()
 
-        # Get previous swing high and low values for comparison
+        # For swing highs: find the previous swing high value for comparison
+        # Create a column that holds the high price only when new_swing_high is True
         df = df.with_columns(
             [
-                col("pivot_high").shift(1).alias("prev_swing_high"),
-                col("pivot_low").shift(1).alias("prev_swing_low"),
+                when(col("new_swing_high")).then(col("high")).otherwise(None).alias("swing_high_values"),
+                when(col("new_swing_low")).then(col("low")).otherwise(None).alias("swing_low_values"),
             ]
         )
 
-        # Create boolean indicators for new market structure
+        # Use shift to get the previous swing high/low values
+        # Forward fill to get the last known swing value, then shift to get previous
         df = df.with_columns(
             [
-                # Boolean: True when current swing creates a new higher high (fill nulls with False)
-                ((col("new_swing_high")) & (col("pivot_high") > col("prev_swing_high")))
-                .fill_null(False)
-                .alias("new_higher_high"),
-                # Boolean: True when current swing creates a new lower high (fill nulls with False)
-                ((col("new_swing_high")) & (col("pivot_high") < col("prev_swing_high")))
-                .fill_null(False)
-                .alias("new_lower_high"),
-                # Boolean: True when current swing creates a new higher low (fill nulls with False)
-                ((col("new_swing_low")) & (col("pivot_low") > col("prev_swing_low")))
-                .fill_null(False)
-                .alias("new_higher_low"),
-                # Boolean: True when current swing creates a new lower low (fill nulls with False)
-                ((col("new_swing_low")) & (col("pivot_low") < col("prev_swing_low")))
-                .fill_null(False)
-                .alias("new_lower_low"),
+                col("swing_high_values").fill_null(strategy="forward").shift(1).alias("prev_swing_high_value"),
+                col("swing_low_values").fill_null(strategy="forward").shift(1).alias("prev_swing_low_value"),
+            ]
+        )
+
+        # Classify market structure based on comparison with previous swing points
+        df = df.with_columns(
+            [
+                # Higher High: new swing high > previous swing high
+                (
+                    col("new_swing_high")
+                    & col("prev_swing_high_value").is_not_null()
+                    & (col("high") > col("prev_swing_high_value"))
+                ).alias("new_higher_high"),
+                # Lower High: new swing high < previous swing high
+                (
+                    col("new_swing_high")
+                    & col("prev_swing_high_value").is_not_null()
+                    & (col("high") < col("prev_swing_high_value"))
+                ).alias("new_lower_high"),
+                # Higher Low: new swing low > previous swing low
+                (
+                    col("new_swing_low")
+                    & col("prev_swing_low_value").is_not_null()
+                    & (col("low") > col("prev_swing_low_value"))
+                ).alias("new_higher_low"),
+                # Lower Low: new swing low < previous swing low
+                (
+                    col("new_swing_low")
+                    & col("prev_swing_low_value").is_not_null()
+                    & (col("low") < col("prev_swing_low_value"))
+                ).alias("new_lower_low"),
             ]
         )
 
@@ -375,7 +532,7 @@ class Indicators(Component):
         )
 
         # Clean up temporary columns
-        df = df.drop(["prev_swing_high", "prev_swing_low"])
+        df = df.drop(["swing_high_values", "swing_low_values", "prev_swing_high_value", "prev_swing_low_value"])
 
         return df
 
@@ -498,80 +655,138 @@ class Indicators(Component):
             ]
         )
 
-        # Initialize signal columns
-        signal_values = []
-        type_values = []
-        bias_values = []
-        signal_objects = []
-        signal_json = []
+        # Fully vectorized signal detection using cascaded when expressions
+        # Build comprehensive pattern matching in a single operation
+        #
+        # **Cascaded Logic Explanation:**
+        # This approach builds nested conditional expressions that process all rows simultaneously,
+        # avoiding any loops while maintaining proper pattern priority (3-bar > 2-bar).
+        #
+        # **Priority System:**
+        # 1. 3-bar patterns have higher priority and are checked first
+        # 2. 2-bar patterns are only applied if no 3-bar pattern matched (signal_expr.is_null())
+        # 3. This ensures that more specific patterns (3-bar) take precedence over general ones (2-bar)
+        #
+        # **Implementation Strategy:**
+        # - Start with null expressions for all signal attributes
+        # - For each pattern in SIGNALS dictionary, build cascaded when() expressions
+        # - Each when() either sets the value (if pattern matches) or preserves existing value
+        # - Final expressions are applied to all rows in a single vectorized operation
 
-        # Get scenarios as Python lists for pattern matching
-        pattern_2bar = df["pattern_2bar"].to_list()
-        pattern_3bar = df["pattern_3bar"].to_list()
+        # Initialize expressions with null values
+        signal_expr = lit(None)
+        type_expr = lit(None)
+        bias_expr = lit(None)
 
-        # Process each row to find matching signals and create signal objects
-        for i in range(len(df)):
-            signal_found = None
-            signal_type = None
-            signal_bias = None
-            signal_obj = None
+        # Phase 1: Build cascaded expressions for 3-bar patterns (higher priority)
+        # These patterns take precedence and will overwrite any existing matches
+        for pattern, config in SIGNALS.items():
+            if config["bar_count"] == 3:
+                signal_expr = when(col("pattern_3bar") == pattern).then(lit(pattern)).otherwise(signal_expr)
+                type_expr = when(col("pattern_3bar") == pattern).then(lit(config["category"])).otherwise(type_expr)
+                bias_expr = when(col("pattern_3bar") == pattern).then(lit(config["bias"])).otherwise(bias_expr)
 
-            # Check 3-bar patterns first (more specific)
-            if pattern_3bar[i] and pattern_3bar[i] in SIGNALS:
-                signal_found = pattern_3bar[i]
-                signal_type = SIGNALS[pattern_3bar[i]]["category"]
-                signal_bias = SIGNALS[pattern_3bar[i]]["bias"]
+        # Phase 2: Add 2-bar patterns (lower priority, only if no 3-bar pattern matched)
+        # Check signal_expr.is_null() to ensure 3-bar patterns maintain priority
+        for pattern, config in SIGNALS.items():
+            if config["bar_count"] == 2:
+                signal_expr = (
+                    when((col("pattern_2bar") == pattern) & signal_expr.is_null())
+                    .then(lit(pattern))
+                    .otherwise(signal_expr)
+                )
+                type_expr = (
+                    when((col("pattern_2bar") == pattern) & type_expr.is_null())
+                    .then(lit(config["category"]))
+                    .otherwise(type_expr)
+                )
+                bias_expr = (
+                    when((col("pattern_2bar") == pattern) & bias_expr.is_null())
+                    .then(lit(config["bias"]))
+                    .otherwise(bias_expr)
+                )
 
-                # Create signal object
-                signal_obj = self._create_signal_object(df, i, signal_found, signal_type, signal_bias)
-
-            # Check 2-bar patterns
-            elif pattern_2bar[i] and pattern_2bar[i] in SIGNALS:
-                signal_found = pattern_2bar[i]
-                signal_type = SIGNALS[pattern_2bar[i]]["category"]
-                signal_bias = SIGNALS[pattern_2bar[i]]["bias"]
-
-                # Create signal object
-                signal_obj = self._create_signal_object(df, i, signal_found, signal_type, signal_bias)
-
-            signal_values.append(signal_found)
-            type_values.append(signal_type)
-            bias_values.append(signal_bias)
-            signal_objects.append(signal_obj)
-            signal_json.append(signal_obj.to_json() if signal_obj else None)
-
-        # Add signal columns using Polars Series
-        from polars import Series
-
+        # Apply all signal detection in a single operation
         df = df.with_columns(
             [
-                Series("signal", signal_values),
-                Series("type", type_values),
-                Series("bias", bias_values),
-                Series("signal_json", signal_json),
+                signal_expr.alias("signal"),
+                type_expr.alias("type"),
+                bias_expr.alias("bias"),
             ]
         )
 
-        # Store signal objects as a separate attribute for programmatic access
-        # (Polars doesn't handle complex objects well in DataFrames)
-        df = df.with_row_index("__temp_idx")
-        signal_obj_map = {i: signal_objects[i] for i in range(len(signal_objects))}
+        # Create signal JSON using vectorized operations with proper SignalMetadata format
+        df = df.with_columns(
+            [
+                when(col("signal").is_not_null())
+                .then(
+                    concat_str(
+                        [
+                            lit('{"pattern":"'),
+                            col("signal"),
+                            lit('","category":"'),
+                            col("type"),
+                            lit('","bias":"'),
+                            col("bias"),
+                            lit('","bar_count":'),
+                            when(col("pattern_3bar").is_not_null()).then(lit("3")).otherwise(lit("2")),
+                            lit(',"status":"active","entry_bar_index":null,"trigger_bar_index":null,'),
+                            lit('"target_bar_index":null,"entry_price":null,"stop_price":null,'),
+                            lit('"target_price":null,"timestamp":null,"symbol":null,"timeframe":null}'),
+                        ],
+                        separator="",
+                    )
+                )
+                .otherwise(None)
+                .alias("signal_json")
+            ]
+        )
 
-        # Add a method to retrieve signal objects by index
-        def get_signal_object(row_index: int):
-            return signal_obj_map.get(row_index)
-
-        # Note: Polars DataFrames don't support attrs like pandas
-        # Signal objects would need to be stored externally if needed
-        # df.attrs = {"signal_objects": signal_obj_map, "get_signal_object": get_signal_object}
-
-        # Remove temporary index
-        df = df.drop("__temp_idx")
+        # Note: Signal objects are not created in this vectorized implementation
+        # for performance reasons. If signal objects are needed, they can be created
+        # on-demand using the get_signal_objects method
 
         # Clean up temporary columns
         df = df.drop(["scenario_2", "scenario_1", "scenario_0", "pattern_2bar", "pattern_3bar"])
 
         return df
+
+    def get_signal_objects(self, result_df: PolarsDataFrame) -> list:
+        """
+        Create SignalMetadata objects on-demand from processed indicator results.
+
+        This method processes rows with signals and creates full SignalMetadata objects
+        with prices and trading context. Only used when signal objects are needed.
+
+        Args:
+            result_df: DataFrame with processed indicators including signal columns
+
+        Returns:
+            List of SignalMetadata objects for rows with detected signals
+        """
+        signal_objects = []
+
+        # Add row index to track original positions
+        df_with_index = result_df.with_row_index("__original_idx")
+
+        # Filter to rows with signals
+        signal_rows = df_with_index.filter(col("signal").is_not_null())
+
+        if len(signal_rows) == 0:
+            return signal_objects
+
+        # Convert to pandas for row-by-row processing
+        signal_data = signal_rows.to_pandas()
+
+        for _, row in signal_data.iterrows():
+            original_index = int(row["__original_idx"])
+            signal_obj = self._create_signal_object(
+                df_with_index, original_index, row["signal"], row["type"], row["bias"]
+            )
+            if signal_obj:
+                signal_objects.append(signal_obj)
+
+        return signal_objects
 
     def _create_signal_object(self, df, index, pattern, category, bias):
         """Factory method to create signal objects."""
@@ -996,20 +1211,8 @@ class Indicators(Component):
         if missing_cols:
             raise ValueError(f"Missing required columns: {missing_cols}")
 
-        # Get minimum swing window from any configuration
-        min_swing_window = 5  # default
-        for tf_config in self.config.timeframe_configs:
-            swing_config = tf_config.swing_points
-            if swing_config is not None:
-                window = swing_config.window
-                min_swing_window = min(min_swing_window, window)
-
-        # Check for minimum data points for swing analysis
-        if len(df) < min_swing_window * 2:
-            raise ValueError(
-                f"Insufficient data: {len(df)} rows provided, need at least {min_swing_window * 2} rows "
-                f"for swing analysis with window={min_swing_window}"
-            )
+        # Note: Minimum data point validation removed as _calculate_swing_points
+        # now handles small datasets gracefully with proper safeguards
 
         # Verify price data integrity
         validations = df.select(

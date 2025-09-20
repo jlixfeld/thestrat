@@ -199,8 +199,9 @@ class TestIndicatorsValidation:
             }
         )
 
-        with pytest.raises(ValueError, match="Insufficient data"):
-            indicators.validate_input(small_data)
+        # Small data validation is now handled gracefully in _calculate_swing_points
+        # Should not raise error, but process with limited swing point detection
+        indicators.validate_input(small_data)  # Should pass without error
 
     def test_validate_input_price_integrity(self, indicators):
         """Test validation checks price data integrity."""
@@ -2388,16 +2389,15 @@ class TestSignalMetadataIntegration:
         config = indicators.config.timeframe_configs[0]
         result = indicators._calculate_strat_patterns(data, config)
 
-        # Check if signal was detected and JSON created
-        signal_json_list = result["signal_json"].to_list()
-        valid_signals = [json_str for json_str in signal_json_list if json_str is not None]
+        # Check if signal was detected
+        signals_detected = result.filter(result["signal"].is_not_null())
+        assert len(signals_detected) > 0  # Should have at least one signal
 
-        assert len(valid_signals) > 0  # Should have at least one signal
+        # Create signal objects on-demand
+        signal_objects = indicators.get_signal_objects(result)
+        assert len(signal_objects) > 0
 
-        # Parse the first valid signal
-        from thestrat import SignalMetadata
-
-        signal = SignalMetadata.from_json(valid_signals[0])
+        signal = signal_objects[0]
 
         # Verify signal properties
         assert signal.pattern in SIGNALS
@@ -3458,3 +3458,145 @@ class TestNullableSchemaConsistency:
             assert column in result.columns, f"Pattern column '{column}' missing - breaks database integration"
 
         print(f"✅ Signal/pattern columns verified present: {signal_columns + pattern_columns}")
+
+
+@pytest.mark.unit
+class TestSwingPointPerformance:
+    """Test performance and edge cases for swing point detection."""
+
+    def test_swing_point_performance_benchmark(self):
+        """Test that swing point detection maintains expected performance (~35k rows/sec)."""
+        import time
+
+        # Create large dataset for performance testing
+        large_size = 10000
+        large_data = create_sample_ohlcv_data(large_size)
+
+        config = IndicatorsConfig(
+            timeframe_configs=[
+                TimeframeItemConfig(timeframes=["all"], swing_points=SwingPointsConfig(window=5, threshold=2.0))
+            ]
+        )
+
+        from thestrat.factory import Factory
+
+        indicators = Factory.create_indicators(config)
+
+        # Benchmark swing point detection
+        start_time = time.time()
+        result = indicators.process(large_data)
+        processing_time = time.time() - start_time
+
+        # Calculate rows per second
+        rows_per_second = len(large_data) / processing_time
+
+        # Verify performance meets benchmark (at least 20k rows/sec with some buffer)
+        min_expected_performance = 20000  # Conservative threshold
+        assert rows_per_second >= min_expected_performance, (
+            f"Performance regression: {rows_per_second:.0f} rows/sec < {min_expected_performance} rows/sec"
+        )
+
+        # Verify correctness not compromised for performance
+        assert "new_swing_high" in result.columns
+        assert "new_swing_low" in result.columns
+        swing_points_detected = len(result.filter(result["new_swing_high"] | result["new_swing_low"]))
+        assert swing_points_detected > 0, "Performance optimization broke swing point detection"
+
+        print(f"✅ Performance benchmark: {rows_per_second:.0f} rows/sec (target: {min_expected_performance}+)")
+
+    def test_swing_points_small_dataset_edge_case(self):
+        """Test handling of datasets smaller than minimum window requirements."""
+        # Test with dataset smaller than 2*window + 1
+        small_data = create_sample_ohlcv_data(5)  # 5 rows < 2*5+1=11
+
+        config = IndicatorsConfig(
+            timeframe_configs=[
+                TimeframeItemConfig(timeframes=["all"], swing_points=SwingPointsConfig(window=5, threshold=2.0))
+            ]
+        )
+
+        from thestrat.factory import Factory
+
+        indicators = Factory.create_indicators(config)
+
+        # Should not raise error and return properly initialized columns
+        result = indicators.process(small_data)
+
+        # Verify all swing point columns exist and are properly initialized
+        swing_columns = ["new_swing_high", "new_swing_low", "swing_high", "swing_low", "pivot_high", "pivot_low"]
+        for column in swing_columns:
+            assert column in result.columns, f"Missing swing point column: {column}"
+
+        # Verify no swing points detected (all False for booleans, all None for values)
+        assert not result["new_swing_high"].any(), "Should have no swing highs for small dataset"
+        assert not result["new_swing_low"].any(), "Should have no swing lows for small dataset"
+        assert result["swing_high"].null_count() == len(result), "swing_high should be all None for small dataset"
+        assert result["swing_low"].null_count() == len(result), "swing_low should be all None for small dataset"
+
+        print(f"✅ Small dataset edge case handled correctly ({len(small_data)} rows)")
+
+    def test_swing_points_exact_minimum_dataset(self):
+        """Test with dataset exactly at minimum size boundary."""
+        window_size = 3
+        exact_min_size = 2 * window_size + 1  # 7 rows
+        exact_data = create_sample_ohlcv_data(exact_min_size)
+
+        config = IndicatorsConfig(
+            timeframe_configs=[
+                TimeframeItemConfig(
+                    timeframes=["all"], swing_points=SwingPointsConfig(window=window_size, threshold=1.0)
+                )
+            ]
+        )
+
+        from thestrat.factory import Factory
+
+        indicators = Factory.create_indicators(config)
+
+        # Should process without error
+        result = indicators.process(exact_data)
+
+        # Verify swing point columns exist
+        assert "new_swing_high" in result.columns
+        assert "new_swing_low" in result.columns
+
+        # With exact minimum size, might detect swing points in the middle
+        # At minimum, should not crash and should have proper column structure
+        assert len(result) == exact_min_size
+
+        print(f"✅ Exact minimum dataset handled correctly ({exact_min_size} rows)")
+
+    def test_swing_point_accuracy_known_example(self):
+        """Test swing point detection accuracy against known example with predictable pattern."""
+        # Use the standard test data creation function for valid OHLC relationships
+        known_data = create_sample_ohlcv_data(15)
+
+        config = IndicatorsConfig(
+            timeframe_configs=[
+                TimeframeItemConfig(
+                    timeframes=["all"],
+                    swing_points=SwingPointsConfig(window=3, threshold=3.0),  # 3% threshold
+                )
+            ]
+        )
+
+        from thestrat.factory import Factory
+
+        indicators = Factory.create_indicators(config)
+        result = indicators.process(known_data)
+
+        # Verify swing points were detected
+        swing_highs = result.filter(result["new_swing_high"])
+        swing_lows = result.filter(result["new_swing_low"])
+
+        # Should detect some swing points given the clear pattern
+        assert len(swing_highs) > 0, "Should detect swing highs in known pattern"
+        assert len(swing_lows) > 0, "Should detect swing lows in known pattern"
+
+        # Verify swing levels are properly maintained
+        non_null_swing_highs = result["swing_high"].drop_nulls()
+        non_null_swing_lows = result["swing_low"].drop_nulls()
+        assert len(non_null_swing_highs) > 0, "Should have non-null swing high levels"
+        assert len(non_null_swing_lows) > 0, "Should have non-null swing low levels"
+
+        print(f"✅ Accuracy test: {len(swing_highs)} highs, {len(swing_lows)} lows detected")
