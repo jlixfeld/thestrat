@@ -2388,16 +2388,15 @@ class TestSignalMetadataIntegration:
         config = indicators.config.timeframe_configs[0]
         result = indicators._calculate_strat_patterns(data, config)
 
-        # Check if signal was detected and JSON created
-        signal_json_list = result["signal_json"].to_list()
-        valid_signals = [json_str for json_str in signal_json_list if json_str is not None]
+        # Check if signal was detected
+        signals_detected = result.filter(result["signal"].is_not_null())
+        assert len(signals_detected) > 0  # Should have at least one signal
 
-        assert len(valid_signals) > 0  # Should have at least one signal
+        # Create signal objects on-demand
+        signal_objects = indicators.get_signal_objects(result)
+        assert len(signal_objects) > 0
 
-        # Parse the first valid signal
-        from thestrat import SignalMetadata
-
-        signal = SignalMetadata.from_json(valid_signals[0])
+        signal = signal_objects[0]
 
         # Verify signal properties
         assert signal.pattern in SIGNALS
