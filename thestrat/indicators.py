@@ -147,11 +147,8 @@ class Indicators(Component):
         # Vectorized indicator calculation with dependency grouping
         df = data.clone()
 
-        # Group 1: Swing points (no dependencies)
-        df = self._calculate_swing_points(df, config)
-
-        # Group 2: Market structure (depends on swing points)
-        df = self._calculate_market_structure(df)
+        # Group 1: Market structure (no dependencies)
+        df = self._calculate_market_structure(df, config)
 
         # Group 3: Combined independent calculations (price analysis, ATH/ATL, gap analysis)
         # These have no dependencies and can be calculated in parallel
@@ -211,94 +208,13 @@ class Indicators(Component):
 
         return df
 
-    def _apply_swing_threshold_filter(self, df: PolarsDataFrame, swing_threshold: float) -> PolarsDataFrame:
+    def _calculate_market_structure(self, data: PolarsDataFrame, config: TimeframeItemConfig) -> PolarsDataFrame:
         """
-        Apply percentage threshold filtering to potential swing points using vectorized operations.
+        Detect market structure patterns: HH, HL, LH, LL using vectorized operations.
 
-        This method implements a vectorized approach to filter swing points based on percentage
-        change from the previous confirmed swing point. The strategy uses forward-fill operations
-        to track the most recent swing values and compares new candidates against these references.
-
-        **Vectorization Strategy Explanation:**
-        1. Extract candidate values only at potential swing points (others are None)
-        2. Forward-fill to propagate last confirmed swing values across all rows
-        3. Shift to get previous swing value for comparison
-        4. Calculate percentage change and apply threshold filter
-
-        **Why This Approach Maintains Correctness:**
-        - Forward-fill ensures we always compare against the most recent confirmed swing
-        - Shift operation provides the "previous" swing value for comparison
-        - First swing always passes (100.0% default) to bootstrap the process
-        - Only potential swings that meet both spatial (peak/valley) and magnitude
-          (threshold) criteria are confirmed
-
-        Args:
-            df: DataFrame with potential_swing_high and potential_swing_low columns
-            swing_threshold: Minimum percentage change required (e.g., 2.0 for 2%)
-
-        Returns:
-            DataFrame with new_swing_high and new_swing_low boolean columns
-        """
-        if swing_threshold <= 0:
-            # No threshold filtering - accept all potential swings
-            return df.with_columns(
-                [
-                    col("potential_swing_high").alias("new_swing_high"),
-                    col("potential_swing_low").alias("new_swing_low"),
-                ]
-            )
-
-        # Step 1: Extract candidate swing values (None except at potential swing points)
-        df = df.with_columns(
-            [
-                when(col("potential_swing_high")).then(col("high")).otherwise(None).alias("swing_high_candidate"),
-                when(col("potential_swing_low")).then(col("low")).otherwise(None).alias("swing_low_candidate"),
-            ]
-        )
-
-        # Step 2: Forward-fill to propagate most recent swing values across all rows
-        # This creates a "running reference" of the last confirmed swing point
-        df = df.with_columns(
-            [
-                col("swing_high_candidate").fill_null(strategy="forward").alias("ref_high"),
-                col("swing_low_candidate").fill_null(strategy="forward").alias("ref_low"),
-            ]
-        )
-
-        # Step 3: Calculate percentage changes from previous confirmed swing points
-        # shift(1) gets the previous row's reference value for comparison
-        df = df.with_columns(
-            [
-                # Percentage change for swing highs: |current - previous| / previous * 100
-                when(col("potential_swing_high") & col("ref_high").shift(1).is_not_null())
-                .then(((col("high") - col("ref_high").shift(1)).abs() / col("ref_high").shift(1) * 100))
-                .otherwise(100.0)  # First swing always passes threshold
-                .alias("high_pct_change"),
-                # Percentage change for swing lows: |current - previous| / previous * 100
-                when(col("potential_swing_low") & col("ref_low").shift(1).is_not_null())
-                .then(((col("low") - col("ref_low").shift(1)).abs() / col("ref_low").shift(1) * 100))
-                .otherwise(100.0)  # First swing always passes threshold
-                .alias("low_pct_change"),
-            ]
-        )
-
-        # Step 4: Apply threshold filter to confirm swing points
-        # Only potential swings that exceed the percentage threshold are confirmed
-        return df.with_columns(
-            [
-                (col("potential_swing_high") & (col("high_pct_change") >= swing_threshold)).alias("new_swing_high"),
-                (col("potential_swing_low") & (col("low_pct_change") >= swing_threshold)).alias("new_swing_low"),
-            ]
-        )
-
-    def _calculate_swing_points(self, data: PolarsDataFrame, config: TimeframeItemConfig) -> PolarsDataFrame:
-        """
-        Detect swing highs and lows using fully vectorized operations.
-
-        Uses lookback and lookahead windows to identify local extremes in price action.
-        A swing high is confirmed when it's the highest point within its window and
-        meets the percentage threshold compared to the previous confirmed swing high.
-        This implementation is fully vectorized for optimal performance.
+        Combines swing point detection with immediate market structure classification.
+        Uses rolling windows to identify local highs/lows, then classifies them based on
+        comparison with previous structure points.
         """
         # Get swing points configuration from the passed config
         swing_points_config = config.swing_points
@@ -312,218 +228,143 @@ class Indicators(Component):
 
         df = data.clone()
 
-        # Performance safeguard: Handle datasets too small for swing point analysis
-        # Need at least 2*window + 1 rows to perform proper lookback/lookahead analysis
+        # Performance safeguard: Handle datasets too small for analysis
         min_required_rows = 2 * swing_window + 1
         if len(df) < min_required_rows:
-            # Initialize swing point columns to False/None and continue with processing
-            # This allows the normal flow to add all other required indicator columns
             return df.with_columns(
                 [
-                    lit(False).alias("new_swing_high"),
-                    lit(False).alias("new_swing_low"),
-                    lit(None, dtype=Float64).alias("swing_high"),
-                    lit(None, dtype=Float64).alias("swing_low"),
-                    lit(False).alias("new_pivot_high"),  # Add missing pivot columns
-                    lit(False).alias("new_pivot_low"),
-                    lit(None, dtype=Float64).alias("pivot_high"),
-                    lit(None, dtype=Float64).alias("pivot_low"),
+                    lit(None, dtype=Float64).alias("higher_high"),
+                    lit(None, dtype=Float64).alias("lower_high"),
+                    lit(None, dtype=Float64).alias("higher_low"),
+                    lit(None, dtype=Float64).alias("lower_low"),
                 ]
             )
 
         # Add row index for boundary checks
         df = df.with_row_index("__row_idx")
 
-        # Calculate lookback and lookahead windows for peak/valley detection
-        # Create rolling windows that check both directions from current bar
+        # Detect local highs and lows using rolling windows
         df = df.with_columns(
             [
-                # Rolling max/min over full window (2*swing_window + 1) centered on current bar
                 col("high").rolling_max(window_size=2 * swing_window + 1, center=True).alias("window_high_max"),
                 col("low").rolling_min(window_size=2 * swing_window + 1, center=True).alias("window_low_min"),
             ]
         )
 
-        # Detect potential swing points (local extremes within full window)
+        # Identify potential structural points (local extremes)
         df = df.with_columns(
             [
-                # Potential swing high: current high equals max in centered window
-                # and is at least swing_window bars from start/end
                 (
                     (col("__row_idx") >= swing_window)
                     & (col("__row_idx") < (len(df) - swing_window))
                     & (col("high") == col("window_high_max"))
-                ).alias("potential_swing_high"),
-                # Potential swing low: current low equals min in centered window
-                # and is at least swing_window bars from start/end
+                ).alias("is_local_high"),
                 (
                     (col("__row_idx") >= swing_window)
                     & (col("__row_idx") < (len(df) - swing_window))
                     & (col("low") == col("window_low_min"))
-                ).alias("potential_swing_low"),
+                ).alias("is_local_low"),
             ]
         )
 
-        # Apply threshold filtering to confirm swing points
-        df = self._apply_swing_threshold_filter(df, swing_threshold)
-
-        # Create forward-filled price columns for swing levels
-        df = df.with_columns(
-            [
-                # swing_high: shows current high when new_swing_high is True, forward-fills
-                when(col("new_swing_high"))
-                .then(col("high"))
-                .otherwise(None)
-                .fill_null(strategy="forward")
-                .alias("swing_high"),
-                # swing_low: shows current low when new_swing_low is True, forward-fills
-                when(col("new_swing_low"))
-                .then(col("low"))
-                .otherwise(None)
-                .fill_null(strategy="forward")
-                .alias("swing_low"),
-            ]
-        )
-
-        # Create boolean indicators for new pivot points (same as swing points)
-        df = df.with_columns(
-            [
-                col("new_swing_high").alias("new_pivot_high"),
-                col("new_swing_low").alias("new_pivot_low"),
-            ]
-        )
-
-        # Create forward-filled price columns for pivot levels
-        df = df.with_columns(
-            [
-                # pivot_high: shows current high when new_pivot_high is True, forward-fills
-                when(col("new_pivot_high"))
-                .then(col("high"))
-                .otherwise(None)
-                .fill_null(strategy="forward")
-                .alias("pivot_high"),
-                # pivot_low: shows current low when new_pivot_low is True, forward-fills
-                when(col("new_pivot_low"))
-                .then(col("low"))
-                .otherwise(None)
-                .fill_null(strategy="forward")
-                .alias("pivot_low"),
-            ]
-        )
-
-        # Clean up temporary columns used during swing point calculation
-        # These columns are always created during the swing point detection process
-        base_temp_columns = [
-            "__row_idx",  # Row index for boundary checks
-            "window_high_max",  # Rolling maximum for peak detection
-            "window_low_min",  # Rolling minimum for valley detection
-            "potential_swing_high",  # Candidate swing highs before threshold filtering
-            "potential_swing_low",  # Candidate swing lows before threshold filtering
-        ]
-
-        # Additional columns created only when threshold filtering is applied
-        threshold_temp_columns = [
-            "swing_high_candidate",  # High values at potential swing points
-            "swing_low_candidate",  # Low values at potential swing points
-            "ref_high",  # Forward-filled reference highs for comparison
-            "ref_low",  # Forward-filled reference lows for comparison
-            "high_pct_change",  # Percentage change from previous swing high
-            "low_pct_change",  # Percentage change from previous swing low
-        ]
-
-        # Build cleanup list: always include base columns, conditionally include threshold columns
-        columns_to_drop = base_temp_columns.copy()
+        # Apply threshold filtering if specified
         if swing_threshold > 0:
-            columns_to_drop.extend(threshold_temp_columns)
+            df = df.with_columns(
+                [
+                    when(col("is_local_high")).then(col("high")).otherwise(None).alias("high_candidates"),
+                    when(col("is_local_low")).then(col("low")).otherwise(None).alias("low_candidates"),
+                ]
+            )
 
-        # Only drop columns that actually exist in the DataFrame (defensive programming)
-        existing_temp_columns = [col for col in columns_to_drop if col in df.columns]
-        if existing_temp_columns:
-            df = df.drop(existing_temp_columns)
+            df = df.with_columns(
+                [
+                    col("high_candidates").fill_null(strategy="forward").alias("ref_high"),
+                    col("low_candidates").fill_null(strategy="forward").alias("ref_low"),
+                ]
+            )
 
-        return df
+            df = df.with_columns(
+                [
+                    when(col("is_local_high") & col("ref_high").shift(1).is_not_null())
+                    .then(((col("high") - col("ref_high").shift(1)).abs() / col("ref_high").shift(1) * 100))
+                    .otherwise(100.0)
+                    .alias("high_pct_change"),
+                    when(col("is_local_low") & col("ref_low").shift(1).is_not_null())
+                    .then(((col("low") - col("ref_low").shift(1)).abs() / col("ref_low").shift(1) * 100))
+                    .otherwise(100.0)
+                    .alias("low_pct_change"),
+                ]
+            )
 
-    def _calculate_market_structure(self, data: PolarsDataFrame) -> PolarsDataFrame:
-        """
-        Classify market structure patterns: HH, HL, LH, LL using vectorized operations.
+            df = df.with_columns(
+                [
+                    (col("is_local_high") & (col("high_pct_change") >= swing_threshold)).alias("valid_high"),
+                    (col("is_local_low") & (col("low_pct_change") >= swing_threshold)).alias("valid_low"),
+                ]
+            )
+        else:
+            df = df.with_columns(
+                [
+                    col("is_local_high").alias("valid_high"),
+                    col("is_local_low").alias("valid_low"),
+                ]
+            )
 
-        Analyzes sequence of swing points to determine market structure.
-        Uses vectorized operations to compare each new swing high to the previous swing high
-        and each new swing low to the previous swing low.
-        """
-        df = data.clone()
-
-        # For swing highs: find the previous swing high value for comparison
-        # Create a column that holds the high price only when new_swing_high is True
+        # Extract valid structural high/low values
         df = df.with_columns(
             [
-                when(col("new_swing_high")).then(col("high")).otherwise(None).alias("swing_high_values"),
-                when(col("new_swing_low")).then(col("low")).otherwise(None).alias("swing_low_values"),
+                when(col("valid_high")).then(col("high")).otherwise(None).alias("structural_high_values"),
+                when(col("valid_low")).then(col("low")).otherwise(None).alias("structural_low_values"),
             ]
         )
 
-        # Use shift to get the previous swing high/low values
-        # Forward fill to get the last known swing value, then shift to get previous
+        # Get previous structural values for comparison
         df = df.with_columns(
             [
-                col("swing_high_values").fill_null(strategy="forward").shift(1).alias("prev_swing_high_value"),
-                col("swing_low_values").fill_null(strategy="forward").shift(1).alias("prev_swing_low_value"),
+                col("structural_high_values").fill_null(strategy="forward").shift(1).alias("prev_structural_high"),
+                col("structural_low_values").fill_null(strategy="forward").shift(1).alias("prev_structural_low"),
             ]
         )
 
-        # Classify market structure based on comparison with previous swing points
+        # Classify market structure and create forward-filled columns
         df = df.with_columns(
             [
-                # Higher High: new swing high > previous swing high
-                (
-                    col("new_swing_high")
-                    & col("prev_swing_high_value").is_not_null()
-                    & (col("high") > col("prev_swing_high_value"))
-                ).alias("new_higher_high"),
-                # Lower High: new swing high < previous swing high
-                (
-                    col("new_swing_high")
-                    & col("prev_swing_high_value").is_not_null()
-                    & (col("high") < col("prev_swing_high_value"))
-                ).alias("new_lower_high"),
-                # Higher Low: new swing low > previous swing low
-                (
-                    col("new_swing_low")
-                    & col("prev_swing_low_value").is_not_null()
-                    & (col("low") > col("prev_swing_low_value"))
-                ).alias("new_higher_low"),
-                # Lower Low: new swing low < previous swing low
-                (
-                    col("new_swing_low")
-                    & col("prev_swing_low_value").is_not_null()
-                    & (col("low") < col("prev_swing_low_value"))
-                ).alias("new_lower_low"),
-            ]
-        )
-
-        # Create forward-filled price columns for market structure levels
-        df = df.with_columns(
-            [
-                # higher_high: shows current high when new_higher_high is True, forward-fills
-                when(col("new_higher_high"))
+                # Higher High: current structural high > previous structural high
+                when(
+                    col("valid_high")
+                    & col("prev_structural_high").is_not_null()
+                    & (col("high") > col("prev_structural_high"))
+                )
                 .then(col("high"))
                 .otherwise(None)
                 .fill_null(strategy="forward")
                 .alias("higher_high"),
-                # lower_high: shows current high when new_lower_high is True, forward-fills
-                when(col("new_lower_high"))
+                # Lower High: current structural high < previous structural high
+                when(
+                    col("valid_high")
+                    & col("prev_structural_high").is_not_null()
+                    & (col("high") < col("prev_structural_high"))
+                )
                 .then(col("high"))
                 .otherwise(None)
                 .fill_null(strategy="forward")
                 .alias("lower_high"),
-                # higher_low: shows current low when new_higher_low is True, forward-fills
-                when(col("new_higher_low"))
+                # Higher Low: current structural low > previous structural low
+                when(
+                    col("valid_low")
+                    & col("prev_structural_low").is_not_null()
+                    & (col("low") > col("prev_structural_low"))
+                )
                 .then(col("low"))
                 .otherwise(None)
                 .fill_null(strategy="forward")
                 .alias("higher_low"),
-                # lower_low: shows current low when new_lower_low is True, forward-fills
-                when(col("new_lower_low"))
+                # Lower Low: current structural low < previous structural low
+                when(
+                    col("valid_low")
+                    & col("prev_structural_low").is_not_null()
+                    & (col("low") < col("prev_structural_low"))
+                )
                 .then(col("low"))
                 .otherwise(None)
                 .fill_null(strategy="forward")
@@ -532,7 +373,28 @@ class Indicators(Component):
         )
 
         # Clean up temporary columns
-        df = df.drop(["swing_high_values", "swing_low_values", "prev_swing_high_value", "prev_swing_low_value"])
+        temp_columns = [
+            "__row_idx",
+            "window_high_max",
+            "window_low_min",
+            "is_local_high",
+            "is_local_low",
+            "valid_high",
+            "valid_low",
+            "structural_high_values",
+            "structural_low_values",
+            "prev_structural_high",
+            "prev_structural_low",
+        ]
+
+        if swing_threshold > 0:
+            temp_columns.extend(
+                ["high_candidates", "low_candidates", "ref_high", "ref_low", "high_pct_change", "low_pct_change"]
+            )
+
+        existing_temp_columns = [col for col in temp_columns if col in df.columns]
+        if existing_temp_columns:
+            df = df.drop(existing_temp_columns)
 
         return df
 

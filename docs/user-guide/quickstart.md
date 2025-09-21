@@ -143,7 +143,7 @@ analyzed = indicators.process(five_min_bars)
 # New columns are added for TheStrat metrics
 print(analyzed.columns)
 # Original OHLCV + TheStrat indicators like:
-# 'inside_bar', 'outside_bar', 'pivot_high', 'pivot_low', etc.
+# 'inside_bar', 'outside_bar', 'higher_high', 'lower_low', etc.
 ```
 
 ### Step 4: Extract Insights
@@ -155,12 +155,12 @@ Work with the results:
 inside_bars = analyzed[analyzed['inside_bar'] == True]
 print(f"Found {len(inside_bars)} inside bars")
 
-# Find pivot points (pivot_high and pivot_low contain price values, not booleans)
-pivot_highs = analyzed[analyzed['new_pivot_high'] == True] if 'new_pivot_high' in analyzed.columns else []
-pivot_lows = analyzed[analyzed['new_pivot_low'] == True] if 'new_pivot_low' in analyzed.columns else []
+# Find market structure points
+higher_highs = len(analyzed['higher_high'].drop_nulls())
+lower_lows = len(analyzed['lower_low'].drop_nulls())
 
-print(f"Pivot highs: {len(pivot_highs) if hasattr(pivot_highs, '__len__') else 0}")
-print(f"Pivot lows: {len(pivot_lows) if hasattr(pivot_lows, '__len__') else 0}")
+print(f"Higher highs: {higher_highs}")
+print(f"Lower lows: {lower_lows}")
 
 # Get the latest signals
 latest_signals = analyzed.tail(10)[['timestamp', 'inside_bar', 'outside_bar']]

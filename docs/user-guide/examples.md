@@ -98,8 +98,8 @@ def analyze_multiple_timeframes(data, timeframes=['5m', '15m', '1h']):
             'data': tf_data,
             'inside_bars': tf_data['inside_bar'].sum(),
             'outside_bars': tf_data['outside_bar'].sum(),
-            'pivot_highs': tf_data['pivot_high'].sum() if 'pivot_high' in tf_data.columns else 0,
-            'pivot_lows': tf_data['pivot_low'].sum() if 'pivot_low' in tf_data.columns else 0
+            'higher_highs': len(tf_data['higher_high'].drop_nulls()),
+            'lower_lows': len(tf_data['lower_low'].drop_nulls())
         }
 
     return results, analyzed  # Return both summary and full data
@@ -177,12 +177,10 @@ fx_pipeline = Factory.create_all(fx_config)
 eurusd_aggregated = fx_pipeline["aggregation"].process(eurusd_1m_data)
 eurusd_analyzed = fx_pipeline["indicators"].process(eurusd_aggregated)
 
-# Find major swing points (check for boolean columns indicating new pivots)
-major_swings = eurusd_analyzed[
-    (eurusd_analyzed.get('new_pivot_high', False) == True) |
-    (eurusd_analyzed.get('new_pivot_low', False) == True)
-] if 'new_pivot_high' in eurusd_analyzed.columns or 'new_pivot_low' in eurusd_analyzed.columns else []
-print(f"Found {len(major_swings)} major swing points in EUR/USD")
+# Find major market structure points
+higher_highs = len(eurusd_analyzed['higher_high'].drop_nulls())
+lower_lows = len(eurusd_analyzed['lower_low'].drop_nulls())
+print(f"Found {higher_highs} HH and {lower_lows} LL in EUR/USD")
 ```
 
 
@@ -272,18 +270,14 @@ def analyze_swing_points(data):
     aggregated = pipeline["aggregation"].process(data)
     analyzed = pipeline["indicators"].process(aggregated)
 
-    # Analyze swing point results
-    swing_highs = analyzed.filter(analyzed['new_swing_high'] == True)
-    swing_lows = analyzed.filter(analyzed['new_swing_low'] == True)
-
-    print(f"Detected {len(swing_highs)} swing highs")
-    print(f"Detected {len(swing_lows)} swing lows")
-
     # Market structure analysis
-    higher_highs = analyzed.filter(analyzed['new_higher_high'] == True)
-    lower_lows = analyzed.filter(analyzed['new_lower_low'] == True)
+    higher_highs = len(analyzed['higher_high'].drop_nulls())
+    lower_highs = len(analyzed['lower_high'].drop_nulls())
+    higher_lows = len(analyzed['higher_low'].drop_nulls())
+    lower_lows = len(analyzed['lower_low'].drop_nulls())
 
-    print(f"Higher highs: {len(higher_highs)} (bullish structure)")
+    print(f"Higher highs: {higher_highs} (bullish structure)")
+    print(f"Lower lows: {lower_lows} (bearish structure)")
     print(f"Lower lows: {len(lower_lows)} (bearish structure)")
 
     return analyzed
@@ -338,11 +332,11 @@ def compare_swing_configurations(data):
         aggregated = pipeline["aggregation"].process(data)
         analyzed = pipeline["indicators"].process(aggregated)
 
-        # Count swing points detected
-        swing_count = len(analyzed.filter(
-            (analyzed['new_swing_high'] == True) |
-            (analyzed['new_swing_low'] == True)
-        ))
+        # Count market structure points detected
+        structure_count = (len(analyzed['higher_high'].drop_nulls()) +
+                          len(analyzed['lower_high'].drop_nulls()) +
+                          len(analyzed['higher_low'].drop_nulls()) +
+                          len(analyzed['lower_low'].drop_nulls()))
 
         results[strategy_name] = {
             'config': swing_config,
@@ -366,10 +360,10 @@ Understanding the relationship between swing highs and lows reveals market trend
 def analyze_market_structure_trend(analyzed_data):
     """Analyze trend direction using market structure."""
 
-    # Get chronological swing points
-    swing_points = analyzed_data.filter(
-        (analyzed_data['new_swing_high'] == True) |
-        (analyzed_data['new_swing_low'] == True)
+    # Get market structure data
+    structure_data = analyzed_data.filter(
+        (analyzed_data['higher_high'].is_not_null()) |
+        (analyzed_data['lower_low'].is_not_null())
     ).sort('timestamp')
 
     if len(swing_points) < 4:
@@ -378,10 +372,10 @@ def analyze_market_structure_trend(analyzed_data):
     # Count recent structure patterns
     recent_data = analyzed_data.tail(50)  # Last 50 bars
 
-    hh_count = len(recent_data.filter(recent_data['new_higher_high'] == True))
-    hl_count = len(recent_data.filter(recent_data['new_higher_low'] == True))
-    lh_count = len(recent_data.filter(recent_data['new_lower_high'] == True))
-    ll_count = len(recent_data.filter(recent_data['new_lower_low'] == True))
+    hh_count = len(recent_data['higher_high'].drop_nulls())
+    hl_count = len(recent_data['higher_low'].drop_nulls())
+    lh_count = len(recent_data['lower_high'].drop_nulls())
+    ll_count = len(recent_data['lower_low'].drop_nulls())
 
     bullish_signals = hh_count + hl_count
     bearish_signals = lh_count + ll_count
@@ -645,11 +639,11 @@ def simulate_real_time_analysis(historical_data, interval_seconds=60):
             elif latest['outside_bar']:
                 print(f"{datetime.now()}: Outside bar detected @ {latest['close']:.2f}")
 
-            # Check for pivot points
-            if latest.get('new_pivot_high', False):
-                print(f"{datetime.now()}: New Pivot HIGH @ {latest['high']:.2f}")
-            elif latest.get('new_pivot_low', False):
-                print(f"{datetime.now()}: New Pivot LOW @ {latest['low']:.2f}")
+            # Check for market structure changes
+            if latest.get('higher_high') is not None:
+                print(f"{datetime.now()}: Higher High @ {latest['higher_high']:.2f}")
+            elif latest.get('lower_low') is not None:
+                print(f"{datetime.now()}: Lower Low @ {latest['lower_low']:.2f}")
 
         time.sleep(interval_seconds)
 

@@ -669,80 +669,26 @@ class IndicatorSchema(BaseModel):
         json_schema_extra={"polars_dtype": Int32, "output": True, "category": "gap_detection", "nullable": True},
     )
 
-    # Swing Point Detection Columns
-    swing_high: float = Field(
-        description="Confirmed swing high price point",
-        gt=0,
-        json_schema_extra={"polars_dtype": Float64, "output": True, "category": "swing_points", "nullable": True},
-    )
-    swing_low: float = Field(
-        description="Confirmed swing low price point",
-        gt=0,
-        json_schema_extra={"polars_dtype": Float64, "output": True, "category": "swing_points", "nullable": True},
-    )
-    new_swing_high: bool = Field(
-        description="True when a new swing high is detected",
-        json_schema_extra={"polars_dtype": Boolean, "output": True, "category": "swing_points", "nullable": False},
-    )
-    new_swing_low: bool = Field(
-        description="True when a new swing low is detected",
-        json_schema_extra={"polars_dtype": Boolean, "output": True, "category": "swing_points", "nullable": False},
-    )
-    pivot_high: float = Field(
-        description="Pivot high price (same as swing_high, alternative name)",
-        gt=0,
-        json_schema_extra={"polars_dtype": Float64, "output": True, "category": "swing_points", "nullable": True},
-    )
-    pivot_low: float = Field(
-        description="Pivot low price (same as swing_low, alternative name)",
-        gt=0,
-        json_schema_extra={"polars_dtype": Float64, "output": True, "category": "swing_points", "nullable": True},
-    )
-    new_pivot_high: bool = Field(
-        description="True when new pivot high detected (same as new_swing_high)",
-        json_schema_extra={"polars_dtype": Boolean, "output": True, "category": "swing_points", "nullable": False},
-    )
-    new_pivot_low: bool = Field(
-        description="True when new pivot low detected (same as new_swing_low)",
-        json_schema_extra={"polars_dtype": Boolean, "output": True, "category": "swing_points", "nullable": False},
-    )
-
     # Market Structure Analysis Columns
     higher_high: float = Field(
         description="Higher high price in uptrend structure",
         gt=0,
-        json_schema_extra={"polars_dtype": Float64, "output": True, "category": "swing_points", "nullable": True},
+        json_schema_extra={"polars_dtype": Float64, "output": True, "category": "market_structure", "nullable": True},
     )
     lower_high: float = Field(
         description="Lower high price in downtrend structure",
         gt=0,
-        json_schema_extra={"polars_dtype": Float64, "output": True, "category": "swing_points", "nullable": True},
+        json_schema_extra={"polars_dtype": Float64, "output": True, "category": "market_structure", "nullable": True},
     )
     higher_low: float = Field(
         description="Higher low price in uptrend structure",
         gt=0,
-        json_schema_extra={"polars_dtype": Float64, "output": True, "category": "swing_points", "nullable": True},
+        json_schema_extra={"polars_dtype": Float64, "output": True, "category": "market_structure", "nullable": True},
     )
     lower_low: float = Field(
         description="Lower low price in downtrend structure",
         gt=0,
-        json_schema_extra={"polars_dtype": Float64, "output": True, "category": "swing_points", "nullable": True},
-    )
-    new_higher_high: bool = Field(
-        description="True when new higher high is detected",
-        json_schema_extra={"polars_dtype": Boolean, "output": True, "nullable": False},
-    )
-    new_lower_high: bool = Field(
-        description="True when new lower high is detected",
-        json_schema_extra={"polars_dtype": Boolean, "output": True, "nullable": False},
-    )
-    new_higher_low: bool = Field(
-        description="True when new higher low is detected",
-        json_schema_extra={"polars_dtype": Boolean, "output": True, "nullable": False},
-    )
-    new_lower_low: bool = Field(
-        description="True when new lower low is detected",
-        json_schema_extra={"polars_dtype": Boolean, "output": True, "nullable": False},
+        json_schema_extra={"polars_dtype": Float64, "output": True, "category": "market_structure", "nullable": True},
     )
 
     # TheStrat Pattern Columns

@@ -74,8 +74,8 @@ for category, columns in categories.items():
     elif category == "signals":
         # Trading signals table with indexes
         create_signals_table(columns)
-    elif category == "swing_points":
-        # Technical analysis table
+    elif category == "market_structure":
+        # Market structure analysis table
         create_analysis_table(columns)
 ```
 
