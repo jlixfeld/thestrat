@@ -71,10 +71,8 @@ class TestTheStratIntegration:
         # Check that all expected indicator columns are present
         # Note: Market structure columns (higher_high, etc.) may not be present if no swings of that type are detected
         required_indicators = [
-            "swing_high",
-            "swing_low",
-            "pivot_high",
-            "pivot_low",
+            "higher_high",
+            "lower_low",
             "continuity",
             "in_force",
             "scenario",
@@ -229,7 +227,7 @@ class TestTheStratIntegration:
         assert isinstance(analyzed, DataFrame)
         assert len(analyzed) > 0
         # Should have all indicator columns
-        assert "swing_high" in analyzed.columns
+        assert "higher_high" in analyzed.columns
         assert "ath" in analyzed.columns
 
     def test_factory_component_consistency(self):
@@ -291,4 +289,4 @@ class TestTheStratIntegration:
         result = pipeline["indicators"].process(aggregated)
         assert isinstance(result, DataFrame)
         # Should have all required columns but limited swing point detection
-        assert len(result.columns) == 46  # Full schema maintained
+        assert len(result.columns) == 34  # Full schema maintained

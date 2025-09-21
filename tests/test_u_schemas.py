@@ -22,7 +22,7 @@ class TestIndicatorSchemaClassMethods:
         # Check some known descriptions
         assert "timestamp" in descriptions
         assert "open" in descriptions
-        assert "swing_high" in descriptions
+        assert "higher_high" in descriptions
         assert isinstance(descriptions["timestamp"], str)
 
     def test_get_polars_dtypes(self):
@@ -91,7 +91,7 @@ class TestIndicatorSchemaClassMethods:
             "base_ohlc",
             "price_analysis",
             "gap_detection",
-            "swing_points",
+            "market_structure",
             "thestrat_patterns",
             "signals",
             "special_patterns",
@@ -105,7 +105,7 @@ class TestIndicatorSchemaClassMethods:
 
         # Check some expected column placements
         assert "timestamp" in categories["base_ohlc"]
-        assert "swing_high" in categories["swing_points"]
+        assert "higher_high" in categories["market_structure"]
         assert "continuity" in categories["thestrat_patterns"]
         assert "signal" in categories["signals"]
 

@@ -17,10 +17,11 @@ TheStrat is a Python financial analysis library implementing Rob Smith's "The St
 
 ### Recent Improvements (2025)
 
-**Fully Vectorized Swing Point Detection:**
-- ✅ Eliminated all for loops from swing point calculations
+**Fully Vectorized Market Structure Detection:**
+- ✅ Eliminated all for loops from market structure calculations
 - ✅ Uses centered rolling windows for accurate peak/valley detection
 - ✅ Vectorized percentage threshold filtering
+- ✅ Direct HH/LH/HL/LL classification without intermediate swing points
 - ✅ Performance: ~35,000 rows/second for complete indicator analysis
 
 **Vectorized Market Structure Classification:**
@@ -105,9 +106,9 @@ mkdocs build
 - Returns normalized data with `timeframe` column for indicators
 
 **Indicators (`indicators.py`)**
-- Complete Strat pattern analysis (swing points, reversals, continuations)
-- **Fully vectorized swing point detection** using proper peak/valley analysis
-- **Vectorized market structure classification** (HH/HL/LH/LL patterns)
+- Complete Strat pattern analysis (market structure, reversals, continuations)
+- **Fully vectorized market structure detection** using proper peak/valley analysis
+- **Direct HH/LH/HL/LL classification** without redundant intermediate columns
 - **Optimized signal processing** with cascaded pattern matching
 - Per-timeframe configuration via `TimeframeItemConfig`
 - Gap detection (kicker, f23x, gapper patterns)
@@ -132,7 +133,7 @@ FactoryConfig
 ```
 
 **Data Schema:**
-- `IndicatorSchema`: Complete output schema with 46 columns
+- `IndicatorSchema`: Complete output schema with 34 columns
 - Database integration helpers: `get_polars_dtypes()`, `get_column_descriptions()`
 - Field metadata for nullable constraints and categories
 
@@ -140,7 +141,7 @@ FactoryConfig
 
 ```
 Raw OHLCV → Aggregation → Multi-timeframe data → Indicators → Analysis with signals
-          (asset class)   (normalized format)    (per-TF config)  (46 columns)
+          (asset class)   (normalized format)    (per-TF config)  (34 columns)
 ```
 
 **Key Data Requirements:**
@@ -163,7 +164,7 @@ Raw OHLCV → Aggregation → Multi-timeframe data → Indicators → Analysis w
 **Key Test Utilities:**
 - `tests/utils/thestrat_data_utils.py`: Common test data generation
 - `tests/utils/config_helpers.py`: Configuration helpers
-- Schema consistency tests ensure all 46 columns always present
+- Schema consistency tests ensure all 34 columns always present
 
 ## Development Patterns
 
@@ -183,7 +184,7 @@ analyzed = components["indicators"].process(aggregated)
 ```
 
 ### Schema Consistency
-The output always contains exactly 46 columns defined in `IndicatorSchema`. Signal and pattern columns are always present (with None values when no patterns detected) to ensure database integration consistency.
+The output always contains exactly 34 columns defined in `IndicatorSchema`. Signal and pattern columns are always present (with None values when no patterns detected) to ensure database integration consistency.
 
 ### Configuration Validation
 All configs use Pydantic v2 with strict validation. Asset class validation includes timezone compatibility checks and session time validation.
