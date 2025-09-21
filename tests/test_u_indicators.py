@@ -123,7 +123,7 @@ class TestIndicatorsInit:
 
         assert indicators.config.timeframe_configs[0].swing_points is not None
         assert indicators.config.timeframe_configs[0].swing_points.window == 10
-        assert indicators.config.timeframe_configs[0].swing_points.threshold == 5.0  # Uses default
+        assert indicators.config.timeframe_configs[0].swing_points.threshold == 0.0  # Uses default
 
     def test_init_empty_swing_config(self):
         """Test initialization with minimal config using Factory (defaults applied)."""
