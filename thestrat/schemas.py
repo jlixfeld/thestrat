@@ -269,10 +269,10 @@ class SwingPointsConfig(BaseModel):
         },
     )
     threshold: float = Field(
-        default=5.0,
+        default=0.0,
         ge=0,  # Replaces manual validator
         description="Minimum percentage move to qualify as swing point",
-        examples=[1.0, 2.5, 5.0, 10.0],
+        examples=[0.0, 1.0, 2.5, 5.0, 10.0],
         json_schema_extra={
             "unit": "percent",
             "asset_class_recommendations": {
