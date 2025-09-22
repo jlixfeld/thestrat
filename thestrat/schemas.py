@@ -260,7 +260,7 @@ class SwingPointsConfig(BaseModel):
 
     window: int = Field(
         default=1,
-        ge=3,  # Replaces manual validator
+        ge=1,  # Replaces manual validator
         description="Number of bars for swing detection window (must be odd for symmetry)",
         examples=[1, 3, 5, 7, 9],
         json_schema_extra={
