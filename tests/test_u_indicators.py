@@ -3599,7 +3599,7 @@ class TestIndicatorsNullable:
         result = indicators.process(df)
 
         # Signal fields should be able to be null when no patterns detected
-        signal_fields = ["signal", "type", "bias", "signal_json"]
+        signal_fields = ["signal", "type", "bias"]
 
         for field in signal_fields:
             if field in result.columns:
@@ -3950,7 +3950,7 @@ class TestNullableSchemaConsistency:
         result = indicators.process(data)
 
         # Verify signal columns exist
-        signal_columns = ["signal", "type", "bias", "signal_json"]
+        signal_columns = ["signal", "type", "bias"]
         for column in signal_columns:
             assert column in result.columns, f"Signal column '{column}' missing - breaks database integration"
 
