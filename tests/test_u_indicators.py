@@ -3565,6 +3565,334 @@ class TestIndicatorsEdgeCases:
 
 
 @pytest.mark.unit
+class TestIndividualSignalPatterns:
+    """Test individual signal patterns from SIGNALS dictionary."""
+
+    @pytest.fixture
+    def indicators_config(self):
+        """Standard indicators configuration for signal testing."""
+        return Indicators(
+            IndicatorsConfig(
+                timeframe_configs=[
+                    TimeframeItemConfig(
+                        timeframes=["all"],
+                        swing_points=SwingPointsConfig(window=1, threshold=0.1),
+                    )
+                ]
+            )
+        )
+
+    def _run_signal_test(self, pattern_type, expected_category, expected_bias, indicators_config):
+        """Helper method to run a complete signal test."""
+        from tests.utils.pattern_data_factory import PatternDataFactory
+
+        # Skip context-dependent patterns that require complex market conditions
+        if PatternDataFactory.is_context_pattern(pattern_type):
+            pytest.skip(
+                f"Pattern '{pattern_type}' requires complex market context that cannot be "
+                f"reliably generated with simple test data. Pattern description: "
+                f"{PatternDataFactory.get_pattern_description(pattern_type)}"
+            )
+
+        # Create pattern-specific test data using the factory
+        data = PatternDataFactory.create(pattern_type)
+
+        # Process data
+        result = indicators_config.process(data)
+        signal_objects = indicators_config.get_signal_objects(result)
+
+        # Find signals of the expected pattern
+        matching_signals = [s for s in signal_objects if s.pattern == pattern_type]
+
+        # For non-context patterns, assert that signals were found
+        assert len(matching_signals) > 0, (
+            f"Expected to find {pattern_type} signals but got {len(signal_objects)} total signals: "
+            f"{[s.pattern for s in signal_objects]}. Pattern description: "
+            f"{PatternDataFactory.get_pattern_description(pattern_type)}"
+        )
+
+        # Validate the first matching signal
+        signal = matching_signals[0]
+        self._validate_signal_object(signal, result, pattern_type, expected_category, expected_bias)
+
+        return signal, result
+
+    def _validate_signal_object(self, signal, result, expected_pattern, expected_category, expected_bias):
+        """Helper method to validate signal object properties."""
+        from thestrat.signals import SignalBias, SignalCategory
+
+        # Basic pattern validation
+        assert signal.pattern == expected_pattern
+        assert signal.category.value == expected_category
+        assert signal.bias.value == expected_bias
+
+        # Validate prices based on bias
+        if signal.bias == SignalBias.LONG:
+            # Long bias: entry = trigger high, stop = trigger low
+            trigger_high = result["high"][signal.trigger_bar_index]
+            trigger_low = result["low"][signal.trigger_bar_index]
+            assert signal.entry_price == trigger_high
+            assert signal.stop_price == trigger_low
+
+            # For reversal signals, validate target price
+            if signal.category == SignalCategory.REVERSAL and signal.target_bar_index is not None:
+                target_high = result["high"][signal.target_bar_index]
+                assert signal.target_price == target_high
+                # Should have reward amount
+                assert signal.reward_amount is not None
+                assert signal.reward_amount > 0
+            else:
+                # Continuation signals have no target
+                assert signal.target_price is None
+                assert signal.reward_amount is None
+
+        elif signal.bias == SignalBias.SHORT:
+            # Short bias: entry = trigger low, stop = trigger high
+            trigger_high = result["high"][signal.trigger_bar_index]
+            trigger_low = result["low"][signal.trigger_bar_index]
+            assert signal.entry_price == trigger_low
+            assert signal.stop_price == trigger_high
+
+            # For reversal signals, validate target price
+            if signal.category == SignalCategory.REVERSAL and signal.target_bar_index is not None:
+                target_low = result["low"][signal.target_bar_index]
+                assert signal.target_price == target_low
+                # Should have reward amount
+                assert signal.reward_amount is not None
+                assert signal.reward_amount > 0
+            else:
+                # Continuation signals have no target
+                assert signal.target_price is None
+                assert signal.reward_amount is None
+
+        # Risk amount should always be calculated
+        assert signal.risk_amount is not None
+        assert signal.risk_amount > 0
+
+        # Risk/reward ratio only for reversal signals
+        if signal.category == SignalCategory.REVERSAL:
+            assert signal.risk_reward_ratio is not None
+            assert signal.risk_reward_ratio > 0
+        else:
+            # Continuation signals have no risk/reward ratio
+            assert signal.risk_reward_ratio is None
+
+    def test_signal_1_2d_2u(self, indicators_config):
+        """Test 1-2D-2U pattern (Rev Strat reversal long)."""
+        self._run_signal_test("1-2D-2U", "reversal", "long", indicators_config)
+
+    def test_signal_3_1_2u(self, indicators_config):
+        """Test 3-1-2U pattern (3-bar reversal long)."""
+        self._run_signal_test("3-1-2U", "reversal", "long", indicators_config)
+
+    def test_signal_3_2d_2u(self, indicators_config):
+        """Test 3-2D-2U pattern (3-bar reversal long)."""
+        self._run_signal_test("3-2D-2U", "reversal", "long", indicators_config)
+
+    def test_signal_2d_1_2u(self, indicators_config):
+        """Test 2D-1-2U pattern (3-bar reversal long)."""
+        self._run_signal_test("2D-1-2U", "reversal", "long", indicators_config)
+
+    def test_signal_2d_2u(self, indicators_config):
+        """Test 2D-2U pattern (2-bar reversal long)."""
+        self._run_signal_test("2D-2U", "reversal", "long", indicators_config)
+
+    def test_signal_1_2u_2d(self, indicators_config):
+        """Test 1-2U-2D pattern (Rev Strat reversal short)."""
+        self._run_signal_test("1-2U-2D", "reversal", "short", indicators_config)
+
+    def test_signal_3_1_2d(self, indicators_config):
+        """Test 3-1-2D pattern (3-bar reversal short)."""
+        self._run_signal_test("3-1-2D", "reversal", "short", indicators_config)
+
+    def test_signal_3_2u_2d(self, indicators_config):
+        """Test 3-2U-2D pattern (3-bar reversal short)."""
+        self._run_signal_test("3-2U-2D", "reversal", "short", indicators_config)
+
+    def test_signal_2u_1_2d(self, indicators_config):
+        """Test 2U-1-2D pattern (3-bar reversal short)."""
+        self._run_signal_test("2U-1-2D", "reversal", "short", indicators_config)
+
+    def test_signal_2u_2d(self, indicators_config):
+        """Test 2U-2D pattern (2-bar reversal short)."""
+        self._run_signal_test("2U-2D", "reversal", "short", indicators_config)
+
+    def test_signal_2u_2u(self, indicators_config):
+        """Test 2U-2U pattern (2-bar continuation long)."""
+        self._run_signal_test("2U-2U", "continuation", "long", indicators_config)
+
+    def test_signal_2u_1_2u(self, indicators_config):
+        """Test 2U-1-2U pattern (3-bar continuation long)."""
+        self._run_signal_test("2U-1-2U", "continuation", "long", indicators_config)
+
+    def test_signal_2d_2d(self, indicators_config):
+        """Test 2D-2D pattern (2-bar continuation short)."""
+        self._run_signal_test("2D-2D", "continuation", "short", indicators_config)
+
+    def test_signal_2d_1_2d(self, indicators_config):
+        """Test 2D-1-2D pattern (3-bar continuation short)."""
+        self._run_signal_test("2D-1-2D", "continuation", "short", indicators_config)
+
+    def test_signal_3_2u(self, indicators_config):
+        """Test 3-2U pattern (context reversal long)."""
+        self._run_signal_test("3-2U", "reversal", "long", indicators_config)
+
+    def test_signal_3_2d(self, indicators_config):
+        """Test 3-2D pattern (context reversal short)."""
+        self._run_signal_test("3-2D", "reversal", "short", indicators_config)
+
+    def test_pattern_detection_with_insufficient_data(self, indicators_config):
+        """Test pattern detection behavior with insufficient data."""
+        # Create minimal data (only 3 bars - insufficient for most patterns)
+        minimal_data = DataFrame(
+            {
+                "timestamp": [datetime(2024, 1, 1, 9, 30) + timedelta(minutes=i * 5) for i in range(3)],
+                "open": [100.0, 102.0, 98.0],
+                "high": [101.0, 103.0, 99.0],
+                "low": [99.0, 101.0, 97.0],
+                "close": [100.5, 102.5, 98.5],
+                "volume": [1000, 1000, 1000],
+            }
+        )
+
+        # Process with minimal data
+        result = indicators_config.process(minimal_data)
+        signal_objects = indicators_config.get_signal_objects(result)
+
+        # Should not crash, but likely no signals detected due to insufficient data
+        assert isinstance(signal_objects, list)
+        # Signal columns should still be present even with no signals
+        signal_columns = ["signal", "type", "bias"]
+        for column in signal_columns:
+            assert column in result.columns
+
+    def test_pattern_detection_with_different_timeframe_configs(self):
+        """Test pattern detection with various timeframe configurations."""
+        from tests.utils.pattern_data_factory import PatternDataFactory
+
+        # Test with different swing point configurations
+        configs = [
+            # Tight swing points
+            Indicators(
+                IndicatorsConfig(
+                    timeframe_configs=[
+                        TimeframeItemConfig(
+                            timeframes=["all"],
+                            swing_points=SwingPointsConfig(window=1, threshold=0.05),
+                        )
+                    ]
+                )
+            ),
+            # Loose swing points
+            Indicators(
+                IndicatorsConfig(
+                    timeframe_configs=[
+                        TimeframeItemConfig(
+                            timeframes=["all"],
+                            swing_points=SwingPointsConfig(window=3, threshold=1.0),
+                        )
+                    ]
+                )
+            ),
+            # Multiple window sizes
+            Indicators(
+                IndicatorsConfig(
+                    timeframe_configs=[
+                        TimeframeItemConfig(
+                            timeframes=["all"],
+                            swing_points=SwingPointsConfig(window=2, threshold=0.3),
+                        )
+                    ]
+                )
+            ),
+        ]
+
+        # Test a simple pattern with all configurations
+        test_data = PatternDataFactory.create("2D-2U")
+
+        for config in configs:
+            result = config.process(test_data)
+            signal_objects = config.get_signal_objects(result)
+
+            # All configurations should produce valid results
+            assert isinstance(result, DataFrame)
+            assert isinstance(signal_objects, list)
+
+            # Schema consistency: 32 columns (raw data) or 33 columns (with timeframe from aggregation)
+            assert len(result.columns) in [32, 33], f"Expected 32 or 33 columns, got {len(result.columns)}"
+
+            # Signal columns should always be present
+            signal_columns = ["signal", "type", "bias"]
+            for column in signal_columns:
+                assert column in result.columns
+
+    def test_pattern_detection_edge_cases(self):
+        """Test pattern detection with edge case market data."""
+        from tests.utils.thestrat_data_utils import create_edge_case_data
+
+        indicators_config = Indicators(
+            IndicatorsConfig(
+                timeframe_configs=[
+                    TimeframeItemConfig(
+                        timeframes=["all"],
+                        swing_points=SwingPointsConfig(window=1, threshold=0.1),
+                    )
+                ]
+            )
+        )
+
+        edge_cases = ["identical_prices", "extreme_gaps", "single_bar"]
+
+        for case_type in edge_cases:
+            try:
+                edge_data = create_edge_case_data(case_type)
+                result = indicators_config.process(edge_data)
+                signal_objects = indicators_config.get_signal_objects(result)
+
+                # Should not crash and should maintain schema consistency
+                assert isinstance(result, DataFrame)
+                assert isinstance(signal_objects, list)
+
+                # Schema consistency: 32 columns (raw data) or 33 columns (with timeframe from aggregation)
+                assert len(result.columns) in [32, 33], f"Expected 32 or 33 columns, got {len(result.columns)}"
+
+                # Signal columns should be present even in edge cases
+                signal_columns = ["signal", "type", "bias"]
+                for column in signal_columns:
+                    assert column in result.columns
+
+            except Exception as e:
+                # If edge case fails, it should be a known limitation, not a crash
+                assert "single_bar" in case_type or "insufficient" in str(e).lower(), (
+                    f"Unexpected failure for edge case '{case_type}': {e}"
+                )
+
+    def test_pattern_factory_error_handling(self):
+        """Test pattern factory error handling for unknown patterns."""
+        from tests.utils.pattern_data_factory import PatternDataFactory
+
+        # Test unknown pattern
+        with pytest.raises(ValueError, match="Pattern 'UNKNOWN_PATTERN' not supported"):
+            PatternDataFactory.create("UNKNOWN_PATTERN")
+
+        # Test available patterns method
+        available_patterns = PatternDataFactory.get_available_patterns()
+        assert isinstance(available_patterns, list)
+        assert len(available_patterns) > 0
+        assert "1-2D-2U" in available_patterns
+
+        # Test pattern descriptions
+        for pattern in available_patterns:
+            description = PatternDataFactory.get_pattern_description(pattern)
+            assert isinstance(description, str)
+            assert len(description) > 0
+
+        # Test context pattern detection
+        assert PatternDataFactory.is_context_pattern("3-2U") is True
+        assert PatternDataFactory.is_context_pattern("1-2D-2U") is False
+
+
+@pytest.mark.unit
 class TestIndicatorsTimestampHandling:
     """Test cases for timestamp conversion edge cases in Indicators."""
 
