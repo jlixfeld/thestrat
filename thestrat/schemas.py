@@ -259,10 +259,10 @@ class SwingPointsConfig(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True, validate_default=True, extra="forbid")
 
     window: int = Field(
-        default=5,
+        default=1,
         ge=3,  # Replaces manual validator
         description="Number of bars for swing detection window (must be odd for symmetry)",
-        examples=[3, 5, 7, 9],
+        examples=[1, 3, 5, 7, 9],
         json_schema_extra={
             "recommendation": "Use odd numbers for symmetric lookback/forward windows",
             "impact": "Larger windows = fewer but more significant swings",
