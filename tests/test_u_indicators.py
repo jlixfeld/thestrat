@@ -2585,6 +2585,554 @@ class TestIndicatorsEdgeCases:
 
 
 @pytest.mark.unit
+class TestIndividualSignalPatterns:
+    """Test individual signal patterns from SIGNALS dictionary."""
+
+    def _validate_signal_object(self, signal, result, expected_pattern, expected_category, expected_bias):
+        """Helper method to validate signal object properties."""
+        from thestrat.signals import SignalBias, SignalCategory
+
+        # Basic pattern validation
+        assert signal.pattern == expected_pattern
+        assert signal.category.value == expected_category
+        assert signal.bias.value == expected_bias
+
+        # Validate prices based on bias
+        if signal.bias == SignalBias.LONG:
+            # Long bias: entry = trigger high, stop = trigger low
+            trigger_high = result["high"][signal.trigger_bar_index]
+            trigger_low = result["low"][signal.trigger_bar_index]
+            assert signal.entry_price == trigger_high
+            assert signal.stop_price == trigger_low
+
+            # For reversal signals, validate target price
+            if signal.category == SignalCategory.REVERSAL and signal.target_bar_index is not None:
+                target_high = result["high"][signal.target_bar_index]
+                assert signal.target_price == target_high
+                # Should have reward amount
+                assert signal.reward_amount is not None
+                assert signal.reward_amount > 0
+            else:
+                # Continuation signals have no target
+                assert signal.target_price is None
+                assert signal.reward_amount is None
+
+        elif signal.bias == SignalBias.SHORT:
+            # Short bias: entry = trigger low, stop = trigger high
+            trigger_high = result["high"][signal.trigger_bar_index]
+            trigger_low = result["low"][signal.trigger_bar_index]
+            assert signal.entry_price == trigger_low
+            assert signal.stop_price == trigger_high
+
+            # For reversal signals, validate target price
+            if signal.category == SignalCategory.REVERSAL and signal.target_bar_index is not None:
+                target_low = result["low"][signal.target_bar_index]
+                assert signal.target_price == target_low
+                # Should have reward amount
+                assert signal.reward_amount is not None
+                assert signal.reward_amount > 0
+            else:
+                # Continuation signals have no target
+                assert signal.target_price is None
+                assert signal.reward_amount is None
+
+        # Risk amount should always be calculated
+        assert signal.risk_amount is not None
+        assert signal.risk_amount > 0
+
+        # Risk/reward ratio only for reversal signals
+        if signal.category == SignalCategory.REVERSAL:
+            assert signal.risk_reward_ratio is not None
+            assert signal.risk_reward_ratio > 0
+        else:
+            # Continuation signals have no risk/reward ratio
+            assert signal.risk_reward_ratio is None
+
+    def _create_test_data_for_pattern(self, pattern_type):
+        """Create test data that will generate the specified pattern."""
+        # Create data that generates multiple patterns
+        data = DataFrame(
+            {
+                "timestamp": [datetime(2024, 1, 1, 9, 30) + timedelta(minutes=i * 5) for i in range(20)],
+                "open": [
+                    100.0,
+                    102.0,
+                    98.0,
+                    105.0,
+                    97.0,
+                    108.0,
+                    95.0,
+                    110.0,
+                    93.0,
+                    112.0,
+                    91.0,
+                    115.0,
+                    89.0,
+                    118.0,
+                    87.0,
+                    120.0,
+                    85.0,
+                    122.0,
+                    83.0,
+                    125.0,
+                ],
+                "high": [
+                    101.0,
+                    103.0,
+                    99.0,
+                    106.0,
+                    98.0,
+                    109.0,
+                    96.0,
+                    111.0,
+                    94.0,
+                    113.0,
+                    92.0,
+                    116.0,
+                    90.0,
+                    119.0,
+                    88.0,
+                    121.0,
+                    86.0,
+                    123.0,
+                    84.0,
+                    126.0,
+                ],
+                "low": [
+                    99.0,
+                    101.0,
+                    97.0,
+                    104.0,
+                    96.0,
+                    107.0,
+                    94.0,
+                    109.0,
+                    92.0,
+                    111.0,
+                    90.0,
+                    114.0,
+                    88.0,
+                    117.0,
+                    86.0,
+                    119.0,
+                    84.0,
+                    121.0,
+                    82.0,
+                    124.0,
+                ],
+                "close": [
+                    100.5,
+                    102.5,
+                    98.5,
+                    105.5,
+                    97.5,
+                    108.5,
+                    95.5,
+                    110.5,
+                    93.5,
+                    112.5,
+                    91.5,
+                    115.5,
+                    89.5,
+                    118.5,
+                    87.5,
+                    120.5,
+                    85.5,
+                    122.5,
+                    83.5,
+                    125.5,
+                ],
+                "volume": [1000] * 20,
+            }
+        )
+        return data
+
+    def test_signal_1_2d_2u(self):
+        """Test 1-2D-2U pattern (Rev Strat reversal long)."""
+        data = self._create_test_data_for_pattern("1-2D-2U")
+
+        indicators = Indicators(
+            IndicatorsConfig(
+                timeframe_configs=[
+                    TimeframeItemConfig(
+                        timeframes=["all"],
+                        swing_points=SwingPointsConfig(window=1, threshold=0.1),
+                    )
+                ]
+            )
+        )
+
+        result = indicators.process(data)
+        signal_objects = indicators.get_signal_objects(result)
+
+        # Find 1-2D-2U signals
+        rev_strat_signals = [s for s in signal_objects if s.pattern == "1-2D-2U"]
+        if rev_strat_signals:
+            signal = rev_strat_signals[0]
+            self._validate_signal_object(signal, result, "1-2D-2U", "reversal", "long")
+
+    def test_signal_3_1_2u(self):
+        """Test 3-1-2U pattern (3-bar reversal long)."""
+        data = self._create_test_data_for_pattern("3-1-2U")
+
+        indicators = Indicators(
+            IndicatorsConfig(
+                timeframe_configs=[
+                    TimeframeItemConfig(
+                        timeframes=["all"],
+                        swing_points=SwingPointsConfig(window=1, threshold=0.1),
+                    )
+                ]
+            )
+        )
+
+        result = indicators.process(data)
+        signal_objects = indicators.get_signal_objects(result)
+
+        # Find 3-1-2U signals
+        signals = [s for s in signal_objects if s.pattern == "3-1-2U"]
+        if signals:
+            signal = signals[0]
+            self._validate_signal_object(signal, result, "3-1-2U", "reversal", "long")
+
+    def test_signal_3_2d_2u(self):
+        """Test 3-2D-2U pattern (3-bar reversal long)."""
+        data = self._create_test_data_for_pattern("3-2D-2U")
+
+        indicators = Indicators(
+            IndicatorsConfig(
+                timeframe_configs=[
+                    TimeframeItemConfig(
+                        timeframes=["all"],
+                        swing_points=SwingPointsConfig(window=1, threshold=0.1),
+                    )
+                ]
+            )
+        )
+
+        result = indicators.process(data)
+        signal_objects = indicators.get_signal_objects(result)
+
+        # Find 3-2D-2U signals
+        signals = [s for s in signal_objects if s.pattern == "3-2D-2U"]
+        if signals:
+            signal = signals[0]
+            self._validate_signal_object(signal, result, "3-2D-2U", "reversal", "long")
+
+    def test_signal_2d_1_2u(self):
+        """Test 2D-1-2U pattern (3-bar reversal long)."""
+        data = self._create_test_data_for_pattern("2D-1-2U")
+
+        indicators = Indicators(
+            IndicatorsConfig(
+                timeframe_configs=[
+                    TimeframeItemConfig(
+                        timeframes=["all"],
+                        swing_points=SwingPointsConfig(window=1, threshold=0.1),
+                    )
+                ]
+            )
+        )
+
+        result = indicators.process(data)
+        signal_objects = indicators.get_signal_objects(result)
+
+        # Find 2D-1-2U signals
+        signals = [s for s in signal_objects if s.pattern == "2D-1-2U"]
+        if signals:
+            signal = signals[0]
+            self._validate_signal_object(signal, result, "2D-1-2U", "reversal", "long")
+
+    def test_signal_2d_2u(self):
+        """Test 2D-2U pattern (2-bar reversal long)."""
+        data = self._create_test_data_for_pattern("2D-2U")
+
+        indicators = Indicators(
+            IndicatorsConfig(
+                timeframe_configs=[
+                    TimeframeItemConfig(
+                        timeframes=["all"],
+                        swing_points=SwingPointsConfig(window=1, threshold=0.1),
+                    )
+                ]
+            )
+        )
+
+        result = indicators.process(data)
+        signal_objects = indicators.get_signal_objects(result)
+
+        # Find 2D-2U signals
+        signals = [s for s in signal_objects if s.pattern == "2D-2U"]
+        if signals:
+            signal = signals[0]
+            self._validate_signal_object(signal, result, "2D-2U", "reversal", "long")
+
+    def test_signal_1_2u_2d(self):
+        """Test 1-2U-2D pattern (Rev Strat reversal short)."""
+        data = self._create_test_data_for_pattern("1-2U-2D")
+
+        indicators = Indicators(
+            IndicatorsConfig(
+                timeframe_configs=[
+                    TimeframeItemConfig(
+                        timeframes=["all"],
+                        swing_points=SwingPointsConfig(window=1, threshold=0.1),
+                    )
+                ]
+            )
+        )
+
+        result = indicators.process(data)
+        signal_objects = indicators.get_signal_objects(result)
+
+        # Find 1-2U-2D signals
+        signals = [s for s in signal_objects if s.pattern == "1-2U-2D"]
+        if signals:
+            signal = signals[0]
+            self._validate_signal_object(signal, result, "1-2U-2D", "reversal", "short")
+
+    def test_signal_3_1_2d(self):
+        """Test 3-1-2D pattern (3-bar reversal short)."""
+        data = self._create_test_data_for_pattern("3-1-2D")
+
+        indicators = Indicators(
+            IndicatorsConfig(
+                timeframe_configs=[
+                    TimeframeItemConfig(
+                        timeframes=["all"],
+                        swing_points=SwingPointsConfig(window=1, threshold=0.1),
+                    )
+                ]
+            )
+        )
+
+        result = indicators.process(data)
+        signal_objects = indicators.get_signal_objects(result)
+
+        # Find 3-1-2D signals
+        signals = [s for s in signal_objects if s.pattern == "3-1-2D"]
+        if signals:
+            signal = signals[0]
+            self._validate_signal_object(signal, result, "3-1-2D", "reversal", "short")
+
+    def test_signal_3_2u_2d(self):
+        """Test 3-2U-2D pattern (3-bar reversal short)."""
+        data = self._create_test_data_for_pattern("3-2U-2D")
+
+        indicators = Indicators(
+            IndicatorsConfig(
+                timeframe_configs=[
+                    TimeframeItemConfig(
+                        timeframes=["all"],
+                        swing_points=SwingPointsConfig(window=1, threshold=0.1),
+                    )
+                ]
+            )
+        )
+
+        result = indicators.process(data)
+        signal_objects = indicators.get_signal_objects(result)
+
+        # Find 3-2U-2D signals
+        signals = [s for s in signal_objects if s.pattern == "3-2U-2D"]
+        if signals:
+            signal = signals[0]
+            self._validate_signal_object(signal, result, "3-2U-2D", "reversal", "short")
+
+    def test_signal_2u_1_2d(self):
+        """Test 2U-1-2D pattern (3-bar reversal short)."""
+        data = self._create_test_data_for_pattern("2U-1-2D")
+
+        indicators = Indicators(
+            IndicatorsConfig(
+                timeframe_configs=[
+                    TimeframeItemConfig(
+                        timeframes=["all"],
+                        swing_points=SwingPointsConfig(window=1, threshold=0.1),
+                    )
+                ]
+            )
+        )
+
+        result = indicators.process(data)
+        signal_objects = indicators.get_signal_objects(result)
+
+        # Find 2U-1-2D signals
+        signals = [s for s in signal_objects if s.pattern == "2U-1-2D"]
+        if signals:
+            signal = signals[0]
+            self._validate_signal_object(signal, result, "2U-1-2D", "reversal", "short")
+
+    def test_signal_2u_2d(self):
+        """Test 2U-2D pattern (2-bar reversal short)."""
+        data = self._create_test_data_for_pattern("2U-2D")
+
+        indicators = Indicators(
+            IndicatorsConfig(
+                timeframe_configs=[
+                    TimeframeItemConfig(
+                        timeframes=["all"],
+                        swing_points=SwingPointsConfig(window=1, threshold=0.1),
+                    )
+                ]
+            )
+        )
+
+        result = indicators.process(data)
+        signal_objects = indicators.get_signal_objects(result)
+
+        # Find 2U-2D signals
+        signals = [s for s in signal_objects if s.pattern == "2U-2D"]
+        if signals:
+            signal = signals[0]
+            self._validate_signal_object(signal, result, "2U-2D", "reversal", "short")
+
+    def test_signal_2u_2u(self):
+        """Test 2U-2U pattern (2-bar continuation long)."""
+        data = self._create_test_data_for_pattern("2U-2U")
+
+        indicators = Indicators(
+            IndicatorsConfig(
+                timeframe_configs=[
+                    TimeframeItemConfig(
+                        timeframes=["all"],
+                        swing_points=SwingPointsConfig(window=1, threshold=0.1),
+                    )
+                ]
+            )
+        )
+
+        result = indicators.process(data)
+        signal_objects = indicators.get_signal_objects(result)
+
+        # Find 2U-2U signals
+        signals = [s for s in signal_objects if s.pattern == "2U-2U"]
+        if signals:
+            signal = signals[0]
+            self._validate_signal_object(signal, result, "2U-2U", "continuation", "long")
+
+    def test_signal_2u_1_2u(self):
+        """Test 2U-1-2U pattern (3-bar continuation long)."""
+        data = self._create_test_data_for_pattern("2U-1-2U")
+
+        indicators = Indicators(
+            IndicatorsConfig(
+                timeframe_configs=[
+                    TimeframeItemConfig(
+                        timeframes=["all"],
+                        swing_points=SwingPointsConfig(window=1, threshold=0.1),
+                    )
+                ]
+            )
+        )
+
+        result = indicators.process(data)
+        signal_objects = indicators.get_signal_objects(result)
+
+        # Find 2U-1-2U signals
+        signals = [s for s in signal_objects if s.pattern == "2U-1-2U"]
+        if signals:
+            signal = signals[0]
+            self._validate_signal_object(signal, result, "2U-1-2U", "continuation", "long")
+
+    def test_signal_2d_2d(self):
+        """Test 2D-2D pattern (2-bar continuation short)."""
+        data = self._create_test_data_for_pattern("2D-2D")
+
+        indicators = Indicators(
+            IndicatorsConfig(
+                timeframe_configs=[
+                    TimeframeItemConfig(
+                        timeframes=["all"],
+                        swing_points=SwingPointsConfig(window=1, threshold=0.1),
+                    )
+                ]
+            )
+        )
+
+        result = indicators.process(data)
+        signal_objects = indicators.get_signal_objects(result)
+
+        # Find 2D-2D signals
+        signals = [s for s in signal_objects if s.pattern == "2D-2D"]
+        if signals:
+            signal = signals[0]
+            self._validate_signal_object(signal, result, "2D-2D", "continuation", "short")
+
+    def test_signal_2d_1_2d(self):
+        """Test 2D-1-2D pattern (3-bar continuation short)."""
+        data = self._create_test_data_for_pattern("2D-1-2D")
+
+        indicators = Indicators(
+            IndicatorsConfig(
+                timeframe_configs=[
+                    TimeframeItemConfig(
+                        timeframes=["all"],
+                        swing_points=SwingPointsConfig(window=1, threshold=0.1),
+                    )
+                ]
+            )
+        )
+
+        result = indicators.process(data)
+        signal_objects = indicators.get_signal_objects(result)
+
+        # Find 2D-1-2D signals
+        signals = [s for s in signal_objects if s.pattern == "2D-1-2D"]
+        if signals:
+            signal = signals[0]
+            self._validate_signal_object(signal, result, "2D-1-2D", "continuation", "short")
+
+    def test_signal_3_2u(self):
+        """Test 3-2U pattern (context reversal long)."""
+        data = self._create_test_data_for_pattern("3-2U")
+
+        indicators = Indicators(
+            IndicatorsConfig(
+                timeframe_configs=[
+                    TimeframeItemConfig(
+                        timeframes=["all"],
+                        swing_points=SwingPointsConfig(window=1, threshold=0.1),
+                    )
+                ]
+            )
+        )
+
+        result = indicators.process(data)
+        signal_objects = indicators.get_signal_objects(result)
+
+        # Find 3-2U signals
+        signals = [s for s in signal_objects if s.pattern == "3-2U"]
+        if signals:
+            signal = signals[0]
+            self._validate_signal_object(signal, result, "3-2U", "reversal", "long")
+
+    def test_signal_3_2d(self):
+        """Test 3-2D pattern (context reversal short)."""
+        data = self._create_test_data_for_pattern("3-2D")
+
+        indicators = Indicators(
+            IndicatorsConfig(
+                timeframe_configs=[
+                    TimeframeItemConfig(
+                        timeframes=["all"],
+                        swing_points=SwingPointsConfig(window=1, threshold=0.1),
+                    )
+                ]
+            )
+        )
+
+        result = indicators.process(data)
+        signal_objects = indicators.get_signal_objects(result)
+
+        # Find 3-2D signals
+        signals = [s for s in signal_objects if s.pattern == "3-2D"]
+        if signals:
+            signal = signals[0]
+            self._validate_signal_object(signal, result, "3-2D", "reversal", "short")
+
+
+@pytest.mark.unit
 class TestIndicatorsTimestampHandling:
     """Test cases for timestamp conversion edge cases in Indicators."""
 

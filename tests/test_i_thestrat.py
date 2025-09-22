@@ -289,4 +289,4 @@ class TestTheStratIntegration:
         result = pipeline["indicators"].process(aggregated)
         assert isinstance(result, DataFrame)
         # Should have all required columns but limited swing point detection
-        assert len(result.columns) == 34  # Full schema maintained
+        assert len(result.columns) == 33  # Full schema maintained

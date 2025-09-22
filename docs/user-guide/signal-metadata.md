@@ -410,3 +410,126 @@ The `SignalMetadata` object contains 30+ fields organized by category:
 - `max_favorable_excursion`, `max_adverse_excursion`
 
 All fields support full serialization and database integration with type preservation.
+
+## Trading Integration Example
+
+Here's a complete example showing how to use `get_signal_objects()` to prepare for live trading when current signals are detected:
+
+```python
+from datetime import datetime
+from thestrat import Factory
+from thestrat.schemas import FactoryConfig, AggregationConfig, IndicatorsConfig, TimeframeItemConfig, SwingPointsConfig
+
+def monitor_signals_for_trading(raw_data):
+    """Monitor incoming market data for trading signals."""
+
+    # Create complete pipeline
+    config = FactoryConfig(
+        aggregation=AggregationConfig(
+            target_timeframes=["5min"],
+            asset_class="equities"
+        ),
+        indicators=IndicatorsConfig(
+            timeframe_configs=[
+                TimeframeItemConfig(
+                    timeframes=["all"],
+                    swing_points=SwingPointsConfig(window=3, threshold=0.5)
+                )
+            ]
+        )
+    )
+
+    components = Factory.create_all(config)
+
+    # Process data through pipeline
+    aggregated = components["aggregation"].process(raw_data)
+    current_signals = components["indicators"].process(aggregated)
+
+    # Get complete signal objects for trading decisions
+    signal_objects = components["indicators"].get_signal_objects(current_signals)
+
+    if signal_objects:
+        print(f"Found {len(signal_objects)} active signals:")
+
+        for signal in signal_objects:
+            print(f"\n=== {signal.pattern} Signal ===")
+            print(f"Symbol: {signal.symbol}")
+            print(f"Category: {signal.category.value}")
+            print(f"Bias: {signal.bias.value}")
+            print(f"Entry Price: ${signal.entry_price:.2f}")
+            print(f"Stop Loss: ${signal.stop_price:.2f}")
+
+            if signal.target_price:
+                print(f"Target Price: ${signal.target_price:.2f}")
+                print(f"Risk/Reward Ratio: {signal.risk_reward_ratio:.2f}")
+            else:
+                print("Target: None (continuation signal)")
+
+            print(f"Risk Amount: ${signal.risk_amount:.2f}")
+
+            # Example trading logic
+            prepare_trade_order(signal)
+    else:
+        print("No signals detected in current data")
+
+def prepare_trade_order(signal):
+    """Prepare actual trade order from signal metadata."""
+
+    # Calculate position size based on risk
+    account_risk_percent = 0.02  # Risk 2% of account per trade
+    account_balance = 100000     # $100k account
+    max_risk_dollars = account_balance * account_risk_percent
+
+    # Position size = Max risk / Signal risk
+    position_size = int(max_risk_dollars / signal.risk_amount)
+
+    order_details = {
+        "symbol": signal.symbol,
+        "action": "BUY" if signal.bias.value == "long" else "SELL",
+        "quantity": position_size,
+        "order_type": "STOP_LIMIT",
+        "entry_price": signal.entry_price,
+        "stop_loss": signal.stop_price,
+        "target_price": signal.target_price,
+        "signal_id": signal.signal_id,
+        "risk_amount": signal.risk_amount,
+        "expected_reward": signal.reward_amount
+    }
+
+    print(f"  → Order prepared: {order_details['action']} {position_size} shares")
+    print(f"  → Max risk: ${max_risk_dollars:.2f}")
+    print(f"  → Signal ID: {signal.signal_id}")
+
+    # Send to broker API or trading system
+    # place_order(order_details)
+
+    return order_details
+
+# Example usage with live market data
+if __name__ == "__main__":
+    # Simulate incoming market data
+    import polars as pl
+
+    live_data = pl.DataFrame({
+        "timestamp": [datetime.now()],
+        "symbol": ["AAPL"],
+        "open": [150.0],
+        "high": [152.0],
+        "low": [149.0],
+        "close": [151.5],
+        "volume": [1000000]
+    })
+
+    monitor_signals_for_trading(live_data)
+```
+
+This example demonstrates:
+
+- **Real-time Processing**: Using the complete pipeline to analyze incoming market data
+- **Signal Detection**: Finding active patterns in current market conditions
+- **Rich Metadata**: Accessing complete trading information from signal objects
+- **Risk Management**: Calculating position sizes based on signal risk
+- **Order Preparation**: Converting signals into actionable trade orders
+- **Trading Integration**: Ready-to-use structure for broker API integration
+
+The key advantage is that `get_signal_objects()` provides complete trading metadata on-demand, eliminating the need for redundant JSON generation during vectorized processing while maintaining full trading functionality.
