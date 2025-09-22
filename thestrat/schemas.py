@@ -742,10 +742,6 @@ class IndicatorSchema(BaseModel):
             "values": ["long", "short"],
         },
     )
-    signal_json: str = Field(
-        description="Complete signal metadata as JSON string",
-        json_schema_extra={"polars_dtype": String, "output": True, "category": "signals", "nullable": True},
-    )
 
     # Special Pattern Columns
     hammer: bool = Field(

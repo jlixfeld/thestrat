@@ -577,33 +577,6 @@ class Indicators(Component):
             ]
         )
 
-        # Create signal JSON using vectorized operations with proper SignalMetadata format
-        df = df.with_columns(
-            [
-                when(col("signal").is_not_null())
-                .then(
-                    concat_str(
-                        [
-                            lit('{"pattern":"'),
-                            col("signal"),
-                            lit('","category":"'),
-                            col("type"),
-                            lit('","bias":"'),
-                            col("bias"),
-                            lit('","bar_count":'),
-                            when(col("pattern_3bar").is_not_null()).then(lit("3")).otherwise(lit("2")),
-                            lit(',"status":"active","entry_bar_index":null,"trigger_bar_index":null,'),
-                            lit('"target_bar_index":null,"entry_price":null,"stop_price":null,'),
-                            lit('"target_price":null,"timestamp":null,"symbol":null,"timeframe":null}'),
-                        ],
-                        separator="",
-                    )
-                )
-                .otherwise(None)
-                .alias("signal_json")
-            ]
-        )
-
         # Note: Signal objects are not created in this vectorized implementation
         # for performance reasons. If signal objects are needed, they can be created
         # on-demand using the get_signal_objects method

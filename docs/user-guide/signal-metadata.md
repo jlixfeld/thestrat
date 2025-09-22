@@ -410,3 +410,171 @@ The `SignalMetadata` object contains 30+ fields organized by category:
 - `max_favorable_excursion`, `max_adverse_excursion`
 
 All fields support full serialization and database integration with type preservation.
+
+## Real-World Trading Example
+
+Here's a complete example showing how to use `get_signal_objects()` to detect patterns and prepare for trade entry:
+
+```python
+from thestrat import Factory, FactoryConfig, AggregationConfig, IndicatorsConfig
+from polars import col
+import polars as pl
+
+def monitor_signals_for_trading(raw_data):
+    """
+    Complete workflow: data processing → signal detection → trade preparation
+    """
+    # 1. Configure TheStrat components
+    config = FactoryConfig(
+        aggregation=AggregationConfig(
+            timeframes=["5min", "1h"],
+            asset_class="equities"
+        ),
+        indicators=IndicatorsConfig()
+    )
+
+    # 2. Create processing pipeline
+    components = Factory.create_all(config)
+
+    # 3. Process raw OHLCV data
+    aggregated_data = components["aggregation"].process(raw_data)
+    analyzed_data = components["indicators"].process(aggregated_data)
+
+    # 4. Filter for current signals (last few bars only)
+    current_signals = analyzed_data.filter(
+        col("signal").is_not_null() &
+        (col("timestamp") >= analyzed_data["timestamp"].max() - pl.duration(hours=2))
+    )
+
+    if len(current_signals) == 0:
+        print("No signals detected in recent data")
+        return []
+
+    # 5. Get full signal objects with trading metadata
+    signal_objects = components["indicators"].get_signal_objects(current_signals)
+
+    # 6. Evaluate each signal for trade entry
+    trade_candidates = []
+
+    for signal in signal_objects:
+        print(f"\n🎯 Signal Detected: {signal.pattern}")
+        print(f"   Symbol: {signal.symbol}")
+        print(f"   Timeframe: {signal.timeframe}")
+        print(f"   Bias: {signal.bias.value.upper()}")
+        print(f"   Category: {signal.category.value}")
+
+        # Price levels for order placement
+        print(f"\n💰 Trading Levels:")
+        print(f"   Entry: ${signal.entry_price:.2f}")
+        print(f"   Stop:  ${signal.stop_price:.2f}")
+
+        if signal.target_price:
+            print(f"   Target: ${signal.target_price:.2f}")
+            print(f"   Risk/Reward: {signal.risk_reward_ratio:.2f}:1")
+        else:
+            print(f"   Target: None (continuation signal)")
+
+        # Risk management
+        risk_dollars = signal.risk_amount
+        print(f"\n📊 Risk Management:")
+        print(f"   Risk per share: ${risk_dollars:.2f}")
+
+        # Position sizing (example: risk $100 per trade)
+        max_risk = 100.0
+        position_size = int(max_risk / risk_dollars)
+        print(f"   Suggested position size: {position_size} shares")
+        print(f"   Total capital at risk: ${position_size * risk_dollars:.2f}")
+
+        # Entry criteria check
+        entry_criteria = {
+            "reasonable_risk_reward": signal.risk_reward_ratio is None or signal.risk_reward_ratio >= 1.5,
+            "reasonable_risk_amount": risk_dollars <= 5.0,  # Max $5 risk per share
+            "recent_signal": True,  # Already filtered above
+            "clear_levels": abs(signal.entry_price - signal.stop_price) > 0.01
+        }
+
+        all_criteria_met = all(entry_criteria.values())
+
+        print(f"\n✅ Entry Criteria:")
+        for criterion, met in entry_criteria.items():
+            status = "✓" if met else "✗"
+            print(f"   {status} {criterion.replace('_', ' ').title()}")
+
+        if all_criteria_met:
+            trade_candidates.append({
+                "signal": signal,
+                "action": "BUY" if signal.bias.value == "long" else "SELL",
+                "quantity": position_size,
+                "entry_price": signal.entry_price,
+                "stop_loss": signal.stop_price,
+                "take_profit": signal.target_price,
+                "risk_amount": position_size * risk_dollars
+            })
+            print(f"\n🚀 TRADE READY: {signal.pattern} on {signal.symbol}")
+        else:
+            print(f"\n⏸️  Criteria not met - monitoring only")
+
+    return trade_candidates
+
+def execute_trades(trade_candidates):
+    """
+    Execute trades using your broker API
+    """
+    for trade in trade_candidates:
+        signal = trade["signal"]
+
+        # Example order placement (adapt to your broker's API)
+        order_params = {
+            "symbol": signal.symbol,
+            "side": trade["action"],
+            "quantity": trade["quantity"],
+            "type": "LIMIT",
+            "price": trade["entry_price"],
+            "stop_loss": trade["stop_loss"],
+            "take_profit": trade["take_profit"]
+        }
+
+        print(f"Placing order: {order_params}")
+        # broker_api.place_bracket_order(**order_params)
+
+        # Store signal for tracking
+        # database.store_active_signal(signal.to_json())
+
+# Usage example
+if __name__ == "__main__":
+    # Your raw market data (timestamp, open, high, low, close, volume, symbol)
+    raw_market_data = get_latest_market_data()  # Your data source
+
+    # Monitor for signals and get trade-ready candidates
+    candidates = monitor_signals_for_trading(raw_market_data)
+
+    if candidates:
+        print(f"\n🎯 Found {len(candidates)} trade candidates")
+
+        # Execute trades (uncomment when ready)
+        # execute_trades(candidates)
+    else:
+        print("\n⏳ No trade candidates found - continue monitoring")
+```
+
+### Key Benefits of This Approach
+
+**Separation of Concerns:**
+- Vectorized pattern detection handles the heavy lifting
+- `get_signal_objects()` provides rich metadata only when signals are found
+- No wasted computation on incomplete JSON during pattern detection
+
+**Complete Trading Context:**
+- Entry, stop, and target prices calculated from actual market structure
+- Risk/reward ratios and position sizing based on real price levels
+- Signal metadata includes bar indices for verification
+
+**Database Integration:**
+- Store complete signal objects for tracking and analysis
+- Update stop/target levels as trades evolve
+- Maintain audit trail of all signal modifications
+
+**Performance Optimized:**
+- Fast vectorized detection identifies patterns quickly
+- Signal objects created on-demand only for actionable signals
+- Minimal memory overhead during bulk processing
