@@ -82,13 +82,12 @@ class Aggregation(Component):
     def process(self, data: PolarsDataFrame | PandasDataFrame) -> PolarsDataFrame:
         """
         Convert OHLC data to target timeframes with boundary alignment.
-        Supports both single-timeframe and multi-timeframe source data.
 
         Args:
-            data: Input DataFrame with OHLC data
+            data: Input DataFrame with OHLC data including MANDATORY timeframe column
 
         Returns:
-            Aggregated OHLC DataFrame with timeframe column
+            Aggregated OHLC DataFrame with consistent column ordering
         """
         if not self.validate_input(data):
             raise ValueError("Input data validation failed")
@@ -96,37 +95,12 @@ class Aggregation(Component):
         df = self._convert_to_polars(data)
         df = self.normalize_timezone(df)
 
-        # Auto-detect mode
-        is_multi_timeframe = "timeframe" in df.columns
+        # Process the timeframe data (timeframe column is mandatory)
+        return self._process_timeframes(df)
 
-        if is_multi_timeframe:
-            return self._process_multi_timeframe_source(df)
-        else:
-            return self._process_single_timeframe_source(df)
-
-    def _process_single_timeframe_source(self, data: PolarsDataFrame) -> PolarsDataFrame:
-        """Process single-timeframe source data."""
-        # Process each timeframe and collect results
-        results = []
-        for timeframe in self.target_timeframes:
-            timeframe_result = self._process_single_timeframe(data, timeframe)
-            results.append(timeframe_result)
-
-        # Concatenate and sort results
-        final_df = results[0]
-        for result in results[1:]:
-            final_df = final_df.vstack(result)
-
-        sort_cols = []
-        if "symbol" in final_df.columns:
-            sort_cols.append("symbol")
-        sort_cols.extend(["timeframe", "timestamp"])
-
-        return final_df.sort(sort_cols)
-
-    def _process_multi_timeframe_source(self, data: PolarsDataFrame) -> PolarsDataFrame:
+    def _process_timeframes(self, data: PolarsDataFrame) -> PolarsDataFrame:
         """
-        Process multi-timeframe source data.
+        Process timeframe source data.
         Intelligently selects optimal source timeframe for each target.
         """
         from .schemas import TimeframeConfig
@@ -142,11 +116,13 @@ class Aggregation(Component):
             if source_tf == target_tf:
                 # Pass-through: target already exists in source
                 target_data = data.filter(col("timeframe") == target_tf)
+                target_data = self._standardize_column_order(target_data)
                 results.append(target_data)
             elif source_tf:
                 # Aggregate from optimal source
                 source_data = data.filter(col("timeframe") == source_tf).drop("timeframe")
                 aggregated = self._process_single_timeframe(source_data, target_tf)
+                aggregated = self._standardize_column_order(aggregated)
                 results.append(aggregated)
             else:
                 # No valid source available for this target - log warning but continue
@@ -277,29 +253,26 @@ class Aggregation(Component):
         """Validate input data format."""
         df = self._convert_to_polars(data)
 
-        # Check required columns using schema-driven approach
-        from .schemas import IndicatorSchema
+        from .schemas import IndicatorSchema, TimeframeConfig
 
+        # Check all required columns (including mandatory timeframe)
         required_cols = IndicatorSchema.get_required_input_columns()
+        missing_cols = [col for col in required_cols if col not in df.columns]
 
-        # Remove timeframe if not in multi-timeframe mode
-        if "timeframe" not in df.columns and "timeframe" in required_cols:
-            required_cols = [col for col in required_cols if col != "timeframe"]
-
-        if not all(col in df.columns for col in required_cols):
+        if missing_cols:
+            print(f"ERROR: Missing required columns: {missing_cols}")
             return False
 
-        # Validate timeframes if in multi-timeframe mode
-        if "timeframe" in df.columns:
-            from .schemas import TimeframeConfig
-
-            unique_timeframes = df["timeframe"].unique().to_list()
-            for tf in unique_timeframes:
-                if not TimeframeConfig.validate_timeframe(tf):
-                    return False
+        # Validate timeframe values
+        unique_timeframes = df["timeframe"].unique().to_list()
+        for tf in unique_timeframes:
+            if not TimeframeConfig.validate_timeframe(tf):
+                print(f"ERROR: Invalid timeframe '{tf}'")
+                return False
 
         # Check for minimum data points
         if len(df) < 2:
+            print(f"ERROR: Insufficient data points ({len(df)} < 2)")
             return False
 
         return True
@@ -340,3 +313,13 @@ class Aggregation(Component):
             return True
 
         return False
+
+    def _standardize_column_order(self, df: PolarsDataFrame) -> PolarsDataFrame:
+        """Apply standard column ordering from schema."""
+        from .schemas import IndicatorSchema
+
+        standard_order = IndicatorSchema.get_standard_column_order()
+        existing_cols = [col for col in standard_order if col in df.columns]
+        remaining_cols = [col for col in df.columns if col not in existing_cols]
+
+        return df.select(existing_cols + remaining_cols)

@@ -21,7 +21,8 @@ data = PandasDataFrame({
     'high': [100.5 + i*0.1 for i in range(300)],
     'low': [99.5 + i*0.1 for i in range(300)],
     'close': [100.2 + i*0.1 for i in range(300)],
-    'volume': [1000 + i*10 for i in range(300)]
+    'volume': [1000 + i*10 for i in range(300)],
+    'timeframe': ['1min'] * 300
 })
 
 # Configure for 5-minute equity analysis with Pydantic models
@@ -289,7 +290,8 @@ trending_data = PandasDataFrame({
     'high': [101 + i*0.5 + (i%10)*0.3 for i in range(100)],
     'low': [99 + i*0.5 + (i%10)*0.1 for i in range(100)],
     'close': [100.5 + i*0.5 + (i%10)*0.25 for i in range(100)],
-    'volume': [1000 + i*10 for i in range(100)]
+    'volume': [1000 + i*10 for i in range(100)],
+    'timeframe': ['5min'] * 100
 })
 
 results = analyze_swing_points(trending_data)
@@ -423,7 +425,8 @@ def benchmark_swing_detection(data_size=10000):
         'high': [100.5 + i*0.01 + (i%100)*0.15 for i in range(data_size)],
         'low': [99.5 + i*0.01 + (i%100)*0.05 for i in range(data_size)],
         'close': [100.2 + i*0.01 + (i%100)*0.12 for i in range(data_size)],
-        'volume': [1000 + i for i in range(data_size)]
+        'volume': [1000 + i for i in range(data_size)],
+        'timeframe': ['1min'] * data_size
     })
 
     config = FactoryConfig(

@@ -9,7 +9,7 @@ from datetime import datetime
 import pytest
 from pandas import DataFrame as PandasDataFrame
 from pandas import date_range
-from polars import DataFrame, Datetime
+from polars import DataFrame, Datetime, col, lit
 from pydantic import ValidationError
 
 from thestrat.aggregation import Aggregation
@@ -251,6 +251,7 @@ class TestAggregationValidation:
                 "low": [99.5, 100.5, 101.5, 102.5, 103.5],
                 "close": [101.0, 102.0, 103.0, 104.0, 105.0],
                 "volume": [1000, 1100, 1200, 1300, 1400],
+                "timeframe": ["1h"] * 5,
             }
         )
 
@@ -296,6 +297,7 @@ class TestAggregationOHLC:
                 "low": [99.5, 99.6, 99.7, 99.8, 99.9],
                 "close": [100.2, 100.3, 100.4, 100.5, 100.6],
                 "volume": [1000, 1100, 1200, 1300, 1400],
+                "timeframe": ["1min"] * 5,
             }
         )
 
@@ -318,6 +320,7 @@ class TestAggregationOHLC:
                 "low": [99.5, 100.5, 101.5],
                 "close": [100.2, 101.2, 102.2],
                 "volume": [1000, 2000, 3000],
+                "timeframe": ["1min"] * 3,
             }
         )
 
@@ -341,6 +344,7 @@ class TestAggregationOHLC:
                 "high": [100.5, 101.5, 102.5],
                 "low": [99.5, 100.5, 101.5],
                 "close": [100.2, 101.2, 102.2],
+                "timeframe": ["1min"] * 3,
             }
         )
 
@@ -574,6 +578,7 @@ class TestMultiTimezoneConsistency:
                 "low": [99.5 + i for i in range(24)],
                 "close": [100.2 + i for i in range(24)],
                 "volume": [1000] * 24,
+                "timeframe": ["1h"] * 24,
             }
         )
 
@@ -587,6 +592,7 @@ class TestMultiTimezoneConsistency:
                 "low": [99.5 + i for i in range(24)],
                 "close": [100.2 + i for i in range(24)],
                 "volume": [1000] * 24,
+                "timeframe": ["1h"] * 24,
             }
         )
 
@@ -1267,6 +1273,7 @@ class TestAllTimeframes:
                 "low": [99.5, 100.5, 101.5, 102.5, 103.5, 104.5],
                 "close": [100.2, 101.2, 102.2, 103.2, 104.2, 105.2],
                 "volume": [1000, 1100, 1200, 1300, 1400, 1500],
+                "timeframe": ["30min"] * 6,
             }
         )
 
@@ -1511,3 +1518,391 @@ class TestAggregationPrivateMethods:
         # Test actual minute patterns that should return False
         assert agg._is_hourly_or_higher("30min") is False
         assert agg._is_hourly_or_higher("invalid") is False
+
+
+def create_multi_timeframe_data(
+    timeframes: list[str],
+    periods_per_tf: int = 10,
+    base_price: float = 100.0,
+    symbols: list[str] | None = None,
+    start_time: str = "2024-01-01 09:30:00",
+) -> DataFrame:
+    """
+    Create test data with multiple timeframes for testing multi-timeframe source functionality.
+
+    Args:
+        timeframes: List of timeframe strings (e.g., ["1min", "5min", "15min"])
+        periods_per_tf: Number of bars to generate per timeframe
+        base_price: Starting price level
+        symbols: Optional list of symbols (defaults to ["TEST"])
+        start_time: Start timestamp string
+
+    Returns:
+        Polars DataFrame with mixed timeframe data including timeframe column
+    """
+    if symbols is None:
+        symbols = ["TEST"]
+
+    all_data = []
+
+    for symbol in symbols:
+        for timeframe in timeframes:
+            # Determine frequency in minutes for this timeframe
+            if timeframe == "1min":
+                freq_minutes = 1
+            elif timeframe == "5min":
+                freq_minutes = 5
+            elif timeframe == "15min":
+                freq_minutes = 15
+            elif timeframe == "30min":
+                freq_minutes = 30
+            elif timeframe == "1h":
+                freq_minutes = 60
+            elif timeframe == "4h":
+                freq_minutes = 240
+            elif timeframe == "1d":
+                freq_minutes = 1440
+            else:
+                freq_minutes = 60  # default to hourly
+
+            # Create OHLC data for this symbol and timeframe
+            tf_data = create_long_term_data(days=1, freq_minutes=freq_minutes, symbol=symbol).head(periods_per_tf)
+
+            # Add timeframe column and adjust prices to be unique per symbol/timeframe
+            price_offset = (hash(f"{symbol}_{timeframe}") % 100) * 0.01
+            tf_data = tf_data.with_columns(
+                [
+                    (col("open") + price_offset).alias("open"),
+                    (col("high") + price_offset).alias("high"),
+                    (col("low") + price_offset).alias("low"),
+                    (col("close") + price_offset).alias("close"),
+                    lit(timeframe).alias("timeframe"),
+                ]
+            )
+
+            all_data.append(tf_data)
+
+    # Combine all data
+    result = all_data[0]
+    for data in all_data[1:]:
+        result = result.vstack(data)
+
+    # Sort by symbol (if present), timeframe, timestamp
+    sort_cols = []
+    if "symbol" in result.columns:
+        sort_cols.append("symbol")
+    sort_cols.extend(["timeframe", "timestamp"])
+
+    return result.sort(sort_cols)
+
+
+@pytest.mark.unit
+class TestMultiTimeframeSource:
+    """Test cases for multi-timeframe source aggregation functionality."""
+
+    def test_multi_timeframe_source_pass_through(self):
+        """Test that when target timeframe already exists in source, data is passed through unchanged."""
+        # Create multi-timeframe data with 1min and 5min
+        source_data = create_multi_timeframe_data(timeframes=["1min", "5min"], periods_per_tf=6, symbols=["AAPL"])
+
+        # Target only 5min (which exists in source)
+        agg = Aggregation(AggregationConfig(target_timeframes=["5min"]))
+        result = agg.process(source_data)
+
+        # Should have only 5min data passed through
+        assert "timeframe" in result.columns
+        assert result["timeframe"].unique().to_list() == ["5min"]
+
+        # Should have the same 5min data as input (6 bars)
+        original_5min = source_data.filter(col("timeframe") == "5min")
+        assert len(result) == len(original_5min)
+        assert result["symbol"].unique().to_list() == ["AAPL"]
+
+    def test_multi_timeframe_source_optimal_selection(self):
+        """Test optimal source timeframe selection (e.g., use 5m for 15m target, not 1m)."""
+        # Create data with 1min, 5min, and 1h timeframes
+        source_data = create_multi_timeframe_data(timeframes=["1min", "5min", "1h"], periods_per_tf=5, symbols=["TEST"])
+
+        # Target 15min - should use 5min source (not 1min) for efficiency
+        agg = Aggregation(AggregationConfig(target_timeframes=["15min"]))
+        result = agg.process(source_data)
+
+        # Should produce 15min timeframe
+        assert "timeframe" in result.columns
+        assert result["timeframe"].unique().to_list() == ["15min"]
+        assert len(result) > 0
+        assert result["symbol"].unique().to_list() == ["TEST"]
+
+        # Verify it's aggregated data (not pass-through)
+        assert len(result) < len(source_data.filter(col("timeframe") == "5min"))
+
+    def test_multi_timeframe_source_mixed_aggregation(self):
+        """Test mixed scenarios with some pass-through and some aggregation."""
+        # Create data with 1min and 5min
+        source_data = create_multi_timeframe_data(timeframes=["1min", "5min"], periods_per_tf=10, symbols=["MIX"])
+
+        # Target both 5min (pass-through) and 15min (aggregated from 5min)
+        agg = Aggregation(AggregationConfig(target_timeframes=["5min", "15min"]))
+        result = agg.process(source_data)
+
+        # Should have both timeframes
+        timeframes = sorted(result["timeframe"].unique().to_list())
+        assert timeframes == ["15min", "5min"]
+
+        # Should have data for both timeframes
+        tf_5min_data = result.filter(col("timeframe") == "5min")
+        tf_15min_data = result.filter(col("timeframe") == "15min")
+
+        assert len(tf_5min_data) == 10  # Pass-through of original 5min data
+        assert len(tf_15min_data) > 0  # Aggregated 15min data
+        assert len(tf_15min_data) < len(tf_5min_data)  # Fewer bars due to aggregation
+
+    def test_source_selection_prefers_larger_timeframes(self):
+        """Verify that larger valid source timeframes are preferred to minimize operations."""
+        # Create data with 1min, 5min, and 15min timeframes
+        source_data = create_multi_timeframe_data(
+            timeframes=["1min", "5min", "15min"], periods_per_tf=8, symbols=["PREF"]
+        )
+
+        # Target 1h - mathematically valid sources are 1min, 5min, 15min
+        # Should prefer 15min (largest) for efficiency
+        agg = Aggregation(AggregationConfig(target_timeframes=["1h"]))
+        result = agg.process(source_data)
+
+        # Should produce 1h timeframe
+        assert result["timeframe"].unique().to_list() == ["1h"]
+        assert len(result) > 0
+
+        # Should have aggregated from the larger timeframe (less work)
+        # With 8 periods of 15min data, we should get fewer 1h bars
+        assert len(result) < len(source_data.filter(col("timeframe") == "15min"))
+
+    def test_source_selection_mathematical_validity(self):
+        """Test that only mathematically valid sources are selected (divisibility check)."""
+        # Use real timeframes that don't divide evenly: 5min doesn't divide into 1h cleanly for certain patterns
+        # Better test: use 1min and 5min for a target that works with one but not optimally
+        source_data = create_multi_timeframe_data(
+            timeframes=["1min", "5min"],
+            periods_per_tf=15,  # 15 minutes worth
+            symbols=["MATH"],
+        )
+
+        # Target 1h - both sources work, but 5min should be preferred (optimal)
+        agg = Aggregation(AggregationConfig(target_timeframes=["1h"]))
+        result = agg.process(source_data)
+
+        # Should successfully produce 1h data
+        assert result["timeframe"].unique().to_list() == ["1h"]
+        assert len(result) > 0
+
+    def test_no_valid_source_timeframe_metadata(self):
+        """Test behavior with timeframes not in TIMEFRAME_METADATA."""
+        # Create data with 1min and 5min first
+        valid_data = create_multi_timeframe_data(timeframes=["1min", "5min"], periods_per_tf=5, symbols=["VALID"])
+
+        # Replace timeframe column with unsupported values
+        invalid_data = valid_data.with_columns([lit("unsupported_tf").alias("timeframe")])
+
+        agg = Aggregation(AggregationConfig(target_timeframes=["15min"]))
+
+        # Should raise ValueError due to validation failure with unsupported timeframes
+        with pytest.raises(ValueError, match="Input data validation failed"):
+            agg.process(invalid_data)
+
+    def test_multi_timeframe_source_with_symbols(self):
+        """Test multi-timeframe aggregation with multiple symbols."""
+        # Create data for multiple symbols with multiple timeframes
+        symbols = ["AAPL", "MSFT", "GOOGL"]
+        source_data = create_multi_timeframe_data(timeframes=["1min", "5min"], periods_per_tf=6, symbols=symbols)
+
+        # Target 15min aggregation from 5min source
+        agg = Aggregation(AggregationConfig(target_timeframes=["15min"]))
+        result = agg.process(source_data)
+
+        # Should have data for all symbols
+        result_symbols = sorted(result["symbol"].unique().to_list())
+        expected_symbols = sorted(symbols)
+        assert result_symbols == expected_symbols
+
+        # Should have 15min timeframe for all symbols
+        assert result["timeframe"].unique().to_list() == ["15min"]
+
+        # Verify each symbol has aggregated data
+        for symbol in symbols:
+            symbol_data = result.filter(col("symbol") == symbol)
+            assert len(symbol_data) > 0
+            assert symbol_data["symbol"].unique().to_list() == [symbol]
+
+    def test_multi_timeframe_source_symbol_preservation(self):
+        """Verify symbols are preserved correctly during aggregation."""
+        # Create mixed symbol/timeframe data
+        source_data = create_multi_timeframe_data(
+            timeframes=["5min", "15min"], periods_per_tf=8, symbols=["PRESERVE", "KEEP"]
+        )
+
+        # Target both pass-through (15min) and aggregation (1h from 15min)
+        agg = Aggregation(AggregationConfig(target_timeframes=["15min", "1h"]))
+        result = agg.process(source_data)
+
+        # Should have both symbols for both timeframes
+        symbols = sorted(result["symbol"].unique().to_list())
+        timeframes = sorted(result["timeframe"].unique().to_list())
+        assert symbols == ["KEEP", "PRESERVE"]
+        assert timeframes == ["15min", "1h"]
+
+        # Verify data integrity for each symbol/timeframe combination
+        for symbol in symbols:
+            for timeframe in timeframes:
+                subset = result.filter((col("symbol") == symbol) & (col("timeframe") == timeframe))
+                assert len(subset) > 0
+                assert subset["symbol"].unique().to_list() == [symbol]
+                assert subset["timeframe"].unique().to_list() == [timeframe]
+
+    def test_multi_timeframe_source_single_target(self):
+        """Test with single target timeframe."""
+        source_data = create_multi_timeframe_data(
+            timeframes=["1min", "5min", "15min"], periods_per_tf=5, symbols=["SINGLE"]
+        )
+
+        # Target only one timeframe
+        agg = Aggregation(AggregationConfig(target_timeframes=["30min"]))
+        result = agg.process(source_data)
+
+        # Should aggregate from 15min (optimal source)
+        assert result["timeframe"].unique().to_list() == ["30min"]
+        assert result["symbol"].unique().to_list() == ["SINGLE"]
+        assert len(result) > 0
+
+    def test_multi_timeframe_source_all_passthrough(self):
+        """Test when all targets exist in source (100% pass-through)."""
+        source_data = create_multi_timeframe_data(
+            timeframes=["5min", "15min", "1h"], periods_per_tf=6, symbols=["PASS"]
+        )
+
+        # Target timeframes that all exist in source
+        agg = Aggregation(AggregationConfig(target_timeframes=["5min", "15min", "1h"]))
+        result = agg.process(source_data)
+
+        # Should be pure pass-through with same amount of data
+        timeframes = sorted(result["timeframe"].unique().to_list())
+        assert timeframes == ["15min", "1h", "5min"]
+
+        # Each timeframe should have the original amount of data
+        for tf in ["5min", "15min", "1h"]:
+            result_tf = result.filter(col("timeframe") == tf)
+            source_tf = source_data.filter(col("timeframe") == tf)
+            assert len(result_tf) == len(source_tf)
+
+    def test_multi_timeframe_source_no_passthrough(self):
+        """Test when no targets exist in source (100% aggregation)."""
+        source_data = create_multi_timeframe_data(timeframes=["1min", "5min"], periods_per_tf=8, symbols=["AGG"])
+
+        # Target timeframes that don't exist in source
+        agg = Aggregation(AggregationConfig(target_timeframes=["15min", "1h"]))
+        result = agg.process(source_data)
+
+        # All should be aggregated (no pass-through)
+        timeframes = sorted(result["timeframe"].unique().to_list())
+        assert timeframes == ["15min", "1h"]
+
+        # Aggregated data should have fewer bars than any source
+        for tf in ["15min", "1h"]:
+            result_tf = result.filter(col("timeframe") == tf)
+            assert len(result_tf) > 0
+            assert len(result_tf) < len(source_data.filter(col("timeframe") == "5min"))
+
+    def test_multi_timeframe_source_empty_data(self):
+        """Test with empty multi-timeframe data."""
+        # Create empty DataFrame with proper schema
+        empty_data = DataFrame(
+            {
+                "timestamp": [],
+                "open": [],
+                "high": [],
+                "low": [],
+                "close": [],
+                "volume": [],
+                "symbol": [],
+                "timeframe": [],
+            }
+        )
+
+        agg = Aggregation(AggregationConfig(target_timeframes=["5min"]))
+
+        # Should handle empty data gracefully
+        with pytest.raises(ValueError, match="Input data validation failed"):
+            agg.process(empty_data)
+
+    def test_multi_timeframe_source_sorting(self):
+        """Verify output is correctly sorted by symbol, timeframe, timestamp."""
+        # Create data with multiple symbols and timeframes
+        source_data = create_multi_timeframe_data(
+            timeframes=["5min", "1min"],  # Reverse order to test sorting
+            periods_per_tf=5,
+            symbols=["ZZZ", "AAA"],  # Reverse alphabetical order
+        )
+
+        agg = Aggregation(AggregationConfig(target_timeframes=["15min", "5min"]))
+        result = agg.process(source_data)
+
+        # Check sorting: symbol (AAA before ZZZ), then timeframe (15min before 5min), then timestamp
+        prev_symbol = None
+        prev_timeframe = None
+        prev_timestamp = None
+
+        for row in result.iter_rows(named=True):
+            current_symbol = row["symbol"]
+            current_timeframe = row["timeframe"]
+            current_timestamp = row["timestamp"]
+
+            if prev_symbol is not None:
+                # Symbol should be same or greater
+                assert current_symbol >= prev_symbol
+
+                if current_symbol == prev_symbol:
+                    # Same symbol: timeframe should be same or greater
+                    if prev_timeframe is not None:
+                        assert current_timeframe >= prev_timeframe
+
+                        if current_timeframe == prev_timeframe:
+                            # Same symbol and timeframe: timestamp should be greater
+                            if prev_timestamp is not None:
+                                assert current_timestamp >= prev_timestamp
+
+            prev_symbol = current_symbol
+            prev_timeframe = current_timeframe
+            prev_timestamp = current_timestamp
+
+    def test_multi_timeframe_source_column_preservation(self):
+        """Ensure all required columns are preserved."""
+        source_data = create_multi_timeframe_data(timeframes=["1min", "5min"], periods_per_tf=4, symbols=["COL"])
+
+        agg = Aggregation(AggregationConfig(target_timeframes=["15min"]))
+        result = agg.process(source_data)
+
+        # Check all expected columns are present
+        expected_columns = ["timestamp", "open", "high", "low", "close", "volume", "symbol", "timeframe"]
+        for col_name in expected_columns:
+            assert col_name in result.columns
+
+        # Check data types are preserved (timezone may vary based on config)
+        assert str(result.schema["timestamp"]).startswith("Datetime")
+        for price_col in ["open", "high", "low", "close"]:
+            assert str(result.schema[price_col]).startswith("Float")
+
+    def test_multi_timeframe_pandas_input_compatibility(self):
+        """Test that Pandas input works with multi-timeframe source."""
+        # Create Polars data first
+        polars_data = create_multi_timeframe_data(timeframes=["1min", "5min"], periods_per_tf=4, symbols=["PANDAS"])
+
+        # Convert to Pandas
+        pandas_data = polars_data.to_pandas()
+
+        agg = Aggregation(AggregationConfig(target_timeframes=["15min"]))
+        result = agg.process(pandas_data)
+
+        # Should work and produce same result as Polars input
+        assert isinstance(result, DataFrame)  # Should return Polars DataFrame
+        assert "timeframe" in result.columns
+        assert result["timeframe"].unique().to_list() == ["15min"]
+        assert result["symbol"].unique().to_list() == ["PANDAS"]

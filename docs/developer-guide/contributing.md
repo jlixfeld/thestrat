@@ -189,7 +189,8 @@ def sample_ohlcv():
         'high': [101.0] * 100,
         'low': [99.0] * 100,
         'close': [100.5] * 100,
-        'volume': [1000] * 100
+        'volume': [1000] * 100,
+        'timeframe': ['1min'] * 100
     })
 ```
 
