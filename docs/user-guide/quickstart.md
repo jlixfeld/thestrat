@@ -71,7 +71,8 @@ sample_data = PandasDataFrame({
     'high': [101.0] * 100,
     'low': [99.0] * 100,
     'close': [100.5] * 100,
-    'volume': [1000] * 100
+    'volume': [1000] * 100,
+    'timeframe': ['1min'] * 100
 })
 
 # Configure TheStrat components with Pydantic models
@@ -343,6 +344,38 @@ A: Include a `symbol` column and TheStrat will process each symbol separately wh
 
 **Q: Why is the timeframe column mandatory?**
 A: The timeframe column ensures TheStrat knows exactly what timeframe your data represents, preventing errors and enabling optimal aggregation strategies. This makes the API explicit and prevents silent failures.
+
+**Q: How do I migrate existing data to include the timeframe column?**
+A: Add the timeframe column to your existing DataFrames. Here's how:
+
+```python
+# If you have existing data without timeframe column
+existing_data = pd.DataFrame({
+    'timestamp': pd.date_range('2024-01-01 09:30', periods=100, freq='1min'),
+    'open': [100.0] * 100,
+    'high': [101.0] * 100,
+    'low': [99.0] * 100,
+    'close': [100.5] * 100,
+    'volume': [1000] * 100
+})
+
+# Add the timeframe column (1min data in this example)
+existing_data['timeframe'] = '1min'
+
+# Or for multiple timeframes, determine based on your data frequency
+def determine_timeframe(freq_minutes):
+    if freq_minutes == 1:
+        return '1min'
+    elif freq_minutes == 5:
+        return '5min'
+    elif freq_minutes == 60:
+        return '1h'
+    # Add more mappings as needed
+
+# Now your data is ready for TheStrat
+pipeline = Factory.create_all(config)
+result = pipeline["aggregation"].process(existing_data)
+```
 
 **Q: How do I handle missing data?**
 A: TheStrat includes built-in handling for gaps and missing bars appropriate to each asset class.
