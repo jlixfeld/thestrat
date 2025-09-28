@@ -1750,6 +1750,19 @@ All columns are required as the indicators component creates them all.</p>
               </td>
             </tr>
             <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="&lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;get_standard_column_order&lt;/span&gt;
+
+
+  &lt;span class=&quot;doc doc-labels&quot;&gt;
+      &lt;small class=&quot;doc doc-label doc-label-classmethod&quot;&gt;&lt;code&gt;classmethod&lt;/code&gt;&lt;/small&gt;
+  &lt;/span&gt; (&lt;code&gt;thestrat.schemas.IndicatorSchema.get_standard_column_order&lt;/code&gt;)" href="#thestrat.schemas.IndicatorSchema.get_standard_column_order">get_standard_column_order</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Get the standard column ordering for aggregation output.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
               <td><code><a class="autorefs autorefs-internal" title="&lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;validate_dataframe&lt;/span&gt;
 
 
@@ -2405,6 +2418,41 @@ All columns are required as the indicators component creates them all.</p>
 </span><span id="__span-0-977"><a id="__codelineno-0-977" name="__codelineno-0-977"></a>        <span class="p">):</span>
 </span><span id="__span-0-978"><a id="__codelineno-0-978" name="__codelineno-0-978"></a>            <span class="n">required_columns</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">field_name</span><span class="p">)</span>
 </span><span id="__span-0-979"><a id="__codelineno-0-979" name="__codelineno-0-979"></a>    <span class="k">return</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">required_columns</span><span class="p">)</span>
+</span></code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="thestrat.schemas.IndicatorSchema.get_standard_column_order" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">get_standard_column_order</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-classmethod"><code>classmethod</code></small>
+  </span>
+
+</h2>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">get_standard_column_order</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="n"><span title="list">list</span></span><span class="p">[</span><span class="n"><span title="str">str</span></span><span class="p">]</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Get the standard column ordering for aggregation output.</p>
+
+
+            <details class="quote">
+              <summary>Source code in <code>thestrat/schemas.py</code></summary>
+              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-1030">1030</a></span>
+<span class="normal"><a href="#__codelineno-0-1031">1031</a></span>
+<span class="normal"><a href="#__codelineno-0-1032">1032</a></span>
+<span class="normal"><a href="#__codelineno-0-1033">1033</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-1030"><a id="__codelineno-0-1030" name="__codelineno-0-1030"></a><span class="nd">@classmethod</span>
+</span><span id="__span-0-1031"><a id="__codelineno-0-1031" name="__codelineno-0-1031"></a><span class="k">def</span><span class="w"> </span><span class="nf">get_standard_column_order</span><span class="p">(</span><span class="bp">cls</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+</span><span id="__span-0-1032"><a id="__codelineno-0-1032" name="__codelineno-0-1032"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Get the standard column ordering for aggregation output.&quot;&quot;&quot;</span>
+</span><span id="__span-0-1033"><a id="__codelineno-0-1033" name="__codelineno-0-1033"></a>    <span class="k">return</span> <span class="p">[</span><span class="s2">&quot;timestamp&quot;</span><span class="p">,</span> <span class="s2">&quot;symbol&quot;</span><span class="p">,</span> <span class="s2">&quot;timeframe&quot;</span><span class="p">,</span> <span class="s2">&quot;open&quot;</span><span class="p">,</span> <span class="s2">&quot;high&quot;</span><span class="p">,</span> <span class="s2">&quot;low&quot;</span><span class="p">,</span> <span class="s2">&quot;close&quot;</span><span class="p">,</span> <span class="s2">&quot;volume&quot;</span><span class="p">]</span>
 </span></code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -3393,7 +3441,7 @@ All columns are required as the indicators component creates them all.</p>
     
     
       
-      <script id="__config" type="application/json">{"base": "../../..", "features": ["navigation.tracking", "navigation.sections", "navigation.expand", "navigation.top", "navigation.tabs", "search.highlight", "search.suggest", "content.code.copy", "content.code.annotate", "content.code.select", "navigation.footer", "content.tooltips"], "search": "../../../assets/javascripts/workers/search.973d3a69.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": "0.0.1a13"}</script>
+      <script id="__config" type="application/json">{"base": "../../..", "features": ["navigation.tracking", "navigation.sections", "navigation.expand", "navigation.top", "navigation.tabs", "search.highlight", "search.suggest", "content.code.copy", "content.code.annotate", "content.code.select", "navigation.footer", "content.tooltips"], "search": "../../../assets/javascripts/workers/search.973d3a69.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": "0.0.1a14"}</script>
     
     
       <script src="../../../assets/javascripts/bundle.92b07e13.min.js"></script>
