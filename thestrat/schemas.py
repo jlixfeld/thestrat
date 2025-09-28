@@ -565,6 +565,27 @@ class IndicatorSchema(BaseModel):
         description="Timestamp for each bar/candle",
         json_schema_extra={"polars_dtype": Datetime, "input": True, "category": "base_ohlc", "nullable": False},
     )
+    symbol: str | None = Field(
+        default=None,
+        description="Trading symbol or ticker (e.g., 'AAPL', 'BTC-USD')",
+        json_schema_extra={
+            "polars_dtype": String,
+            "input": True,
+            "category": "base_ohlc",
+            "optional": True,
+            "nullable": True,
+        },
+    )
+    timeframe: str = Field(
+        description="Timeframe identifier (e.g., '5min', '1h', '1d')",
+        json_schema_extra={
+            "polars_dtype": String,
+            "input": True,
+            "category": "base_ohlc",
+            "note": "Added by Aggregation component for multi-timeframe data",
+            "nullable": False,
+        },
+    )
     open: float = Field(
         description="Opening price for the time period",
         gt=0,
@@ -585,17 +606,6 @@ class IndicatorSchema(BaseModel):
         gt=0,
         json_schema_extra={"polars_dtype": Float64, "input": True, "category": "base_ohlc", "nullable": False},
     )
-    symbol: str | None = Field(
-        default=None,
-        description="Trading symbol or ticker (e.g., 'AAPL', 'BTC-USD')",
-        json_schema_extra={
-            "polars_dtype": String,
-            "input": True,
-            "category": "base_ohlc",
-            "optional": True,
-            "nullable": True,
-        },
-    )
     volume: float | None = Field(
         default=None,
         description="Trading volume for the time period (supports fractional shares/units)",
@@ -606,16 +616,6 @@ class IndicatorSchema(BaseModel):
             "category": "base_ohlc",
             "optional": True,
             "nullable": True,
-        },
-    )
-    timeframe: str = Field(
-        description="Timeframe identifier (e.g., '5min', '1h', '1d')",
-        json_schema_extra={
-            "polars_dtype": String,
-            "input": True,
-            "category": "base_ohlc",
-            "note": "Added by Aggregation component for multi-timeframe data",
-            "nullable": False,
         },
     )
 
@@ -1026,3 +1026,8 @@ class IndicatorSchema(BaseModel):
         if not field_info:
             return {}
         return getattr(field_info, "json_schema_extra", {}) or {}
+
+    @classmethod
+    def get_standard_column_order(cls) -> list[str]:
+        """Get the standard column ordering for aggregation output."""
+        return ["timestamp", "symbol", "timeframe", "open", "high", "low", "close", "volume"]

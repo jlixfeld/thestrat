@@ -47,6 +47,7 @@ def create_ohlc_data(
     freq_minutes: int = 60,
     symbol: str | None = None,
     timezone: str | None = None,
+    timeframe: str | None = None,
 ) -> DataFrame:
     """
     Create realistic OHLC test data.
@@ -58,11 +59,31 @@ def create_ohlc_data(
         freq_minutes: Minutes between bars
         symbol: Optional symbol name
         timezone: Optional timezone
+        timeframe: Optional timeframe string (auto-determined from freq_minutes if None)
 
     Returns:
-        Polars DataFrame with OHLC data
+        Polars DataFrame with OHLC data including timeframe column
     """
     timestamps = create_timestamp_series(start, periods, freq_minutes, timezone)
+
+    # Determine timeframe if not provided
+    if timeframe is None:
+        if freq_minutes == 1:
+            timeframe = "1min"
+        elif freq_minutes == 5:
+            timeframe = "5min"
+        elif freq_minutes == 15:
+            timeframe = "15min"
+        elif freq_minutes == 30:
+            timeframe = "30min"
+        elif freq_minutes == 60:
+            timeframe = "1h"
+        elif freq_minutes == 240:
+            timeframe = "4h"
+        elif freq_minutes == 1440:
+            timeframe = "1d"
+        else:
+            timeframe = f"{freq_minutes}min"
 
     # Generate realistic price movements
     data = {
@@ -72,6 +93,7 @@ def create_ohlc_data(
         "low": [base_price + i * 0.1 + (i % 5) * 0.05 - 0.5 for i in range(periods)],
         "close": [base_price + i * 0.1 + (i % 5) * 0.05 + 0.2 for i in range(periods)],
         "volume": [1000 + i * 10 + (i % 3) * 50 for i in range(periods)],
+        "timeframe": [timeframe] * periods,
     }
 
     if symbol:
@@ -96,6 +118,7 @@ def create_trend_data(periods: int = 10) -> DataFrame:
             "low": [p - 1.0 for p in base_prices],  # Low is always base - 1
             "close": [p + 0.5 for p in base_prices],  # Close is always base + 0.5
             "volume": [1000] * periods,
+            "timeframe": ["1d"] * periods,
         }
     )
 
@@ -112,6 +135,7 @@ def create_pattern_data() -> DataFrame:
             "low": [99 + i * 0.5 for i in range(15)],
             "close": [100.2 + i * 0.5 for i in range(15)],
             "volume": [1000] * 15,
+            "timeframe": ["1d"] * 15,
         }
     )
 
@@ -128,6 +152,7 @@ def create_gap_data() -> DataFrame:
             "low": [98, 103, 93, 101, 95, 100, 90, 103],
             "close": [101, 106, 96, 104, 98, 103, 93, 106],
             "volume": [1000] * 8,
+            "timeframe": ["1d"] * 8,
         }
     )
 
@@ -144,6 +169,7 @@ def create_price_analysis_data() -> DataFrame:
             "low": [98, 100, 102, 104, 106, 108, 110, 112],
             "close": [99, 103, 105, 107, 109, 111, 113, 115],  # Various positions within range
             "volume": [1000] * 8,
+            "timeframe": ["1d"] * 8,
         }
     )
 
@@ -160,6 +186,7 @@ def create_ath_atl_data() -> DataFrame:
             "low": [99, 101, 97, 104, 102, 109, 107, 94],  # ATL at index 7 (94)
             "close": [100.5, 102.5, 98.5, 105.5, 103.5, 111.5, 108.5, 95.5],
             "volume": [1000] * 8,
+            "timeframe": ["1d"] * 8,
         }
     )
 
@@ -167,6 +194,24 @@ def create_ath_atl_data() -> DataFrame:
 def create_large_dataset(periods: int = 1000, freq_minutes: int = 1) -> DataFrame:
     """Create large dataset for performance testing."""
     timestamps = create_timestamp_series("2023-01-01", periods, freq_minutes)
+
+    # Determine timeframe based on frequency
+    if freq_minutes == 1:
+        timeframe = "1min"
+    elif freq_minutes == 5:
+        timeframe = "5min"
+    elif freq_minutes == 15:
+        timeframe = "15min"
+    elif freq_minutes == 30:
+        timeframe = "30min"
+    elif freq_minutes == 60:
+        timeframe = "1h"
+    elif freq_minutes == 240:
+        timeframe = "4h"
+    elif freq_minutes == 1440:
+        timeframe = "1d"
+    else:
+        timeframe = f"{freq_minutes}min"
 
     return DataFrame(
         {
@@ -176,6 +221,7 @@ def create_large_dataset(periods: int = 1000, freq_minutes: int = 1) -> DataFram
             "low": [99.5 + i * 0.001 for i in range(periods)],
             "close": [100.2 + i * 0.001 for i in range(periods)],
             "volume": [1000 + i for i in range(periods)],
+            "timeframe": [timeframe] * periods,
         }
     )
 
@@ -194,6 +240,7 @@ def create_market_hours_data(symbol: str = "AAPL") -> DataFrame:
             "low": [149.5 + i * 0.01 + (i % 10) * 0.05 for i in range(390)],
             "close": [150.2 + i * 0.01 + (i % 10) * 0.05 for i in range(390)],
             "volume": [1000 + i * 5 + (i % 20) * 100 for i in range(390)],
+            "timeframe": ["1min"] * 390,
         }
     )
 
@@ -212,6 +259,7 @@ def create_crypto_data(symbol: str = "BTC-USD") -> DataFrame:
             "low": [39800 + i * 50 + (i % 4) * 100 for i in range(48)],
             "close": [40100 + i * 50 + (i % 4) * 100 for i in range(48)],
             "volume": [10 + i * 0.5 for i in range(48)],
+            "timeframe": ["1h"] * 48,
         }
     )
 
@@ -230,6 +278,7 @@ def create_forex_data(symbol: str = "EUR/USD") -> DataFrame:
             "low": [1.0490 + i * 0.0001 + (i % 8) * 0.0005 for i in range(240)],
             "close": [1.0505 + i * 0.0001 + (i % 8) * 0.0005 for i in range(240)],
             "volume": [100000 + i * 1000 for i in range(240)],
+            "timeframe": ["30min"] * 240,
         }
     )
 
@@ -310,6 +359,7 @@ def create_dst_transition_data(transition_type: str = "spring_forward", timezone
             "low": [base_price - 0.5 + i * 0.01 for i in range(num_bars)],
             "close": [base_price + 0.2 + i * 0.01 for i in range(num_bars)],
             "volume": [1000 + i * 10 for i in range(num_bars)],
+            "timeframe": ["1min"] * num_bars,
         }
     )
 
@@ -344,6 +394,7 @@ def create_multi_timezone_data(timezones: list = None) -> dict:
                 "low": [base_price - 0.5 + i * 0.1 for i in range(num_bars)],
                 "close": [base_price + 0.2 + i * 0.1 for i in range(num_bars)],
                 "volume": [1000 + i * 50 for i in range(num_bars)],
+                "timeframe": ["1h"] * num_bars,
             }
         )
 
@@ -373,6 +424,7 @@ def create_edge_case_data(case_type: str = "identical_prices") -> DataFrame:
                 "low": [price] * 10,
                 "close": [price] * 10,
                 "volume": [1000] * 10,
+                "timeframe": ["1h"] * 10,
             }
         )
 
@@ -386,6 +438,7 @@ def create_edge_case_data(case_type: str = "identical_prices") -> DataFrame:
                 "low": [95, 195, 45, 295, 20, 395, 5, 495, 1, 595],
                 "close": [102, 202, 52, 302, 27, 402, 12, 502, 7, 602],
                 "volume": [1000] * 10,
+                "timeframe": ["1h"] * 10,
             }
         )
 
@@ -399,6 +452,7 @@ def create_edge_case_data(case_type: str = "identical_prices") -> DataFrame:
                 "low": [99.0],
                 "close": [100.5],
                 "volume": [1000],
+                "timeframe": ["1h"],
             }
         )
 
@@ -411,6 +465,7 @@ def create_edge_case_data(case_type: str = "identical_prices") -> DataFrame:
                 "high": [101.0 + i for i in range(10)],
                 "low": [99.0 + i for i in range(10)],
                 "close": [100.5 + i for i in range(10)],
+                "timeframe": ["1h"] * 10,
             }
         )
 
@@ -418,7 +473,9 @@ def create_edge_case_data(case_type: str = "identical_prices") -> DataFrame:
         raise ValueError(f"Unknown edge case type: {case_type}")
 
 
-def create_long_term_data(days: int = 365, freq_minutes: int = 60, symbol: str = "SPY") -> DataFrame:
+def create_long_term_data(
+    days: int = 365, freq_minutes: int = 60, symbol: str = "SPY", timeframe: str | None = None
+) -> DataFrame:
     """
     Create long-term dataset for aggregation testing across multiple timeframes.
 
@@ -426,12 +483,32 @@ def create_long_term_data(days: int = 365, freq_minutes: int = 60, symbol: str =
         days: Number of days of data to generate
         freq_minutes: Frequency in minutes between bars
         symbol: Symbol name
+        timeframe: Optional timeframe string (auto-determined from freq_minutes if None)
 
     Returns:
         DataFrame with long-term OHLC data suitable for all timeframe aggregations
     """
     periods = days * 24 * 60 // freq_minutes  # Calculate total bars needed
     timestamps = create_timestamp_series("2023-01-01", periods, freq_minutes)
+
+    # Determine timeframe if not provided
+    if timeframe is None:
+        if freq_minutes == 1:
+            timeframe = "1min"
+        elif freq_minutes == 5:
+            timeframe = "5min"
+        elif freq_minutes == 15:
+            timeframe = "15min"
+        elif freq_minutes == 30:
+            timeframe = "30min"
+        elif freq_minutes == 60:
+            timeframe = "1h"
+        elif freq_minutes == 240:
+            timeframe = "4h"
+        elif freq_minutes == 1440:
+            timeframe = "1d"
+        else:
+            timeframe = f"{freq_minutes}min"
 
     # Generate realistic price movements with trends and volatility
     import random
@@ -486,6 +563,7 @@ def create_long_term_data(days: int = 365, freq_minutes: int = 60, symbol: str =
         {
             "timestamp": timestamps[1:],  # Skip first timestamp since we use prices[1:]
             "symbol": [symbol] * len(opens),
+            "timeframe": [timeframe] * len(opens),
             "open": opens,
             "high": highs,
             "low": lows,

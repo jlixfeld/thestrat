@@ -11,6 +11,47 @@ TheStrat follows a simple workflow:
 3. **Analyze** with TheStrat indicators
 4. **Extract** signals and insights
 
+## Data Format Requirements
+
+TheStrat requires specific columns in your input data. All data must include a `timeframe` column that specifies the timeframe of each data point.
+
+### Required Columns
+
+**Required columns (all mandatory):**
+- `timestamp` - datetime column for each bar/candle
+- `timeframe` - timeframe of the data (e.g., '1min', '5min', '1h')
+- `open` - opening price (float, > 0)
+- `high` - highest price (float, > 0)
+- `low` - lowest price (float, > 0)
+- `close` - closing price (float, > 0)
+
+**Optional columns:**
+- `symbol` - trading symbol/ticker (string)
+- `volume` - trading volume (float, ≥ 0)
+
+### Data Format Example
+
+All input data **must** include the `timeframe` column:
+
+```python
+# Example input data
+data = pd.DataFrame({
+    'timestamp': [...],  # datetime
+    'timeframe': ['1min', '1min', '5min', '5min', ...],  # MANDATORY
+    'open': [...],       # float
+    'high': [...],       # float
+    'low': [...],        # float
+    'close': [...],      # float
+    'symbol': [...],     # optional string
+    'volume': [...]      # optional float
+})
+```
+
+**Data type support:**
+- Accepts both Polars and Pandas DataFrames (auto-converts Pandas to Polars)
+- Timestamps can be timezone-naive (converted using config timezone) or timezone-aware
+- Minimum 2 data points required
+
 ## Your First TheStrat Analysis
 
 Let's start with a complete example using sample market data:
@@ -295,7 +336,13 @@ Now that you understand the basics:
 A: Standard timeframes: 1m, 5m, 15m, 30m, 1h, 4h, 1d. Custom intervals can be configured.
 
 **Q: Can I use my own data format?**
-A: Yes, as long as it has OHLCV columns and a timestamp. The data will be automatically standardized.
+A: Yes, as long as it has the required columns including the mandatory `timeframe` column. TheStrat accepts both Pandas and Polars DataFrames and will automatically standardize the data.
+
+**Q: What if I have data from multiple symbols?**
+A: Include a `symbol` column and TheStrat will process each symbol separately while maintaining proper grouping in the aggregation.
+
+**Q: Why is the timeframe column mandatory?**
+A: The timeframe column ensures TheStrat knows exactly what timeframe your data represents, preventing errors and enabling optimal aggregation strategies. This makes the API explicit and prevents silent failures.
 
 **Q: How do I handle missing data?**
 A: TheStrat includes built-in handling for gaps and missing bars appropriate to each asset class.
