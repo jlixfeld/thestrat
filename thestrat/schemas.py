@@ -11,7 +11,7 @@ from datetime import datetime
 from typing import Any, ClassVar, Literal, Self
 
 import pytz
-from polars import Boolean, Datetime, Float64, Int32, String
+from polars import Boolean, Datetime, Float64, Int32, List, String
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
@@ -314,14 +314,20 @@ class TargetConfig(BaseModel):
 
     upper_bound: Literal["higher_high", "lower_high", "higher_low", "lower_low"] = Field(
         default="higher_high",
-        description="Upper bound for target detection - determines both boundary and target type",
+        description="Boundary for long signal targets (detects highs bounded by higher_high or lower_high)",
         json_schema_extra={
-            "target_inference": {
-                "higher_high": "targets are highs (long signals)",
-                "lower_high": "targets are highs (long signals)",
-                "higher_low": "targets are lows (short signals)",
-                "lower_low": "targets are lows (short signals)",
-            }
+            "usage": "Used for long signals only",
+            "target_type": "highs",
+            "examples": {"higher_high": "targets until next HH", "lower_high": "targets until next LH"},
+        },
+    )
+    lower_bound: Literal["higher_high", "lower_high", "higher_low", "lower_low"] = Field(
+        default="lower_low",
+        description="Boundary for short signal targets (detects lows bounded by higher_low or lower_low)",
+        json_schema_extra={
+            "usage": "Used for short signals only",
+            "target_type": "lows",
+            "examples": {"lower_low": "targets until next LL", "higher_low": "targets until next HL"},
         },
     )
     merge_threshold_pct: float = Field(
@@ -337,7 +343,7 @@ class TargetConfig(BaseModel):
     max_targets: int | None = Field(
         default=None,
         ge=1,
-        description="Maximum number of targets to detect (None = all targets until upper_bound)",
+        description="Maximum number of targets to detect (None = all targets until bound)",
         examples=[None, 3, 5, 10],
     )
 
@@ -780,15 +786,25 @@ class IndicatorSchema(BaseModel):
             "values": ["long", "short"],
         },
     )
-    target_prices: str | None = Field(
+    target_prices: list[float] | None = Field(
         default=None,
-        description="JSON array of target prices for reversal signals",
-        json_schema_extra={"polars_dtype": String, "output": True, "category": "signals", "nullable": True},
+        description="List of target prices for reversal signals (most recent first)",
+        json_schema_extra={
+            "polars_dtype": List(Float64),
+            "output": True,
+            "category": "signals",
+            "nullable": True,
+        },
     )
     target_count: int | None = Field(
         default=None,
         description="Number of targets detected for reversal signals",
-        json_schema_extra={"polars_dtype": Int32, "output": True, "category": "signals", "nullable": True},
+        json_schema_extra={
+            "polars_dtype": Int32,
+            "output": True,
+            "category": "signals",
+            "nullable": True,
+        },
     )
 
     # Special Pattern Columns

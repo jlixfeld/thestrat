@@ -5,6 +5,8 @@ This module provides comprehensive Strat pattern analysis with high-performance
 vectorized calculations using Polars operations.
 """
 
+from typing import TYPE_CHECKING
+
 from pandas import DataFrame as PandasDataFrame
 from polars import DataFrame as PolarsDataFrame
 from polars import Float64, Int32, String, col, concat_str, lit, when
@@ -12,6 +14,9 @@ from polars import Float64, Int32, String, col, concat_str, lit, when
 from .base import Component
 from .schemas import IndicatorsConfig, TimeframeItemConfig
 from .signals import SIGNALS
+
+if TYPE_CHECKING:
+    from .signals import SignalMetadata
 
 
 class Indicators(Component):
@@ -471,17 +476,17 @@ class Indicators(Component):
         df = self._calculate_advanced_patterns(df, config)
 
         # Add signal pattern detection
-        df = self._calculate_signals(df)
+        df = self._calculate_signals(df, config)
 
         return df
 
-    def _calculate_signals(self, data: PolarsDataFrame) -> PolarsDataFrame:
+    def _calculate_signals(self, data: PolarsDataFrame, config: "TimeframeItemConfig") -> PolarsDataFrame:
         """
-        Detect multi-bar signal patterns and create rich signal objects.
+        Detect multi-bar signal patterns and populate target prices.
 
         Signals are collections of sequential scenarios that match specific
-        patterns defined in the SIGNALS dictionary. Creates SignalMetadata
-        objects with full trading context.
+        patterns defined in the SIGNALS dictionary. Targets are calculated
+        eagerly for database integration.
         """
         df = data.clone()
 
@@ -568,71 +573,155 @@ class Indicators(Component):
                     .otherwise(bias_expr)
                 )
 
+        # Import List type for target_prices column
+        from polars import List as PolarsListType
+
         # Apply all signal detection in a single operation
         df = df.with_columns(
             [
                 signal_expr.alias("signal"),
                 type_expr.alias("type"),
                 bias_expr.alias("bias"),
-                # Add placeholder columns for multi-target support
-                # These are populated on-demand via get_signal_objects()
-                lit(None, dtype=String).alias("target_prices"),
+                # Initialize target columns with proper types
+                lit(None, dtype=PolarsListType(Float64)).alias("target_prices"),
                 lit(None, dtype=Int32).alias("target_count"),
             ]
         )
 
-        # Note: Signal objects are not created in this vectorized implementation
-        # for performance reasons. If signal objects are needed, they can be created
-        # on-demand using the get_signal_objects method.
-        # Target detection is also deferred to get_signal_objects() to maintain
-        # vectorized performance for the main indicator pipeline.
-
         # Clean up temporary columns
         df = df.drop(["scenario_2", "scenario_1", "scenario_0", "pattern_2bar", "pattern_3bar"])
 
+        # Populate targets eagerly for database integration
+        df = self._populate_targets_in_dataframe(df, config)
+
         return df
 
-    def get_signal_objects(self, result_df: PolarsDataFrame) -> list:
+    def _populate_targets_in_dataframe(self, df: PolarsDataFrame, config: "TimeframeItemConfig") -> PolarsDataFrame:
         """
-        Create SignalMetadata objects on-demand from processed indicator results.
-
-        This method processes rows with signals and creates full SignalMetadata objects
-        with prices and trading context. Only used when signal objects are needed.
+        Populate target_prices and target_count for all signal rows.
 
         Args:
-            result_df: DataFrame with processed indicators including signal columns
+            df: DataFrame with signal column populated
+            config: TimeframeItemConfig with target_config
 
         Returns:
-            List of SignalMetadata objects for rows with detected signals
+            DataFrame with target_prices (List[Float64]) and target_count populated
         """
-        signal_objects = []
+        import polars as pl
 
-        # Add row index to track original positions
-        df_with_index = result_df.with_row_index("__original_idx")
+        # Handle both TimeframeItemConfig objects and dict configs (for backward compatibility in tests)
+        if isinstance(config, dict):
+            target_config = config.get("target_config")
+        else:
+            target_config = config.target_config if config else None
 
-        # Filter to rows with signals
-        signal_rows = df_with_index.filter(col("signal").is_not_null())
+        if target_config is None:
+            return df
+
+        df_with_idx = df.with_row_index("__row_idx")
+        signal_rows = df_with_idx.filter(col("signal").is_not_null())
 
         if len(signal_rows) == 0:
-            return signal_objects
+            return df
 
-        # Use native Polars iteration instead of pandas conversion
+        updates = []
         for row in signal_rows.iter_rows(named=True):
-            original_index = int(row["__original_idx"])
-
-            # Get target_config for this row's timeframe
-            target_config = None
-            if "timeframe" in row and row["timeframe"] is not None:
-                tf_config = self._get_config_for_timeframe(row["timeframe"])
-                target_config = tf_config.target_config if tf_config else None
-
-            signal_obj = self._create_signal_object(
-                df_with_index, original_index, row["signal"], row["type"], row["bias"], target_config
+            targets = self._detect_targets_for_signal(df_with_idx, row["__row_idx"], row["bias"], target_config)
+            updates.append(
+                {
+                    "row_idx": row["__row_idx"],
+                    "target_prices": targets if targets else None,
+                    "target_count": len(targets) if targets else None,
+                }
             )
-            if signal_obj:
-                signal_objects.append(signal_obj)
 
-        return signal_objects
+        if updates:
+            updates_df = pl.DataFrame(updates)
+            df_with_idx = (
+                df_with_idx.join(updates_df, left_on="__row_idx", right_on="row_idx", how="left")
+                .with_columns(
+                    [
+                        col("target_prices_right").alias("target_prices"),
+                        col("target_count_right").alias("target_count"),
+                    ]
+                )
+                .drop(["target_prices_right", "target_count_right"])
+            )
+
+        return df_with_idx.drop("__row_idx")
+
+    @classmethod
+    def get_signal_object(cls, df: PolarsDataFrame) -> "SignalMetadata":
+        """
+        Create SignalMetadata object from single-row DataFrame.
+
+        Decoupled from pipeline - can be called standalone with database query results.
+        Expects DataFrame with exactly 1 row containing signal data with pre-calculated targets.
+
+        Args:
+            df: DataFrame with exactly 1 row containing signal data
+
+        Returns:
+            SignalMetadata object with targets parsed from DataFrame
+
+        Raises:
+            ValueError: If df doesn't have exactly 1 row
+
+        Example:
+            # Query database for specific signal
+            signal_df = db.query(\"\"\"
+                SELECT * FROM signals
+                WHERE symbol='AAPL' AND timestamp='2024-01-15 10:30:00'
+            \"\"\")
+
+            # Create signal object (no pipeline needed)
+            signal = Indicators.get_signal_object(signal_df)
+        """
+        if df.shape[0] != 1:
+            raise ValueError(
+                f"get_signal_object() expects DataFrame with exactly 1 row, got {df.shape[0]} rows. "
+                "Query database to filter to specific signal first."
+            )
+
+        from .signals import SIGNALS, SignalBias, SignalCategory, SignalMetadata, TargetLevel
+
+        # Extract row data
+        row = df.row(0, named=True)
+
+        # Parse target_prices from native list (not JSON)
+        target_prices = []
+        if row.get("target_prices") is not None:
+            # target_prices is List[Float64] from database
+            target_list = row["target_prices"]
+            target_prices = [TargetLevel(price=price) for price in target_list]
+
+        # Get signal configuration
+        pattern = row["signal"]
+        config = SIGNALS.get(pattern, {})
+
+        # Determine entry/stop from trigger bar (current bar)
+        if row["bias"] == "long":
+            entry_price = float(row["high"])
+            stop_price = float(row["low"])
+        else:  # short
+            entry_price = float(row["low"])
+            stop_price = float(row["high"])
+
+        # Create SignalMetadata
+        signal = SignalMetadata(
+            pattern=pattern,
+            category=SignalCategory(row["type"]),
+            bias=SignalBias(row["bias"]),
+            bar_count=config.get("bar_count", 2),
+            entry_price=entry_price,
+            stop_price=stop_price,
+            target_prices=target_prices,
+            timestamp=row["timestamp"],
+            symbol=row.get("symbol"),
+            timeframe=row.get("timeframe"),
+        )
+
+        return signal
 
     def _detect_targets_for_signal(
         self, df: PolarsDataFrame, signal_index: int, bias: str, target_config
@@ -641,7 +730,7 @@ class Indicators(Component):
         Detect multiple target levels for a signal using vectorized operations.
 
         Detects all relevant local highs (long) or lows (short) between signal bar
-        and configured upper bound, applies merge logic, and returns targets in
+        and configured bound, applies merge logic, and returns targets in
         reverse chronological order.
 
         Args:
@@ -663,22 +752,25 @@ class Indicators(Component):
         if target_config is None:
             target_config = TargetConfig()
 
-        upper_bound = target_config.upper_bound
+        # Select appropriate bound based on signal bias
+        # Long signals use upper_bound (higher_high or lower_high)
+        # Short signals use lower_bound (higher_low or lower_low)
+        if bias == "long":
+            structure_bound = target_config.upper_bound
+            target_col = "high"
+        else:  # short
+            structure_bound = target_config.lower_bound
+            target_col = "low"
+
         merge_threshold_pct = target_config.merge_threshold_pct
         max_targets = target_config.max_targets
 
-        # Determine target type from upper_bound
+        # Determine target type from bound
         # higher_high/lower_high -> targets are highs (long signals)
         # higher_low/lower_low -> targets are lows (short signals)
-        target_is_high = upper_bound in ["higher_high", "lower_high"]
+        target_is_high = structure_bound in ["higher_high", "lower_high"]
 
-        # Get the column name for targets and upper bound
-        if bias == "long":
-            target_col = "high"
-            structure_col = upper_bound  # e.g., "higher_high"
-        else:  # short
-            target_col = "low"
-            structure_col = upper_bound  # e.g., "lower_low"
+        structure_col = structure_bound
 
         # Get data up to signal bar (not including signal bar itself)
         historical_df = df.slice(0, signal_index)
@@ -752,38 +844,38 @@ class Indicators(Component):
         if not filtered_targets:
             return []
 
-        # Check for upper bound in structure column
+        # Check for structure bound in structure column
         # Find first historical bar where structure_col == True and get its price
-        upper_bound_price = None
+        bound_price = None
         if structure_col in historical_df.columns:
-            # Filter to bars where upper_bound condition is True
+            # Filter to bars where bound condition is True
             # Note: Explicit True comparison needed for boolean column filtering
-            upper_bound_bars = historical_df.filter(col(structure_col) == True)  # noqa: E712
+            bound_bars = historical_df.filter(col(structure_col) == True)  # noqa: E712
 
-            if len(upper_bound_bars) > 0:
+            if len(bound_bars) > 0:
                 # Sort by row index descending to get most recent occurrence first
-                upper_bound_bars = upper_bound_bars.sort("__row_idx", descending=True)
-                first_bound_bar = upper_bound_bars[0]
+                bound_bars = bound_bars.sort("__row_idx", descending=True)
+                first_bound_bar = bound_bars[0]
 
                 # Extract the price from the appropriate column
-                upper_bound_price = float(first_bound_bar[target_col])
+                bound_price = float(first_bound_bar[target_col])
 
-        # Trim targets to upper bound
-        if upper_bound_price is not None:
+        # Trim targets to structure bound
+        if bound_price is not None:
             final_targets = []
             for price in filtered_targets:
                 if bias == "long":
-                    if price <= upper_bound_price:
+                    if price <= bound_price:
                         final_targets.append(price)
                     else:
-                        # Stop at and include first target beyond upper bound
+                        # Stop at and include first target beyond bound
                         final_targets.append(price)
                         break
                 else:  # short
-                    if price >= upper_bound_price:
+                    if price >= bound_price:
                         final_targets.append(price)
                     else:
-                        # Stop at and include first target beyond upper bound
+                        # Stop at and include first target beyond bound
                         final_targets.append(price)
                         break
             filtered_targets = final_targets
@@ -820,88 +912,6 @@ class Indicators(Component):
             filtered_targets = filtered_targets[:max_targets]
 
         return filtered_targets
-
-    def _create_signal_object(self, df, index, pattern, category, bias, target_config=None):
-        """Factory method to create signal objects with multi-target support."""
-        from datetime import datetime
-
-        from .signals import SignalBias, SignalCategory, SignalMetadata, TargetLevel
-
-        # Skip if bias is None (some patterns need special handling)
-        if bias is None:
-            return None
-
-        # Get pattern configuration
-        config = SIGNALS[pattern]
-        bar_count = config["bar_count"]
-
-        # Get trigger bar (previous bar) for entry/stop prices
-        # In TheStrat, entry and stop come from the trigger bar (typically bar before signal)
-        # For 2-bar patterns: trigger is 1 bar back, for 3-bar: trigger is 1 bar back
-        trigger_index = index - 1  # Standard: trigger bar is previous bar
-
-        if trigger_index < 0:
-            return None
-
-        trigger_row = df.row(trigger_index)
-        current_row = df.row(index)
-
-        # Find column indices
-        high_col_idx = df.columns.index("high")
-        low_col_idx = df.columns.index("low")
-        timestamp_col_idx = df.columns.index("timestamp")
-
-        trigger_high = float(trigger_row[high_col_idx])
-        trigger_low = float(trigger_row[low_col_idx])
-
-        # Calculate entry and stop based on bias
-        if bias == "long":
-            entry_price = trigger_high
-            stop_price = trigger_low
-        else:  # short
-            entry_price = trigger_low
-            stop_price = trigger_high
-
-        # Detect multiple targets for reversals
-        target_levels = []
-        if category == "reversal":
-            target_prices = self._detect_targets_for_signal(df, index, bias, target_config)
-            target_levels = [TargetLevel(price=price) for price in target_prices]
-
-        # Get timestamp
-        timestamp = current_row[timestamp_col_idx]
-
-        # Handle timestamp conversion
-        if hasattr(timestamp, "to_pydatetime"):
-            timestamp = timestamp.to_pydatetime()
-        elif not isinstance(timestamp, datetime):
-            timestamp = datetime.now()
-
-        # Get symbol if available
-        symbol = None
-        if "symbol" in df.columns:
-            symbol_col_idx = df.columns.index("symbol")
-            symbol = current_row[symbol_col_idx]
-
-        # Get timeframe if available
-        timeframe = None
-        if "timeframe" in df.columns:
-            timeframe_col_idx = df.columns.index("timeframe")
-            timeframe = current_row[timeframe_col_idx]
-
-        # Create signal metadata object
-        return SignalMetadata(
-            pattern=pattern,
-            category=SignalCategory[category.upper()],
-            bias=SignalBias[bias.upper()],
-            bar_count=bar_count,
-            entry_price=entry_price,
-            stop_price=stop_price,
-            target_prices=target_levels,
-            timestamp=timestamp,
-            symbol=symbol,
-            timeframe=timeframe,
-        )
 
     def _calculate_advanced_patterns(self, data: PolarsDataFrame, config: TimeframeItemConfig) -> PolarsDataFrame:
         """Calculate advanced Strat patterns: kicker, f23, pmg, motherbar_problems."""

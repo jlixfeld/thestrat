@@ -53,6 +53,62 @@ print(f"Found {analyzed['inside_bar'].sum()} inside bars")
 print(f"Found {analyzed['outside_bar'].sum()} outside bars")
 ```
 
+### Multi-Target Configuration
+
+Configure multiple target detection for reversal signals with per-timeframe settings:
+
+```python
+from thestrat import Factory
+from thestrat.schemas import (
+    FactoryConfig, AggregationConfig, IndicatorsConfig,
+    TimeframeItemConfig, SwingPointsConfig, TargetConfig
+)
+
+# Configure with target detection
+config = FactoryConfig(
+    aggregation=AggregationConfig(
+        target_timeframes=["5m"],
+        asset_class="equities",
+        timezone="US/Eastern"
+    ),
+    indicators=IndicatorsConfig(
+        timeframe_configs=[
+            TimeframeItemConfig(
+                timeframes=["5m"],
+                swing_points=SwingPointsConfig(window=5, threshold=2.0),
+                target_config=TargetConfig(
+                    upper_bound="higher_high",    # For long signals - targets until next HH
+                    lower_bound="lower_low",       # For short signals - targets until next LL
+                    merge_threshold_pct=0.02,     # Merge targets within 2% of each other
+                    max_targets=3                  # Limit to 3 targets per signal
+                )
+            )
+        ]
+    )
+)
+
+pipeline = Factory.create_all(config)
+aggregated = pipeline["aggregation"].process(market_data)
+analyzed = pipeline["indicators"].process(aggregated)
+
+# Get signal objects with multiple targets
+signals_with_targets = analyzed.filter(analyzed["signal"].is_not_null())
+signal_objects = pipeline["indicators"].get_signal_objects(signals_with_targets)
+
+for signal in signal_objects:
+    print(f"Signal: {signal.pattern} - {signal.bias.value}")
+    print(f"Entry: ${signal.entry_price:.2f}, Stop: ${signal.stop_price:.2f}")
+    if signal.target_prices:
+        for i, target in enumerate(signal.target_prices, 1):
+            print(f"  Target {i}: ${target.price:.2f}")
+```
+
+**Key Parameters:**
+- `upper_bound`: Boundary for long signal targets (`higher_high`, `lower_high`)
+- `lower_bound`: Boundary for short signal targets (`lower_low`, `higher_low`)
+- `merge_threshold_pct`: Merge nearby targets (0.02 = 2%)
+- `max_targets`: Maximum targets per signal (None = unlimited)
+
 ### Multi-Timeframe Analysis
 
 ```python

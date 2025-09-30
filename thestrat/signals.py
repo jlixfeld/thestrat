@@ -18,6 +18,7 @@ class TargetLevel:
     price: float
     hit: bool = False
     hit_timestamp: datetime | None = None
+    id: str | None = None  # Broker's fill ID
 
 
 # Signal patterns with metadata for object creation
