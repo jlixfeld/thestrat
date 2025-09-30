@@ -9,11 +9,11 @@ TheStrat signals return rich metadata objects that provide comprehensive trading
 When TheStrat indicators detect trading patterns, they generate signals with detailed metadata through the `SignalMetadata` class. This metadata transforms simple pattern strings into actionable trading objects with:
 
 - **Price levels**: Entry and stop prices, with multiple target levels for reversals
-- **Target tracking**: `TargetLevel` objects with hit status and timestamps
+- **Target tracking**: `TargetLevel` objects with hit status, timestamps, and broker fill IDs
 - **Risk management**: Risk/reward ratios and position sizing data
 - **State tracking**: Signal lifecycle and execution status
 - **Change history**: Audit trail for stop price adjustments
-- **DataFrame integration**: JSON serialization for database storage
+- **DataFrame integration**: Native List[Float64] type for database storage with eager evaluation
 
 ## Basic Signal Example
 
@@ -193,9 +193,10 @@ Track when each target level is reached:
 for i, target in enumerate(signal.target_prices):
     print(f"Target {i+1}: ${target.price} - Hit: {target.hit}")
 
-# Mark first target as hit (typically done by brokerage)
+# Mark first target as hit (typically done by brokerage integration)
 signal.target_prices[0].hit = True
 signal.target_prices[0].hit_timestamp = datetime.now()
+signal.target_prices[0].id = "BROKER_FILL_12345"  # Broker's fill ID for tracking
 
 # Scale out or adjust stops based on targets hit
 hit_count = sum(1 for t in signal.target_prices if t.hit)
@@ -210,20 +211,33 @@ if signal.target_prices[0].hit:
 
 ### DataFrame Schema
 
-TheStrat indicators output signal data as DataFrame columns for database storage:
+TheStrat indicators output signal data as DataFrame columns with eager evaluation - targets are calculated during `process()` and immediately available in the DataFrame:
 
 ```python
 from thestrat import Factory, FactoryConfig, AggregationConfig, IndicatorsConfig
+from thestrat.schemas import TimeframeItemConfig, SwingPointsConfig, TargetConfig
 
-# Process data through TheStrat
+# Process data through TheStrat with target configuration
 config = FactoryConfig(
     aggregation=AggregationConfig(target_timeframes=["5min"], asset_class="equities"),
-    indicators=IndicatorsConfig()
+    indicators=IndicatorsConfig(
+        timeframe_configs=[
+            TimeframeItemConfig(
+                timeframes=["5min"],
+                swing_points=SwingPointsConfig(window=5, threshold=2.0),
+                target_config=TargetConfig(
+                    upper_bound="higher_high",  # For long signals
+                    lower_bound="lower_low",    # For short signals
+                    max_targets=3
+                )
+            )
+        ]
+    )
 )
 
 pipeline = Factory.create_all(config)
 aggregated = pipeline["aggregation"].process(raw_data)
-analyzed = pipeline["indicators"].process(aggregated)
+analyzed = pipeline["indicators"].process(aggregated)  # Targets calculated here (eager)
 
 # Signal data is available in DataFrame columns
 signals_df = analyzed.filter(analyzed["signal"].is_not_null())
@@ -232,7 +246,7 @@ signals_df = analyzed.filter(analyzed["signal"].is_not_null())
 # - signal: Pattern string (e.g., "2D-2U")
 # - type: Signal category ("reversal" or "continuation")
 # - bias: Direction ("long" or "short")
-# - target_prices: JSON string of target price array (e.g., "[155.0, 158.0, 160.0]")
+# - target_prices: Native List[Float64] (e.g., [155.0, 158.0, 160.0]) - NOT JSON strings
 # - target_count: Integer count of targets
 
 print(signals_df.select(["timestamp", "symbol", "signal", "type", "bias", "target_prices", "target_count"]))
@@ -240,9 +254,61 @@ print(signals_df.select(["timestamp", "symbol", "signal", "type", "bias", "targe
 
 ### Database Storage Example
 
+**PostgreSQL (Recommended - supports native ARRAY type):**
+
+```python
+import psycopg2
+import polars as pl
+
+# Create database table with native ARRAY type
+conn = psycopg2.connect("dbname=trading user=trader")
+cursor = conn.cursor()
+
+cursor.execute("""
+    CREATE TABLE IF NOT EXISTS signals (
+        timestamp TIMESTAMP,
+        symbol TEXT,
+        timeframe TEXT,
+        signal TEXT,
+        type TEXT,
+        bias TEXT,
+        target_prices FLOAT[],  -- Native PostgreSQL array type
+        target_count INTEGER,
+        PRIMARY KEY (timestamp, symbol, timeframe)
+    )
+""")
+
+# Insert signals from DataFrame
+signals_df = analyzed.filter(pl.col("signal").is_not_null())
+
+for row in signals_df.iter_rows(named=True):
+    cursor.execute("""
+        INSERT INTO signals
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        ON CONFLICT (timestamp, symbol, timeframe) DO UPDATE
+        SET target_prices = EXCLUDED.target_prices,
+            target_count = EXCLUDED.target_count
+    """, (
+        row["timestamp"],
+        row["symbol"],
+        row["timeframe"],
+        row["signal"],
+        row["type"],
+        row["bias"],
+        row["target_prices"],  # Native list[float] - no conversion needed
+        row["target_count"]
+    ))
+
+conn.commit()
+conn.close()
+```
+
+**SQLite (requires JSON conversion):**
+
 ```python
 import sqlite3
 import polars as pl
+import json
 
 # Create database table
 conn = sqlite3.connect("trading.db")
@@ -256,7 +322,7 @@ cursor.execute("""
         signal TEXT,
         type TEXT,
         bias TEXT,
-        target_prices TEXT,  -- JSON array
+        target_prices TEXT,  -- JSON string (SQLite doesn't have array type)
         target_count INTEGER,
         PRIMARY KEY (timestamp, symbol, timeframe)
     )
@@ -266,6 +332,9 @@ cursor.execute("""
 signals_df = analyzed.filter(pl.col("signal").is_not_null())
 
 for row in signals_df.iter_rows(named=True):
+    # Convert list to JSON string for SQLite
+    target_prices_json = json.dumps(row["target_prices"]) if row["target_prices"] else None
+
     cursor.execute("""
         INSERT OR REPLACE INTO signals
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -276,7 +345,7 @@ for row in signals_df.iter_rows(named=True):
         row["signal"],
         row["type"],
         row["bias"],
-        row["target_prices"],  # Already JSON string
+        target_prices_json,
         row["target_count"]
     ))
 
@@ -286,8 +355,30 @@ conn.close()
 
 ### Querying Signal Data
 
+**PostgreSQL:**
+
 ```python
-# Query signals with SQL
+# Query signals with SQL (PostgreSQL native array support)
+cursor.execute("""
+    SELECT timestamp, symbol, signal, bias, target_prices, target_count
+    FROM signals
+    WHERE signal = '2D-2U' AND date(timestamp) = '2024-01-15'
+""")
+
+for row in cursor.fetchall():
+    timestamp, symbol, signal, bias, target_prices, target_count = row
+    print(f"{timestamp}: {signal} on {symbol}")
+    print(f"  Bias: {bias}")
+    print(f"  Targets: {target_prices}")  # [155.0, 158.0, 160.0] (native list)
+    print(f"  Count: {target_count}")
+```
+
+**SQLite:**
+
+```python
+import json
+
+# Query signals with SQL (SQLite JSON conversion needed)
 cursor.execute("""
     SELECT timestamp, symbol, signal, bias, target_prices, target_count
     FROM signals
@@ -296,9 +387,11 @@ cursor.execute("""
 
 for row in cursor.fetchall():
     timestamp, symbol, signal, bias, target_prices_json, target_count = row
+    target_prices = json.loads(target_prices_json) if target_prices_json else []
+
     print(f"{timestamp}: {signal} on {symbol}")
     print(f"  Bias: {bias}")
-    print(f"  Targets: {target_prices_json}")  # "[155.0, 158.0, 160.0]"
+    print(f"  Targets: {target_prices}")  # [155.0, 158.0, 160.0] (after JSON parse)
     print(f"  Count: {target_count}")
 ```
 
@@ -358,14 +451,16 @@ The `SignalMetadata` object contains 25+ fields organized by category:
 - `max_favorable_excursion`, `max_adverse_excursion`
 
 **Target Tracking** (via `TargetLevel` objects):
-- `price`, `hit`, `hit_timestamp`
+- `price`, `hit`, `hit_timestamp`, `id` (broker fill ID)
 
 ## Real-World Trading Example
 
-Here's a complete example showing how to use `get_signal_objects()` to detect patterns and prepare for trade entry:
+Here's a complete example showing how to detect patterns and create SignalMetadata objects for trade entry:
 
 ```python
 from thestrat import Factory, FactoryConfig, AggregationConfig, IndicatorsConfig
+from thestrat.schemas import TimeframeItemConfig, SwingPointsConfig, TargetConfig
+from thestrat.indicators import Indicators
 from polars import col
 import polars as pl
 
@@ -373,23 +468,45 @@ def monitor_signals_for_trading(raw_data):
     """
     Complete workflow: data processing → signal detection → trade preparation
     """
-    # 1. Configure TheStrat components
+    # 1. Configure TheStrat components with target detection
     config = FactoryConfig(
         aggregation=AggregationConfig(
-            timeframes=["5min", "1h"],
+            target_timeframes=["5min", "1h"],
             asset_class="equities"
         ),
-        indicators=IndicatorsConfig()
+        indicators=IndicatorsConfig(
+            timeframe_configs=[
+                TimeframeItemConfig(
+                    timeframes=["5min"],
+                    swing_points=SwingPointsConfig(window=5, threshold=2.0),
+                    target_config=TargetConfig(
+                        upper_bound="higher_high",
+                        lower_bound="lower_low",
+                        max_targets=3
+                    )
+                ),
+                TimeframeItemConfig(
+                    timeframes=["1h"],
+                    swing_points=SwingPointsConfig(window=5, threshold=2.0),
+                    target_config=TargetConfig(
+                        upper_bound="higher_high",
+                        lower_bound="lower_low",
+                        max_targets=3
+                    )
+                )
+            ]
+        )
     )
 
     # 2. Create processing pipeline
     components = Factory.create_all(config)
 
-    # 3. Process raw OHLCV data
+    # 3. Process raw OHLCV data (targets calculated eagerly during process())
     aggregated_data = components["aggregation"].process(raw_data)
     analyzed_data = components["indicators"].process(aggregated_data)
 
     # 4. Filter for current signals (last few bars only)
+    # Note: target_prices and target_count are already populated in DataFrame
     current_signals = analyzed_data.filter(
         col("signal").is_not_null() &
         (col("timestamp") >= analyzed_data["timestamp"].max() - pl.duration(hours=2))
@@ -399,13 +516,15 @@ def monitor_signals_for_trading(raw_data):
         print("No signals detected in recent data")
         return []
 
-    # 5. Get full signal objects with trading metadata
-    signal_objects = components["indicators"].get_signal_objects(current_signals)
-
-    # 6. Evaluate each signal for trade entry
+    # 5. Evaluate each signal for trade entry
     trade_candidates = []
 
-    for signal in signal_objects:
+    for i in range(len(current_signals)):
+        # Get single-row DataFrame for this signal
+        signal_row_df = current_signals.slice(i, 1)
+
+        # Create SignalMetadata object from single row
+        signal = Indicators.get_signal_object(signal_row_df)
         print(f"\n🎯 Signal Detected: {signal.pattern}")
         print(f"   Symbol: {signal.symbol}")
         print(f"   Timeframe: {signal.timeframe}")
@@ -509,23 +628,23 @@ if __name__ == "__main__":
 
 ### Key Benefits of This Approach
 
-**Separation of Concerns:**
-- Vectorized pattern detection handles the heavy lifting
-- `get_signal_objects()` provides rich metadata only when signals are found
-- No wasted computation on incomplete JSON during pattern detection
+**Eager Evaluation:**
+- Targets calculated during `process()` and immediately available in DataFrame
+- Database-ready output without additional method calls
+- Target prices and counts visible for troubleshooting and analysis
 
 **Complete Trading Context:**
 - Entry, stop, and multiple target prices calculated from actual market structure
 - Risk/reward ratios and position sizing based on real price levels
-- Target hit tracking for position scaling strategies
+- Target hit tracking with broker fill IDs for position scaling strategies
 
 **Database Integration:**
+- Native List[Float64] type for seamless PostgreSQL ARRAY storage
 - Store signal data as DataFrame columns for easy querying
 - Update stop levels as trades evolve
 - Maintain audit trail of all stop modifications
-- Target prices stored as JSON for database compatibility
 
 **Performance Optimized:**
 - Fast vectorized detection identifies patterns quickly
-- Signal objects created on-demand only for actionable signals
-- Minimal memory overhead during bulk processing
+- `get_signal_object()` creates rich metadata objects from single-row queries
+- Native type conversion eliminates JSON parsing overhead
