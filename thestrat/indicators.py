@@ -547,16 +547,18 @@ class Indicators(Component):
 
         # Phase 1: Build cascaded expressions for 3-bar patterns (higher priority)
         # These patterns take precedence and will overwrite any existing matches
-        for pattern, config in SIGNALS.items():
-            if config["bar_count"] == 3:
+        for pattern, signal_config in SIGNALS.items():
+            if signal_config["bar_count"] == 3:
                 signal_expr = when(col("pattern_3bar") == pattern).then(lit(pattern)).otherwise(signal_expr)
-                type_expr = when(col("pattern_3bar") == pattern).then(lit(config["category"])).otherwise(type_expr)
-                bias_expr = when(col("pattern_3bar") == pattern).then(lit(config["bias"])).otherwise(bias_expr)
+                type_expr = (
+                    when(col("pattern_3bar") == pattern).then(lit(signal_config["category"])).otherwise(type_expr)
+                )
+                bias_expr = when(col("pattern_3bar") == pattern).then(lit(signal_config["bias"])).otherwise(bias_expr)
 
         # Phase 2: Add 2-bar patterns (lower priority, only if no 3-bar pattern matched)
         # Check signal_expr.is_null() to ensure 3-bar patterns maintain priority
-        for pattern, config in SIGNALS.items():
-            if config["bar_count"] == 2:
+        for pattern, signal_config in SIGNALS.items():
+            if signal_config["bar_count"] == 2:
                 signal_expr = (
                     when((col("pattern_2bar") == pattern) & signal_expr.is_null())
                     .then(lit(pattern))
@@ -564,12 +566,12 @@ class Indicators(Component):
                 )
                 type_expr = (
                     when((col("pattern_2bar") == pattern) & type_expr.is_null())
-                    .then(lit(config["category"]))
+                    .then(lit(signal_config["category"]))
                     .otherwise(type_expr)
                 )
                 bias_expr = (
                     when((col("pattern_2bar") == pattern) & bias_expr.is_null())
-                    .then(lit(config["bias"]))
+                    .then(lit(signal_config["bias"]))
                     .otherwise(bias_expr)
                 )
 
@@ -786,8 +788,9 @@ class Indicators(Component):
         if len(historical_df) < min_required:
             return []
 
-        # Add row index
-        historical_df = historical_df.with_row_index("__row_idx")
+        # Add row index if not already present
+        if "__row_idx" not in historical_df.columns:
+            historical_df = historical_df.with_row_index("__row_idx")
 
         # Detect local extremes
         if target_is_high:
@@ -845,20 +848,20 @@ class Indicators(Component):
             return []
 
         # Check for structure bound in structure column
-        # Find first historical bar where structure_col == True and get its price
+        # Find most recent bar where structure column has a value (indicating swing point)
         bound_price = None
         if structure_col in historical_df.columns:
-            # Filter to bars where bound condition is True
-            # Note: Explicit True comparison needed for boolean column filtering
-            bound_bars = historical_df.filter(col(structure_col) == True)  # noqa: E712
+            # Filter to bars where structure column is not null (forward-filled values)
+            # Structure columns contain float prices, not booleans
+            bound_bars = historical_df.filter(col(structure_col).is_not_null())
 
             if len(bound_bars) > 0:
                 # Sort by row index descending to get most recent occurrence first
                 bound_bars = bound_bars.sort("__row_idx", descending=True)
-                first_bound_bar = bound_bars[0]
+                first_bound_row = bound_bars.row(0, named=True)
 
                 # Extract the price from the appropriate column
-                bound_price = float(first_bound_bar[target_col])
+                bound_price = float(first_bound_row[target_col])
 
         # Trim targets to structure bound
         if bound_price is not None:
