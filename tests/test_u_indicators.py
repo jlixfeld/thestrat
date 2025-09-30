@@ -5282,27 +5282,25 @@ class TestEagerTargetEvaluation:
         # Find signal rows
         signal_rows = result.filter(col("signal").is_not_null())
 
-        if len(signal_rows) > 0:
-            # Check if any signals have targets populated
-            rows_with_targets = signal_rows.filter(col("target_prices").is_not_null())
+        # Require at least some signals to be detected
+        assert len(signal_rows) > 0, "Test data should generate at least some signals"
 
-            if len(rows_with_targets) > 0:
-                # Verify targets are actually list of floats
-                first_target = rows_with_targets.row(0, named=True)
-                assert isinstance(first_target["target_prices"], list), (
-                    "target_prices should be native Python list in row data"
-                )
-                assert all(isinstance(t, float) for t in first_target["target_prices"]), (
-                    "All target prices should be floats"
-                )
+        # Check if any signals have targets populated
+        rows_with_targets = signal_rows.filter(col("target_prices").is_not_null())
 
-                print(
-                    f"✅ Eager evaluation: {len(rows_with_targets)}/{len(signal_rows)} signals have targets populated"
-                )
-            else:
-                print("⚠️  Signals detected but no targets (valid if no higher_high/lower_low after signals)")
-        else:
-            print("⚠️  No signals detected in test data (this is okay for small datasets)")
+        # Require at least some targets to be populated
+        assert len(rows_with_targets) > 0, (
+            f"At least some signals should have targets populated. "
+            f"Found {len(signal_rows)} signals but 0 with targets. "
+            f"This indicates the target detection logic is broken."
+        )
+
+        # Verify targets are actually list of floats
+        first_target = rows_with_targets.row(0, named=True)
+        assert isinstance(first_target["target_prices"], list), "target_prices should be native Python list in row data"
+        assert all(isinstance(t, float) for t in first_target["target_prices"]), "All target prices should be floats"
+
+        print(f"✅ Eager evaluation: {len(rows_with_targets)}/{len(signal_rows)} signals have targets populated")
 
     def test_target_count_matches_target_prices(self):
         """Test that target_count matches len(target_prices) for all signals."""
