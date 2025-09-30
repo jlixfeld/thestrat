@@ -307,6 +307,41 @@ class GapDetectionConfig(BaseModel):
     )
 
 
+class TargetConfig(BaseModel):
+    """Configuration for multi-target detection."""
+
+    model_config = ConfigDict(str_strip_whitespace=True, validate_default=True, extra="forbid")
+
+    upper_bound: Literal["higher_high", "lower_high", "higher_low", "lower_low"] = Field(
+        default="higher_high",
+        description="Upper bound for target detection - determines both boundary and target type",
+        json_schema_extra={
+            "target_inference": {
+                "higher_high": "targets are highs (long signals)",
+                "lower_high": "targets are highs (long signals)",
+                "higher_low": "targets are lows (short signals)",
+                "lower_low": "targets are lows (short signals)",
+            }
+        },
+    )
+    merge_threshold_pct: float = Field(
+        default=0.0,
+        ge=0,
+        description="Merge targets within this percentage threshold (0 = no merging, 0.02 = 2%)",
+        examples=[0.0, 0.01, 0.02, 0.05],
+        json_schema_extra={
+            "unit": "decimal_percentage",
+            "merge_rules": "Long: pick higher target, Short: pick lower target",
+        },
+    )
+    max_targets: int | None = Field(
+        default=None,
+        ge=1,
+        description="Maximum number of targets to detect (None = all targets until upper_bound)",
+        examples=[None, 3, 5, 10],
+    )
+
+
 class TimeframeItemConfig(BaseModel):
     """Configuration for a single timeframe item with flexible timeframe targeting."""
 
@@ -329,6 +364,9 @@ class TimeframeItemConfig(BaseModel):
         default=None,
         description="Optional gap detection configuration for these timeframes",
         json_schema_extra={"note": "Most useful for session-based markets (equities) with overnight gaps"},
+    )
+    target_config: TargetConfig | None = Field(
+        default=None, description="Optional multi-target detection configuration for reversal signals"
     )
 
     @field_validator("timeframes")
@@ -741,6 +779,16 @@ class IndicatorSchema(BaseModel):
             "nullable": True,
             "values": ["long", "short"],
         },
+    )
+    target_prices: str | None = Field(
+        default=None,
+        description="JSON array of target prices for reversal signals",
+        json_schema_extra={"polars_dtype": String, "output": True, "category": "signals", "nullable": True},
+    )
+    target_count: int | None = Field(
+        default=None,
+        description="Number of targets detected for reversal signals",
+        json_schema_extra={"polars_dtype": Int32, "output": True, "category": "signals", "nullable": True},
     )
 
     # Special Pattern Columns

@@ -574,12 +574,18 @@ class Indicators(Component):
                 signal_expr.alias("signal"),
                 type_expr.alias("type"),
                 bias_expr.alias("bias"),
+                # Add placeholder columns for multi-target support
+                # These are populated on-demand via get_signal_objects()
+                lit(None, dtype=String).alias("target_prices"),
+                lit(None, dtype=Int32).alias("target_count"),
             ]
         )
 
         # Note: Signal objects are not created in this vectorized implementation
         # for performance reasons. If signal objects are needed, they can be created
-        # on-demand using the get_signal_objects method
+        # on-demand using the get_signal_objects method.
+        # Target detection is also deferred to get_signal_objects() to maintain
+        # vectorized performance for the main indicator pipeline.
 
         # Clean up temporary columns
         df = df.drop(["scenario_2", "scenario_1", "scenario_0", "pattern_2bar", "pattern_3bar"])
@@ -615,19 +621,207 @@ class Indicators(Component):
 
         for _, row in signal_data.iterrows():
             original_index = int(row["__original_idx"])
+
+            # Get target_config for this row's timeframe
+            target_config = None
+            if "timeframe" in row and row["timeframe"] is not None:
+                tf_config = self._get_config_for_timeframe(row["timeframe"])
+                target_config = tf_config.target_config if tf_config else None
+
             signal_obj = self._create_signal_object(
-                df_with_index, original_index, row["signal"], row["type"], row["bias"]
+                df_with_index, original_index, row["signal"], row["type"], row["bias"], target_config
             )
             if signal_obj:
                 signal_objects.append(signal_obj)
 
         return signal_objects
 
-    def _create_signal_object(self, df, index, pattern, category, bias):
-        """Factory method to create signal objects."""
+    def _detect_targets_for_signal(
+        self, df: PolarsDataFrame, signal_index: int, bias: str, target_config
+    ) -> list[float]:
+        """
+        Detect multiple target levels for a signal using vectorized operations.
+
+        Detects all relevant local highs (long) or lows (short) between signal bar
+        and configured upper bound, applies merge logic, and returns targets in
+        reverse chronological order.
+
+        Args:
+            df: DataFrame with market structure columns
+            signal_index: Index of signal bar
+            bias: Signal bias ("long" or "short")
+            target_config: TargetConfig with detection parameters
+
+        Returns:
+            List of target prices in reverse chronological order (most recent first)
+        """
+        if target_config is None:
+            return []
+
+        # Import here to avoid circular dependency
+        from .schemas import TargetConfig
+
+        # Handle None config
+        if target_config is None:
+            target_config = TargetConfig()
+
+        upper_bound = target_config.upper_bound
+        merge_threshold_pct = target_config.merge_threshold_pct
+        max_targets = target_config.max_targets
+
+        # Determine target type from upper_bound
+        # higher_high/lower_high -> targets are highs (long signals)
+        # higher_low/lower_low -> targets are lows (short signals)
+        target_is_high = upper_bound in ["higher_high", "lower_high"]
+
+        # Get the column name for targets and upper bound
+        if bias == "long":
+            target_col = "high"
+            structure_col = upper_bound  # e.g., "higher_high"
+        else:  # short
+            target_col = "low"
+            structure_col = upper_bound  # e.g., "lower_low"
+
+        # Get data up to signal bar (not including signal bar itself)
+        historical_df = df.slice(0, signal_index)
+
+        if len(historical_df) == 0:
+            return []
+
+        # Detect local highs/lows using rolling windows (similar to market structure detection)
+        # Use same window approach as in _calculate_market_structure
+        window = 1  # Use minimal window for target detection
+        min_required = 2 * window + 1
+
+        if len(historical_df) < min_required:
+            return []
+
+        # Add row index
+        historical_df = historical_df.with_row_index("__row_idx")
+
+        # Detect local extremes
+        if target_is_high:
+            historical_df = historical_df.with_columns(
+                [col("high").rolling_max(window_size=2 * window + 1, center=True).alias("window_max")]
+            )
+            historical_df = historical_df.with_columns(
+                [
+                    (
+                        (col("__row_idx") >= window)
+                        & (col("__row_idx") < (len(historical_df) - window))
+                        & (col("high") == col("window_max"))
+                    ).alias("is_local_extreme")
+                ]
+            )
+        else:
+            historical_df = historical_df.with_columns(
+                [col("low").rolling_min(window_size=2 * window + 1, center=True).alias("window_min")]
+            )
+            historical_df = historical_df.with_columns(
+                [
+                    (
+                        (col("__row_idx") >= window)
+                        & (col("__row_idx") < (len(historical_df) - window))
+                        & (col("low") == col("window_min"))
+                    ).alias("is_local_extreme")
+                ]
+            )
+
+        # Filter to local extremes only
+        local_extremes = historical_df.filter(col("is_local_extreme"))
+
+        if len(local_extremes) == 0:
+            return []
+
+        # Extract target prices
+        target_prices = local_extremes.select(target_col).to_series().to_list()
+
+        # Filter for ascending/descending progression
+        filtered_targets = []
+        for price in reversed(target_prices):  # Scan backwards from most recent
+            if not filtered_targets:
+                filtered_targets.append(price)
+            else:
+                if bias == "long":
+                    # For long: each target should be higher than previous
+                    if price > filtered_targets[-1]:
+                        filtered_targets.append(price)
+                else:  # short
+                    # For short: each target should be lower than previous
+                    if price < filtered_targets[-1]:
+                        filtered_targets.append(price)
+
+        if not filtered_targets:
+            return []
+
+        # Check for upper bound in structure column
+        # Stop at first occurrence of upper bound
+        upper_bound_value = None
+        if structure_col in df.columns:
+            # Get upper bound value at signal bar
+            signal_row = df.slice(signal_index, 1)
+            bound_value = signal_row.select(structure_col).item()
+            if bound_value is not None:
+                upper_bound_value = bound_value
+
+        # Trim targets to upper bound
+        if upper_bound_value is not None:
+            final_targets = []
+            for price in filtered_targets:
+                if bias == "long":
+                    if price <= upper_bound_value:
+                        final_targets.append(price)
+                    else:
+                        # Stop at and include first target beyond upper bound
+                        final_targets.append(price)
+                        break
+                else:  # short
+                    if price >= upper_bound_value:
+                        final_targets.append(price)
+                    else:
+                        # Stop at and include first target beyond upper bound
+                        final_targets.append(price)
+                        break
+            filtered_targets = final_targets
+
+        # Apply merge logic
+        if merge_threshold_pct > 0 and len(filtered_targets) > 1:
+            merged = []
+            i = 0
+            while i < len(filtered_targets):
+                current = filtered_targets[i]
+                # Look ahead for targets within merge threshold
+                group = [current]
+                j = i + 1
+                while j < len(filtered_targets):
+                    next_price = filtered_targets[j]
+                    pct_diff = abs(next_price - current) / current
+                    if pct_diff <= merge_threshold_pct:
+                        group.append(next_price)
+                        j += 1
+                    else:
+                        break
+
+                # Pick representative from group
+                if bias == "long":
+                    merged.append(max(group))  # Pick higher for long
+                else:
+                    merged.append(min(group))  # Pick lower for short
+
+                i = j
+            filtered_targets = merged
+
+        # Apply max_targets limit
+        if max_targets is not None and len(filtered_targets) > max_targets:
+            filtered_targets = filtered_targets[:max_targets]
+
+        return filtered_targets
+
+    def _create_signal_object(self, df, index, pattern, category, bias, target_config=None):
+        """Factory method to create signal objects with multi-target support."""
         from datetime import datetime
 
-        from .signals import SignalBias, SignalCategory, SignalMetadata
+        from .signals import SignalBias, SignalCategory, SignalMetadata, TargetLevel
 
         # Skip if bias is None (some patterns need special handling)
         if bias is None:
@@ -637,18 +831,18 @@ class Indicators(Component):
         config = SIGNALS[pattern]
         bar_count = config["bar_count"]
 
-        # Determine bar indices
-        entry_bar_index = index
-        trigger_bar_index = index - config["trigger_bar_offset"]
+        # Get trigger bar (previous bar) for entry/stop prices
+        # In TheStrat, entry and stop come from the trigger bar (typically bar before signal)
+        # For 2-bar patterns: trigger is 1 bar back, for 3-bar: trigger is 1 bar back
+        trigger_index = index - 1  # Standard: trigger bar is previous bar
 
-        # Ensure we have enough data for the trigger bar
-        if trigger_bar_index < 0:
+        if trigger_index < 0:
             return None
 
-        # Get trigger bar data for entry/stop prices
-        trigger_row = df.row(trigger_bar_index)
+        trigger_row = df.row(trigger_index)
+        current_row = df.row(index)
 
-        # Find high, low columns (assuming standard OHLC structure)
+        # Find column indices
         high_col_idx = df.columns.index("high")
         low_col_idx = df.columns.index("low")
         timestamp_col_idx = df.columns.index("timestamp")
@@ -664,27 +858,13 @@ class Indicators(Component):
             entry_price = trigger_low
             stop_price = trigger_high
 
-        # Calculate target for reversals
-        target_price = None
-        target_bar_index = None
-
+        # Detect multiple targets for reversals
+        target_levels = []
         if category == "reversal":
-            target_bar_offset = config.get("target_bar_offset")
-            if target_bar_offset is not None:
-                target_bar_index = index - target_bar_offset
+            target_prices = self._detect_targets_for_signal(df, index, bias, target_config)
+            target_levels = [TargetLevel(price=price) for price in target_prices]
 
-                if target_bar_index >= 0:
-                    target_row = df.row(target_bar_index)
-                    target_high = float(target_row[high_col_idx])
-                    target_low = float(target_row[low_col_idx])
-
-                    if bias == "long":
-                        target_price = target_high
-                    else:
-                        target_price = target_low
-
-        # Get current row data
-        current_row = df.row(index)
+        # Get timestamp
         timestamp = current_row[timestamp_col_idx]
 
         # Handle timestamp conversion
@@ -699,21 +879,24 @@ class Indicators(Component):
             symbol_col_idx = df.columns.index("symbol")
             symbol = current_row[symbol_col_idx]
 
+        # Get timeframe if available
+        timeframe = None
+        if "timeframe" in df.columns:
+            timeframe_col_idx = df.columns.index("timeframe")
+            timeframe = current_row[timeframe_col_idx]
+
         # Create signal metadata object
         return SignalMetadata(
             pattern=pattern,
             category=SignalCategory[category.upper()],
             bias=SignalBias[bias.upper()],
             bar_count=bar_count,
-            entry_bar_index=entry_bar_index,
-            trigger_bar_index=trigger_bar_index,
-            target_bar_index=target_bar_index,
             entry_price=entry_price,
             stop_price=stop_price,
-            target_price=target_price,
+            target_prices=target_levels,
             timestamp=timestamp,
             symbol=symbol,
-            timeframe=getattr(self, "timeframe", None),
+            timeframe=timeframe,
         )
 
     def _calculate_advanced_patterns(self, data: PolarsDataFrame, config: TimeframeItemConfig) -> PolarsDataFrame:
