@@ -616,10 +616,8 @@ class Indicators(Component):
         if len(signal_rows) == 0:
             return signal_objects
 
-        # Convert to pandas for row-by-row processing
-        signal_data = signal_rows.to_pandas()
-
-        for _, row in signal_data.iterrows():
+        # Use native Polars iteration instead of pandas conversion
+        for row in signal_rows.iter_rows(named=True):
             original_index = int(row["__original_idx"])
 
             # Get target_config for this row's timeframe
@@ -755,28 +753,34 @@ class Indicators(Component):
             return []
 
         # Check for upper bound in structure column
-        # Stop at first occurrence of upper bound
-        upper_bound_value = None
-        if structure_col in df.columns:
-            # Get upper bound value at signal bar
-            signal_row = df.slice(signal_index, 1)
-            bound_value = signal_row.select(structure_col).item()
-            if bound_value is not None:
-                upper_bound_value = bound_value
+        # Find first historical bar where structure_col == True and get its price
+        upper_bound_price = None
+        if structure_col in historical_df.columns:
+            # Filter to bars where upper_bound condition is True
+            # Note: Explicit True comparison needed for boolean column filtering
+            upper_bound_bars = historical_df.filter(col(structure_col) == True)  # noqa: E712
+
+            if len(upper_bound_bars) > 0:
+                # Sort by row index descending to get most recent occurrence first
+                upper_bound_bars = upper_bound_bars.sort("__row_idx", descending=True)
+                first_bound_bar = upper_bound_bars[0]
+
+                # Extract the price from the appropriate column
+                upper_bound_price = float(first_bound_bar[target_col])
 
         # Trim targets to upper bound
-        if upper_bound_value is not None:
+        if upper_bound_price is not None:
             final_targets = []
             for price in filtered_targets:
                 if bias == "long":
-                    if price <= upper_bound_value:
+                    if price <= upper_bound_price:
                         final_targets.append(price)
                     else:
                         # Stop at and include first target beyond upper bound
                         final_targets.append(price)
                         break
                 else:  # short
-                    if price >= upper_bound_value:
+                    if price >= upper_bound_price:
                         final_targets.append(price)
                     else:
                         # Stop at and include first target beyond upper bound

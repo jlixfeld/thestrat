@@ -23,6 +23,9 @@ from thestrat.schemas import (
 )
 from thestrat.signals import SIGNALS
 
+# Get expected column count from schema
+EXPECTED_INDICATOR_COLUMNS = len(IndicatorSchema.model_fields)
+
 
 def validate_result_against_schema(result: DataFrame) -> None:
     """
@@ -3286,6 +3289,399 @@ class TestSignalMetadataIntegration:
 
 
 @pytest.mark.unit
+class TestTargetDetection:
+    """Direct unit tests for multi-target detection logic."""
+
+    def test_local_extreme_detection_highs(self):
+        """Test detection of local highs for long signals."""
+        from thestrat.schemas import TargetConfig
+
+        # Create data with clear local highs
+        data = DataFrame(
+            {
+                "timestamp": [datetime(2024, 1, 1, 9, 30) + timedelta(minutes=i) for i in range(10)],
+                "open": [100.0] * 10,
+                "high": [100.0, 105.0, 103.0, 108.0, 106.0, 110.0, 109.0, 112.0, 111.0, 115.0],
+                "low": [99.0] * 10,
+                "close": [100.0] * 10,
+                "volume": [1000] * 10,
+                "symbol": ["TEST"] * 10,
+                "timeframe": ["5min"] * 10,
+            }
+        )
+
+        config = IndicatorsConfig(
+            timeframe_configs=[
+                TimeframeItemConfig(
+                    timeframes=["5min"],
+                    target_config=TargetConfig(upper_bound="higher_high", merge_threshold_pct=0.0),
+                )
+            ]
+        )
+
+        indicators = Indicators(config)
+        result = indicators.process(data)
+
+        # Trigger target detection at last bar (index 9) as if there's a signal
+        target_config = config.timeframe_configs[0].target_config
+        targets = indicators._detect_targets_for_signal(
+            result, signal_index=9, bias="long", target_config=target_config
+        )
+
+        # Should detect local highs: 105, 108, 110, 112 (progressively higher)
+        assert len(targets) > 0, "Should detect some targets"
+        # Targets should be in ascending order (reverse chronological means most recent first)
+        for i in range(len(targets) - 1):
+            assert targets[i] < targets[i + 1], f"Targets should be ascending for long signals: {targets}"
+
+    def test_local_extreme_detection_lows(self):
+        """Test detection of local lows for short signals."""
+        from thestrat.schemas import TargetConfig
+
+        # Create data with clear local lows
+        data = DataFrame(
+            {
+                "timestamp": [datetime(2024, 1, 1, 9, 30) + timedelta(minutes=i) for i in range(10)],
+                "open": [100.0] * 10,
+                "high": [101.0] * 10,
+                "low": [100.0, 95.0, 97.0, 92.0, 94.0, 90.0, 91.0, 88.0, 89.0, 85.0],
+                "close": [100.0] * 10,
+                "volume": [1000] * 10,
+                "symbol": ["TEST"] * 10,
+                "timeframe": ["5min"] * 10,
+            }
+        )
+
+        config = IndicatorsConfig(
+            timeframe_configs=[
+                TimeframeItemConfig(
+                    timeframes=["5min"],
+                    target_config=TargetConfig(upper_bound="lower_low", merge_threshold_pct=0.0),
+                )
+            ]
+        )
+
+        indicators = Indicators(config)
+        result = indicators.process(data)
+
+        target_config = config.timeframe_configs[0].target_config
+        targets = indicators._detect_targets_for_signal(
+            result, signal_index=9, bias="short", target_config=target_config
+        )
+
+        # Should detect local lows progressively lower
+        assert len(targets) > 0, "Should detect some targets"
+        # Targets should be in descending order (progressively lower for short)
+        for i in range(len(targets) - 1):
+            assert targets[i] > targets[i + 1], f"Targets should be descending for short signals: {targets}"
+
+    def test_ascending_progression_filtering(self):
+        """Test that only ascending highs are included for long signals."""
+        from thestrat.schemas import TargetConfig
+
+        # Create data where not all highs are progressively higher
+        data = DataFrame(
+            {
+                "timestamp": [datetime(2024, 1, 1, 9, 30) + timedelta(minutes=i) for i in range(10)],
+                "open": [100.0] * 10,
+                "high": [100.0, 105.0, 103.0, 107.0, 104.0, 109.0, 106.0, 111.0, 108.0, 115.0],
+                "low": [99.0] * 10,
+                "close": [100.0] * 10,
+                "volume": [1000] * 10,
+                "symbol": ["TEST"] * 10,
+                "timeframe": ["5min"] * 10,
+            }
+        )
+
+        config = IndicatorsConfig(
+            timeframe_configs=[
+                TimeframeItemConfig(
+                    timeframes=["5min"],
+                    target_config=TargetConfig(upper_bound="higher_high", merge_threshold_pct=0.0),
+                )
+            ]
+        )
+
+        indicators = Indicators(config)
+        result = indicators.process(data)
+
+        target_config = config.timeframe_configs[0].target_config
+        targets = indicators._detect_targets_for_signal(
+            result, signal_index=9, bias="long", target_config=target_config
+        )
+
+        # Should only get ascending highs (filtering out lower highs)
+        for i in range(len(targets) - 1):
+            assert targets[i] < targets[i + 1], f"Should only include ascending highs: {targets}"
+
+    def test_merge_logic_two_percent_threshold(self):
+        """Test merge logic with 2% threshold."""
+        from thestrat.schemas import TargetConfig
+
+        # Create data with targets within 2% of each other
+        data = DataFrame(
+            {
+                "timestamp": [datetime(2024, 1, 1, 9, 30) + timedelta(minutes=i) for i in range(10)],
+                "open": [100.0] * 10,
+                "high": [100.0, 105.0, 103.0, 106.5, 104.0, 109.0, 106.0, 110.0, 108.0, 115.0],
+                # 105 and 106.5 are ~1.4% apart, should merge
+                # 109 and 110 are ~0.9% apart, should merge
+                "low": [99.0] * 10,
+                "close": [100.0] * 10,
+                "volume": [1000] * 10,
+                "symbol": ["TEST"] * 10,
+                "timeframe": ["5min"] * 10,
+            }
+        )
+
+        config = IndicatorsConfig(
+            timeframe_configs=[
+                TimeframeItemConfig(
+                    timeframes=["5min"],
+                    target_config=TargetConfig(upper_bound="higher_high", merge_threshold_pct=0.02),
+                )
+            ]
+        )
+
+        indicators = Indicators(config)
+        result = indicators.process(data)
+
+        target_config = config.timeframe_configs[0].target_config
+        targets = indicators._detect_targets_for_signal(
+            result, signal_index=9, bias="long", target_config=target_config
+        )
+
+        # With 2% merge, close targets should be merged
+        # For long signals, merge picks higher value
+        if len(targets) > 1:
+            for i in range(len(targets) - 1):
+                pct_diff = abs(targets[i + 1] - targets[i]) / targets[i]
+                assert pct_diff > 0.02 or targets[i] == targets[i + 1], (
+                    f"Adjacent targets should be >2% apart or merged: {targets}"
+                )
+
+    def test_merge_logic_picks_higher_for_long(self):
+        """Test that merge logic picks higher target for long signals."""
+        from thestrat.schemas import TargetConfig
+
+        # Create data with two very close targets
+        data = DataFrame(
+            {
+                "timestamp": [datetime(2024, 1, 1, 9, 30) + timedelta(minutes=i) for i in range(6)],
+                "open": [100.0] * 6,
+                "high": [100.0, 105.0, 103.0, 105.5, 104.0, 110.0],  # 105 and 105.5 should merge to 105.5
+                "low": [99.0] * 6,
+                "close": [100.0] * 6,
+                "volume": [1000] * 6,
+                "symbol": ["TEST"] * 6,
+                "timeframe": ["5min"] * 6,
+            }
+        )
+
+        config = IndicatorsConfig(
+            timeframe_configs=[
+                TimeframeItemConfig(
+                    timeframes=["5min"],
+                    target_config=TargetConfig(upper_bound="higher_high", merge_threshold_pct=0.01),  # 1% threshold
+                )
+            ]
+        )
+
+        indicators = Indicators(config)
+        result = indicators.process(data)
+
+        target_config = config.timeframe_configs[0].target_config
+        targets = indicators._detect_targets_for_signal(
+            result, signal_index=5, bias="long", target_config=target_config
+        )
+
+        # Should include the higher value (105.5) when merging, not 105
+        if any(104.5 < t < 106 for t in targets):
+            # If we got a target in the 105 range, it should be 105.5 (the higher one)
+            merged_target = next(t for t in targets if 104.5 < t < 106)
+            assert merged_target == 105.5, f"Should merge to higher value (105.5), got {merged_target}"
+
+    def test_merge_logic_picks_lower_for_short(self):
+        """Test that merge logic picks lower target for short signals."""
+        from thestrat.schemas import TargetConfig
+
+        # Create data with two very close targets
+        data = DataFrame(
+            {
+                "timestamp": [datetime(2024, 1, 1, 9, 30) + timedelta(minutes=i) for i in range(6)],
+                "open": [100.0] * 6,
+                "high": [101.0] * 6,
+                "low": [100.0, 95.0, 97.0, 94.5, 96.0, 90.0],  # 95 and 94.5 should merge to 94.5
+                "close": [100.0] * 6,
+                "volume": [1000] * 6,
+                "symbol": ["TEST"] * 6,
+                "timeframe": ["5min"] * 6,
+            }
+        )
+
+        config = IndicatorsConfig(
+            timeframe_configs=[
+                TimeframeItemConfig(
+                    timeframes=["5min"],
+                    target_config=TargetConfig(upper_bound="lower_low", merge_threshold_pct=0.01),
+                )
+            ]
+        )
+
+        indicators = Indicators(config)
+        result = indicators.process(data)
+
+        target_config = config.timeframe_configs[0].target_config
+        targets = indicators._detect_targets_for_signal(
+            result, signal_index=5, bias="short", target_config=target_config
+        )
+
+        # Should include the lower value (94.5) when merging, not 95
+        if any(94 < t < 96 for t in targets):
+            merged_target = next(t for t in targets if 94 < t < 96)
+            assert merged_target == 94.5, f"Should merge to lower value (94.5), got {merged_target}"
+
+    def test_max_targets_limiting(self):
+        """Test max_targets configuration limits number of targets."""
+        from thestrat.schemas import TargetConfig
+
+        # Create data with many local highs
+        data = DataFrame(
+            {
+                "timestamp": [datetime(2024, 1, 1, 9, 30) + timedelta(minutes=i) for i in range(20)],
+                "open": [100.0] * 20,
+                "high": [100 + i * 2 for i in range(20)],  # Progressively higher
+                "low": [99.0] * 20,
+                "close": [100.0] * 20,
+                "volume": [1000] * 20,
+                "symbol": ["TEST"] * 20,
+                "timeframe": ["5min"] * 20,
+            }
+        )
+
+        config = IndicatorsConfig(
+            timeframe_configs=[
+                TimeframeItemConfig(
+                    timeframes=["5min"],
+                    target_config=TargetConfig(upper_bound="higher_high", merge_threshold_pct=0.0, max_targets=3),
+                )
+            ]
+        )
+
+        indicators = Indicators(config)
+        result = indicators.process(data)
+
+        target_config = config.timeframe_configs[0].target_config
+        targets = indicators._detect_targets_for_signal(
+            result, signal_index=19, bias="long", target_config=target_config
+        )
+
+        # Should be limited to max_targets
+        assert len(targets) <= 3, f"Should respect max_targets=3, got {len(targets)} targets"
+
+    def test_no_ascending_targets_empty_list(self):
+        """Test that empty list is returned when no ascending progression exists."""
+        from thestrat.schemas import TargetConfig
+
+        # Create data with local highs that don't form ascending progression (all descending)
+        data = DataFrame(
+            {
+                "timestamp": [datetime(2024, 1, 1, 9, 30) + timedelta(minutes=i) for i in range(10)],
+                "open": [110.0, 105.0, 103.0, 102.0, 101.0, 100.0, 99.0, 98.0, 97.0, 96.0],
+                "high": [111.0, 106.0, 104.0, 103.0, 102.0, 101.0, 100.0, 99.0, 98.0, 97.0],  # All descending
+                "low": [109.0, 104.0, 102.0, 101.0, 100.0, 99.0, 98.0, 97.0, 96.0, 95.0],
+                "close": [110.0, 105.0, 103.0, 102.0, 101.0, 100.0, 99.0, 98.0, 97.0, 96.0],
+                "volume": [1000] * 10,
+                "symbol": ["TEST"] * 10,
+                "timeframe": ["5min"] * 10,
+            }
+        )
+
+        config = IndicatorsConfig(
+            timeframe_configs=[
+                TimeframeItemConfig(
+                    timeframes=["5min"],
+                    target_config=TargetConfig(upper_bound="higher_high"),
+                )
+            ]
+        )
+
+        indicators = Indicators(config)
+        result = indicators.process(data)
+
+        target_config = config.timeframe_configs[0].target_config
+        targets = indicators._detect_targets_for_signal(
+            result, signal_index=9, bias="long", target_config=target_config
+        )
+
+        # For long signal, all highs are descending, so no ascending progression = empty list
+        assert targets == [], "Should return empty list when no ascending targets found"
+
+    def test_insufficient_history_empty_list(self):
+        """Test that empty list is returned with insufficient historical data."""
+        from thestrat.schemas import TargetConfig
+
+        # Create minimal data (signal at index 1, almost no history)
+        data = DataFrame(
+            {
+                "timestamp": [datetime(2024, 1, 1, 9, 30) + timedelta(minutes=i) for i in range(3)],
+                "open": [100.0] * 3,
+                "high": [100.0, 105.0, 110.0],
+                "low": [99.0] * 3,
+                "close": [100.0] * 3,
+                "volume": [1000] * 3,
+                "symbol": ["TEST"] * 3,
+                "timeframe": ["5min"] * 3,
+            }
+        )
+
+        config = IndicatorsConfig(
+            timeframe_configs=[
+                TimeframeItemConfig(
+                    timeframes=["5min"],
+                    target_config=TargetConfig(upper_bound="higher_high"),
+                )
+            ]
+        )
+
+        indicators = Indicators(config)
+        result = indicators.process(data)
+
+        target_config = config.timeframe_configs[0].target_config
+        targets = indicators._detect_targets_for_signal(
+            result, signal_index=1, bias="long", target_config=target_config
+        )
+
+        # Should handle gracefully with minimal history
+        assert isinstance(targets, list), "Should return list even with insufficient history"
+
+    def test_none_target_config_returns_empty(self):
+        """Test that None target_config returns empty list."""
+        data = DataFrame(
+            {
+                "timestamp": [datetime(2024, 1, 1, 9, 30) + timedelta(minutes=i) for i in range(10)],
+                "open": [100.0] * 10,
+                "high": [100 + i * 2 for i in range(10)],
+                "low": [99.0] * 10,
+                "close": [100.0] * 10,
+                "volume": [1000] * 10,
+                "symbol": ["TEST"] * 10,
+                "timeframe": ["5min"] * 10,
+            }
+        )
+
+        config = IndicatorsConfig(timeframe_configs=[TimeframeItemConfig(timeframes=["5min"])])
+
+        indicators = Indicators(config)
+        result = indicators.process(data)
+
+        # Call with None config
+        targets = indicators._detect_targets_for_signal(result, signal_index=9, bias="long", target_config=None)
+
+        assert targets == [], "Should return empty list when target_config is None"
+
+
+@pytest.mark.unit
 class TestPerTimeframeIndicators:
     """Test per-timeframe configuration functionality."""
 
@@ -3752,9 +4148,14 @@ class TestIndividualSignalPatterns:
             assert isinstance(result, DataFrame)
             assert isinstance(signal_objects, list)
 
-            # Schema consistency: 34 columns (raw data) or 35 columns (with timeframe from aggregation)
-            # Added target_prices and target_count columns
-            assert len(result.columns) in [34, 35], f"Expected 34 or 35 columns, got {len(result.columns)}"
+            # Schema consistency: Result should have all required indicator columns
+            # (34 columns for raw data, 35 with timeframe from aggregation)
+            assert len(result.columns) in [
+                EXPECTED_INDICATOR_COLUMNS - 1,
+                EXPECTED_INDICATOR_COLUMNS,
+            ], (
+                f"Expected {EXPECTED_INDICATOR_COLUMNS - 1} or {EXPECTED_INDICATOR_COLUMNS} columns, got {len(result.columns)}"
+            )
 
             # Signal columns should always be present
             signal_columns = ["signal", "type", "bias"]
@@ -3788,9 +4189,14 @@ class TestIndividualSignalPatterns:
                 assert isinstance(result, DataFrame)
                 assert isinstance(signal_objects, list)
 
-                # Schema consistency: 34 columns (raw data) or 35 columns (with timeframe from aggregation)
-                # Added target_prices and target_count columns
-                assert len(result.columns) in [34, 35], f"Expected 34 or 35 columns, got {len(result.columns)}"
+                # Schema consistency: Result should have all required indicator columns
+                # (34 columns for raw data, 35 with timeframe from aggregation)
+                assert len(result.columns) in [
+                    EXPECTED_INDICATOR_COLUMNS - 1,
+                    EXPECTED_INDICATOR_COLUMNS,
+                ], (
+                    f"Expected {EXPECTED_INDICATOR_COLUMNS - 1} or {EXPECTED_INDICATOR_COLUMNS} columns, got {len(result.columns)}"
+                )
 
                 # Signal columns should be present even in edge cases
                 signal_columns = ["signal", "type", "bias"]

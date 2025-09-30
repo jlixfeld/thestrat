@@ -253,7 +253,7 @@ When targets are within `merge_threshold_pct` of each other:
 - [x] Implement merge logic (threshold-based grouping)
 - [x] Implement upper bound detection
 - [x] Handle reverse chronological ordering
-- [ ] Serialize prices to JSON string for `target_prices` column (done in Phase 3)
+- [x] Serialize prices to JSON string for `target_prices` column
 
 ### Phase 3: Integration
 - [x] Update `_calculate_signals()` to add `target_prices` and `target_count` columns to DataFrame
