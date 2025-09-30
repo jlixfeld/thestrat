@@ -13,12 +13,16 @@ from thestrat import Factory
 from thestrat.schemas import (
     AggregationConfig,
     FactoryConfig,
+    IndicatorSchema,
     IndicatorsConfig,
     SwingPointsConfig,
     TimeframeItemConfig,
 )
 
 from .utils.config_helpers import create_aggregation_config
+
+# Get expected column count from schema
+EXPECTED_INDICATOR_COLUMNS = len(IndicatorSchema.model_fields)
 
 
 @pytest.mark.integration
@@ -289,4 +293,4 @@ class TestTheStratIntegration:
         result = pipeline["indicators"].process(aggregated)
         assert isinstance(result, DataFrame)
         # Should have all required columns but limited swing point detection
-        assert len(result.columns) == 33  # Full schema maintained (33 columns after signal_json removal)
+        assert len(result.columns) == EXPECTED_INDICATOR_COLUMNS  # Full schema maintained

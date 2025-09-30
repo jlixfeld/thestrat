@@ -2,7 +2,6 @@
 Comprehensive tests for signal metadata functionality.
 """
 
-import json
 from datetime import datetime
 
 import pytest
@@ -63,17 +62,16 @@ class TestSignalMetadata:
 
     def create_sample_signal(self):
         """Create a sample signal for testing."""
+        from thestrat.signals import TargetLevel
+
         return SignalMetadata(
             pattern="3-2U",
             category=SignalCategory.REVERSAL,
             bias=SignalBias.LONG,
             bar_count=2,
-            entry_bar_index=100,
-            trigger_bar_index=99,
-            target_bar_index=98,
             entry_price=150.0,
             stop_price=148.0,
-            target_price=155.0,
+            target_prices=[TargetLevel(price=155.0), TargetLevel(price=158.0), TargetLevel(price=160.0)],
             timestamp=datetime(2024, 1, 15, 10, 30, 0),
             symbol="AAPL",
             timeframe="5min",
@@ -89,7 +87,10 @@ class TestSignalMetadata:
         assert signal.bar_count == 2
         assert signal.entry_price == 150.0
         assert signal.stop_price == 148.0
-        assert signal.target_price == 155.0
+        assert len(signal.target_prices) == 3
+        assert signal.target_prices[0].price == 155.0
+        assert signal.target_prices[1].price == 158.0
+        assert signal.target_prices[2].price == 160.0
         assert signal.status == SignalStatus.PENDING
         assert len(signal.change_history) == 0
 
@@ -99,25 +100,24 @@ class TestSignalMetadata:
 
         # Check original values are stored
         assert signal.original_stop == 148.0
-        assert signal.original_target == 155.0
 
-        # Check risk/reward calculations
+        # Check risk/reward calculations (uses first target)
         assert signal.risk_amount == 2.0  # 150 - 148
-        assert signal.reward_amount == 5.0  # 155 - 150
+        assert signal.reward_amount == 5.0  # 155 - 150 (first target)
         assert signal.risk_reward_ratio == 2.5  # 5 / 2
 
     def test_short_signal_calculations(self):
         """Test calculations for short signals."""
+        from thestrat.signals import TargetLevel
+
         signal = SignalMetadata(
             pattern="3-2D",
             category=SignalCategory.REVERSAL,
             bias=SignalBias.SHORT,
             bar_count=2,
-            entry_bar_index=100,
-            trigger_bar_index=99,
             entry_price=150.0,
             stop_price=152.0,
-            target_price=145.0,
+            target_prices=[TargetLevel(price=145.0)],
             timestamp=datetime.now(),
         )
 
@@ -133,14 +133,12 @@ class TestSignalMetadata:
             category=SignalCategory.CONTINUATION,
             bias=SignalBias.LONG,
             bar_count=2,
-            entry_bar_index=100,
-            trigger_bar_index=99,
             entry_price=150.0,
             stop_price=148.0,
             timestamp=datetime.now(),
         )
 
-        assert signal.target_price is None
+        assert len(signal.target_prices) == 0
         assert signal.reward_amount is None
         assert signal.risk_reward_ratio is None
 
@@ -176,44 +174,24 @@ class TestSignalMetadata:
 
         assert len(signal.change_history) == original_count
 
-    def test_update_target_price(self):
-        """Test updating target price with tracking."""
+    def test_target_level_tracking(self):
+        """Test TargetLevel tracking for hit status."""
+
+        # Create a signal with multiple targets
         signal = self.create_sample_signal()
 
-        # Update target price
-        signal.update_target(160.0, "extended_target")
+        # Verify initial state
+        assert len(signal.target_prices) == 3
+        assert all(not target.hit for target in signal.target_prices)
+        assert all(target.hit_timestamp is None for target in signal.target_prices)
 
-        # Check target was updated
-        assert signal.target_price == 160.0
-        assert len(signal.change_history) == 1
+        # Update first target as hit
+        signal.target_prices[0].hit = True
+        signal.target_prices[0].hit_timestamp = datetime.now()
 
-        # Check change record
-        change = signal.change_history[0]
-        assert change.field_name == "target_price"
-        assert change.from_value == 155.0
-        assert change.to_value == 160.0
-        assert change.reason == "extended_target"
-
-        # Check metrics recalculated
-        assert signal.reward_amount == 10.0  # 160 - 150
-        assert signal.risk_reward_ratio == 5.0  # 10 / 2
-
-    def test_update_continuation_target_raises_error(self):
-        """Test updating target on continuation signal raises error."""
-        signal = SignalMetadata(
-            pattern="2U-2U",
-            category=SignalCategory.CONTINUATION,
-            bias=SignalBias.LONG,
-            bar_count=2,
-            entry_bar_index=100,
-            trigger_bar_index=99,
-            entry_price=150.0,
-            stop_price=148.0,
-            timestamp=datetime.now(),
-        )
-
-        with pytest.raises(ValueError, match="Continuation signals have no target"):
-            signal.update_target(155.0)
+        assert signal.target_prices[0].hit is True
+        assert signal.target_prices[0].hit_timestamp is not None
+        assert signal.target_prices[1].hit is False  # Other targets unaffected
 
     def test_trail_stop_long_signal(self):
         """Test trailing stop for long signal."""
@@ -231,15 +209,16 @@ class TestSignalMetadata:
 
     def test_trail_stop_short_signal(self):
         """Test trailing stop for short signal."""
+        from thestrat.signals import TargetLevel
+
         signal = SignalMetadata(
             pattern="3-2D",
             category=SignalCategory.REVERSAL,
             bias=SignalBias.SHORT,
             bar_count=2,
-            entry_bar_index=100,
-            trigger_bar_index=99,
             entry_price=150.0,
             stop_price=152.0,
+            target_prices=[TargetLevel(price=145.0)],
             timestamp=datetime.now(),
         )
 
@@ -253,82 +232,7 @@ class TestSignalMetadata:
         assert result is False
         assert signal.stop_price == 151.0  # Unchanged
 
-    def test_serialization_to_dict(self):
-        """Test converting signal to dictionary."""
-        signal = self.create_sample_signal()
-
-        # Add a price change for testing
-        signal.update_stop(149.0, "test_update")
-
-        data = signal.to_dict()
-
-        # Check basic fields
-        assert data["pattern"] == "3-2U"
-        assert data["category"] == "reversal"
-        assert data["bias"] == "long"
-        assert data["status"] == "pending"
-
-        # Check timestamp conversion
-        assert data["timestamp"] == "2024-01-15T10:30:00"
-
-        # Check price fields are numeric (not strings)
-        assert isinstance(data["entry_price"], float)
-        assert data["entry_price"] == 150.0
-
-        # Check change history
-        assert len(data["change_history"]) == 1
-        change = data["change_history"][0]
-        assert change["field_name"] == "stop_price"
-        assert change["from_value"] == 148.0
-        assert change["to_value"] == 149.0
-        assert change["reason"] == "test_update"
-        assert "timestamp" in change
-
-    def test_deserialization_from_dict(self):
-        """Test reconstructing signal from dictionary."""
-        original_signal = self.create_sample_signal()
-        original_signal.update_stop(149.0, "test_update")
-
-        # Serialize and deserialize
-        data = original_signal.to_dict()
-        restored_signal = SignalMetadata.from_dict(data)
-
-        # Check all fields match
-        assert restored_signal.pattern == original_signal.pattern
-        assert restored_signal.category == original_signal.category
-        assert restored_signal.bias == original_signal.bias
-        assert restored_signal.entry_price == original_signal.entry_price
-        assert restored_signal.stop_price == original_signal.stop_price
-        assert restored_signal.target_price == original_signal.target_price
-        assert restored_signal.timestamp == original_signal.timestamp
-
-        # Check change history
-        assert len(restored_signal.change_history) == 1
-        change = restored_signal.change_history[0]
-        assert change.field_name == "stop_price"
-        assert change.from_value == 148.0
-        assert change.to_value == 149.0
-        assert change.reason == "test_update"
-
-    def test_json_serialization(self):
-        """Test JSON serialization and deserialization."""
-        original_signal = self.create_sample_signal()
-
-        # Serialize to JSON
-        json_str = original_signal.to_json()
-        assert isinstance(json_str, str)
-
-        # Verify valid JSON
-        data = json.loads(json_str)
-        assert data["pattern"] == "3-2U"
-
-        # Deserialize from JSON
-        restored_signal = SignalMetadata.from_json(json_str)
-
-        # Check key fields match
-        assert restored_signal.pattern == original_signal.pattern
-        assert restored_signal.entry_price == original_signal.entry_price
-        assert restored_signal.timestamp == original_signal.timestamp
+    # Serialization methods removed as per spec - brokerage handles persistence
 
     def test_signal_with_minimal_data(self):
         """Test signal creation with minimal required data."""
@@ -337,8 +241,6 @@ class TestSignalMetadata:
             category=SignalCategory.CONTINUATION,
             bias=SignalBias.LONG,
             bar_count=2,
-            entry_bar_index=50,
-            trigger_bar_index=49,
             entry_price=100.0,
             stop_price=95.0,
             timestamp=datetime.now(),
@@ -346,8 +248,7 @@ class TestSignalMetadata:
 
         assert signal.symbol is None
         assert signal.timeframe is None
-        assert signal.target_price is None
-        assert signal.target_bar_index is None
+        assert len(signal.target_prices) == 0
         assert signal.status == SignalStatus.PENDING
 
     def test_unique_signal_ids(self):
@@ -366,132 +267,20 @@ class TestSignalEdgeCases:
 
     def create_sample_signal(self):
         """Helper to create a sample signal for testing."""
+        from thestrat.signals import TargetLevel
+
         return SignalMetadata(
             pattern="3-1D",
             category=SignalCategory.REVERSAL,
             bias=SignalBias.SHORT,
             bar_count=3,
-            entry_bar_index=100,
-            trigger_bar_index=99,
             entry_price=150.0,
             stop_price=148.0,
-            target_price=155.0,
+            target_prices=[TargetLevel(price=155.0)],
             timestamp=datetime(2024, 1, 15, 10, 30),
             symbol="TEST",
             timeframe="5min",
         )
 
-    def test_update_target_same_price_noop(self):
-        """Test that updating target to the same price does nothing (early return)."""
-        signal = self.create_sample_signal()
-
-        # Get initial state
-        initial_target = signal.target_price
-        initial_change_count = len(signal.change_history)
-
-        # Update to the same target price - should be a no-op
-        signal.update_target(initial_target, "same_price_test")
-
-        # Should not have created a new change record
-        assert len(signal.change_history) == initial_change_count
-        assert signal.target_price == initial_target
-
-    def test_update_target_continuation_raises_error(self):
-        """Test that updating target on continuation signals raises ValueError."""
-        # Create a continuation signal (no target)
-        continuation_signal = SignalMetadata(
-            pattern="2U-2U",
-            category=SignalCategory.CONTINUATION,
-            bias=SignalBias.LONG,
-            bar_count=2,
-            entry_bar_index=100,
-            trigger_bar_index=99,
-            entry_price=150.0,
-            stop_price=148.0,
-            timestamp=datetime(2024, 1, 15, 10, 30),
-        )
-
-        # Should raise ValueError when trying to update target
-        with pytest.raises(ValueError, match="Continuation signals have no target"):
-            continuation_signal.update_target(155.0, "invalid_update")
-
-    def test_to_dict_with_triggered_and_closed_timestamps(self):
-        """Test to_dict serialization with triggered_at and closed_at timestamps."""
-        signal = self.create_sample_signal()
-
-        # Set triggered_at and closed_at times directly
-        triggered_time = datetime(2024, 1, 15, 10, 35)
-        closed_time = datetime(2024, 1, 15, 10, 40)
-
-        signal.triggered_at = triggered_time
-        signal.closed_at = closed_time
-        signal.status = SignalStatus.TARGET_HIT
-
-        # Convert to dict
-        signal_dict = signal.to_dict()
-
-        # Check that triggered_at and closed_at are in ISO format
-        assert "triggered_at" in signal_dict
-        assert "closed_at" in signal_dict
-        assert signal_dict["triggered_at"] == triggered_time.isoformat()
-        assert signal_dict["closed_at"] == closed_time.isoformat()
-
-        # Check status
-        assert signal_dict["status"] == SignalStatus.TARGET_HIT.value
-
-    def test_from_dict_with_triggered_and_closed_timestamps(self):
-        """Test from_dict deserialization with triggered_at and closed_at timestamps."""
-        # Create signal dict with timestamp fields
-        signal_data = {
-            "signal_id": "test_123",
-            "pattern": "3-1D",
-            "category": "reversal",
-            "bias": "short",
-            "bar_count": 3,
-            "entry_bar_index": 100,
-            "trigger_bar_index": 99,
-            "entry_price": 150.0,
-            "stop_price": 148.0,
-            "target_price": 155.0,
-            "timestamp": "2024-01-15T10:30:00",
-            "triggered_at": "2024-01-15T10:35:00",
-            "closed_at": "2024-01-15T10:40:00",
-            "status": "target_hit",
-            "symbol": "TEST",
-            "timeframe": "5min",
-            "change_history": [],
-        }
-
-        # Restore from dict
-        restored_signal = SignalMetadata.from_dict(signal_data)
-
-        # Check that timestamps were properly converted
-        assert restored_signal.triggered_at == datetime(2024, 1, 15, 10, 35)
-        assert restored_signal.closed_at == datetime(2024, 1, 15, 10, 40)
-        assert restored_signal.status == SignalStatus.TARGET_HIT
-
-    def test_from_dict_with_none_timestamps(self):
-        """Test from_dict deserialization with None timestamp fields."""
-        # Create signal dict without triggered_at and closed_at
-        signal_data = {
-            "signal_id": "test_456",
-            "pattern": "2U-2U",
-            "category": "continuation",
-            "bias": "long",
-            "bar_count": 2,
-            "entry_bar_index": 50,
-            "trigger_bar_index": 49,
-            "entry_price": 100.0,
-            "stop_price": 95.0,
-            "timestamp": "2024-01-15T10:30:00",
-            "status": "pending",
-            "change_history": [],
-        }
-
-        # Restore from dict
-        restored_signal = SignalMetadata.from_dict(signal_data)
-
-        # Check that None timestamps are handled properly
-        assert restored_signal.triggered_at is None
-        assert restored_signal.closed_at is None
-        assert restored_signal.status == SignalStatus.PENDING
+    # Tests for removed update_target and serialization methods removed
+    # Brokerage handles persistence as per spec
