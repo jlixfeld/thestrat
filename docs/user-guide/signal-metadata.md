@@ -8,30 +8,32 @@ TheStrat signals return rich metadata objects that provide comprehensive trading
 
 When TheStrat indicators detect trading patterns, they generate signals with detailed metadata through the `SignalMetadata` class. This metadata transforms simple pattern strings into actionable trading objects with:
 
-- **Price levels**: Entry, stop, and target prices
+- **Price levels**: Entry and stop prices, with multiple target levels for reversals
+- **Target tracking**: `TargetLevel` objects with hit status and timestamps
 - **Risk management**: Risk/reward ratios and position sizing data
 - **State tracking**: Signal lifecycle and execution status
-- **Change history**: Audit trail for stop/target adjustments
-- **Database integration**: Full serialization/deserialization support
+- **Change history**: Audit trail for stop price adjustments
+- **DataFrame integration**: JSON serialization for database storage
 
 ## Basic Signal Example
 
 ```python
 from datetime import datetime
-from thestrat.signals import SignalMetadata, SignalCategory, SignalBias
+from thestrat.signals import SignalMetadata, SignalCategory, SignalBias, TargetLevel
 
-# Create a reversal signal
+# Create a reversal signal with multiple targets
 signal = SignalMetadata(
     pattern="3-2U",
     category=SignalCategory.REVERSAL,
     bias=SignalBias.LONG,
     bar_count=2,
-    entry_bar_index=100,
-    trigger_bar_index=99,
-    target_bar_index=98,
     entry_price=150.0,
     stop_price=148.0,
-    target_price=155.0,
+    target_prices=[
+        TargetLevel(price=155.0),
+        TargetLevel(price=158.0),
+        TargetLevel(price=160.0)
+    ],
     timestamp=datetime.now(),
     symbol="AAPL",
     timeframe="5min"
@@ -40,8 +42,8 @@ signal = SignalMetadata(
 print(f"Signal: {signal.pattern}")
 print(f"Entry: ${signal.entry_price}")
 print(f"Stop: ${signal.stop_price}")
-print(f"Target: ${signal.target_price}")
-print(f"Risk/Reward: {signal.risk_reward_ratio:.2f}")
+print(f"Targets: {[t.price for t in signal.target_prices]}")
+print(f"Risk/Reward (first target): {signal.risk_reward_ratio:.2f}")
 ```
 
 Output:
@@ -49,51 +51,53 @@ Output:
 Signal: 3-2U
 Entry: $150.0
 Stop: $148.0
-Target: $155.0
-Risk/Reward: 2.50
+Targets: [155.0, 158.0, 160.0]
+Risk/Reward (first target): 2.50
 ```
 
 ## Signal Categories and Examples
 
 ### Reversal Signals
 
-Reversal signals have entry, stop, and target prices:
+Reversal signals have entry, stop, and multiple target prices:
 
 ```python
-# Long reversal signal
+# Long reversal signal with multiple targets
 long_reversal = SignalMetadata(
     pattern="2D-2U",
     category=SignalCategory.REVERSAL,
     bias=SignalBias.LONG,
     bar_count=2,
-    entry_bar_index=50,
-    trigger_bar_index=49,
-    target_bar_index=48,
     entry_price=125.50,
     stop_price=123.75,
-    target_price=129.00,
+    target_prices=[
+        TargetLevel(price=129.00),
+        TargetLevel(price=131.50),
+        TargetLevel(price=134.00)
+    ],
     timestamp=datetime.now()
 )
 
-# Short reversal signal
+# Short reversal signal with multiple targets
 short_reversal = SignalMetadata(
     pattern="2U-2D",
     category=SignalCategory.REVERSAL,
     bias=SignalBias.SHORT,
     bar_count=2,
-    entry_bar_index=75,
-    trigger_bar_index=74,
-    target_bar_index=73,
     entry_price=98.25,
     stop_price=99.50,
-    target_price=95.00,
+    target_prices=[
+        TargetLevel(price=95.00),
+        TargetLevel(price=93.50),
+        TargetLevel(price=92.00)
+    ],
     timestamp=datetime.now()
 )
 ```
 
 ### Continuation Signals
 
-Continuation signals have no target (trend-following):
+Continuation signals have no targets (trend-following):
 
 ```python
 # Long continuation signal
@@ -102,21 +106,19 @@ continuation = SignalMetadata(
     category=SignalCategory.CONTINUATION,
     bias=SignalBias.LONG,
     bar_count=2,
-    entry_bar_index=200,
-    trigger_bar_index=199,
     entry_price=87.50,
     stop_price=85.25,
     timestamp=datetime.now()
 )
 
-# Note: target_price is None for continuation signals
-assert continuation.target_price is None
+# Note: target_prices is empty for continuation signals
+assert len(continuation.target_prices) == 0
 assert continuation.reward_amount is None
 ```
 
 ## Risk Management Data
 
-All signals automatically calculate risk metrics:
+All signals automatically calculate risk metrics using the first target:
 
 ```python
 signal = SignalMetadata(
@@ -124,26 +126,26 @@ signal = SignalMetadata(
     category=SignalCategory.REVERSAL,
     bias=SignalBias.LONG,
     bar_count=3,
-    entry_bar_index=100,
-    trigger_bar_index=99,
-    target_bar_index=97,
     entry_price=100.0,
     stop_price=97.0,
-    target_price=106.0,
+    target_prices=[
+        TargetLevel(price=106.0),
+        TargetLevel(price=109.0),
+        TargetLevel(price=112.0)
+    ],
     timestamp=datetime.now()
 )
 
-# Automatic risk calculations
+# Automatic risk calculations (based on first target)
 print(f"Risk Amount: ${signal.risk_amount}")      # $3.00 (100 - 97)
-print(f"Reward Amount: ${signal.reward_amount}")  # $6.00 (106 - 100)
+print(f"Reward Amount: ${signal.reward_amount}")  # $6.00 (106 - 100, first target)
 print(f"R/R Ratio: {signal.risk_reward_ratio}")   # 2.0 (6 / 3)
 
-# Original values preserved
-print(f"Original Stop: ${signal.original_stop}")     # $97.0
-print(f"Original Target: ${signal.original_target}") # $106.0
+# Original stop preserved for tracking
+print(f"Original Stop: ${signal.original_stop}")  # $97.0
 ```
 
-## Updating Stop and Target Prices
+## Stop Loss Management
 
 ### Adjusting Stop Loss
 
@@ -180,178 +182,124 @@ short_signal.trail_stop(95.0)  # Move stop from 99.50 to 95.0 ✓
 short_signal.trail_stop(101.0) # Try to move stop UP ✗ (rejected)
 ```
 
-### Adjusting Targets
+## Multiple Target Tracking
+
+### Target Hit Management
+
+Track when each target level is reached:
 
 ```python
-# Extend target for reversal signals
-signal.update_target(108.0, "extended_target")
+# Check target status
+for i, target in enumerate(signal.target_prices):
+    print(f"Target {i+1}: ${target.price} - Hit: {target.hit}")
 
-print(f"New Target: ${signal.target_price}")       # $108.0
-print(f"New Reward: ${signal.reward_amount}")      # $8.0 (108 - 100)
-print(f"New R/R: {signal.risk_reward_ratio}")      # 4.0 (8 / 2)
+# Mark first target as hit (typically done by brokerage)
+signal.target_prices[0].hit = True
+signal.target_prices[0].hit_timestamp = datetime.now()
 
-# Continuation signals cannot have targets
-try:
-    continuation_signal.update_target(90.0)
-except ValueError as e:
-    print(f"Error: {e}")  # "Continuation signals have no target"
+# Scale out or adjust stops based on targets hit
+hit_count = sum(1 for t in signal.target_prices if t.hit)
+print(f"Targets hit: {hit_count}/{len(signal.target_prices)}")
+
+# Adjust stop to breakeven after first target
+if signal.target_prices[0].hit:
+    signal.trail_stop(signal.entry_price, "breakeven_after_target_1")
 ```
 
 ## Database Integration
 
-### Serializing for Database Storage
+### DataFrame Schema
+
+TheStrat indicators output signal data as DataFrame columns for database storage:
 
 ```python
-# Convert signal to database-friendly dictionary
-signal_dict = signal.to_dict()
+from thestrat import Factory, FactoryConfig, AggregationConfig, IndicatorsConfig
 
-# All fields are JSON-serializable
-import json
-json_data = json.dumps(signal_dict)
-
-# Example database insert (using any database library)
-cursor.execute("""
-    INSERT INTO signals (
-        signal_id, pattern, category, bias, entry_price, stop_price,
-        target_price, timestamp, symbol, timeframe, signal_data
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-""", (
-    signal.signal_id,
-    signal.pattern,
-    signal.category.value,
-    signal.bias.value,
-    signal.entry_price,
-    signal.stop_price,
-    signal.target_price,
-    signal.timestamp.isoformat(),
-    signal.symbol,
-    signal.timeframe,
-    json_data  # Complete metadata as JSON
-))
-```
-
-### Recreating Signals from Database
-
-```python
-# Retrieve from database
-cursor.execute("SELECT signal_data FROM signals WHERE signal_id = ?", (signal_id,))
-json_data = cursor.fetchone()[0]
-
-# Method 1: From JSON string
-restored_signal = SignalMetadata.from_json(json_data)
-
-# Method 2: From dictionary
-signal_dict = json.loads(json_data)
-restored_signal = SignalMetadata.from_dict(signal_dict)
-
-# All metadata is preserved
-assert restored_signal.pattern == original_signal.pattern
-assert restored_signal.entry_price == original_signal.entry_price
-assert restored_signal.risk_reward_ratio == original_signal.risk_reward_ratio
-assert len(restored_signal.change_history) == len(original_signal.change_history)
-
-# Original values and calculations are restored
-print(f"Original stop restored: ${restored_signal.original_stop}")
-print(f"Risk metrics recalculated: {restored_signal.risk_reward_ratio}")
-```
-
-## Complete Database Workflow Example
-
-```python
-import json
-import sqlite3
-from datetime import datetime
-from thestrat.signals import SignalMetadata, SignalCategory, SignalBias
-
-# 1. Create and modify a signal
-signal = SignalMetadata(
-    pattern="1-2D-2U",
-    category=SignalCategory.REVERSAL,
-    bias=SignalBias.LONG,
-    bar_count=3,
-    entry_bar_index=500,
-    trigger_bar_index=499,
-    target_bar_index=496,  # Rev Strat uses 4th bar back
-    entry_price=245.75,
-    stop_price=243.50,
-    target_price=250.00,
-    timestamp=datetime.now(),
-    symbol="SPY",
-    timeframe="15min"
+# Process data through TheStrat
+config = FactoryConfig(
+    aggregation=AggregationConfig(target_timeframes=["5min"], asset_class="equities"),
+    indicators=IndicatorsConfig()
 )
 
-# Apply some updates
-signal.update_stop(244.00, "partial_trail")
-signal.update_target(252.00, "extended_target")
+pipeline = Factory.create_all(config)
+aggregated = pipeline["aggregation"].process(raw_data)
+analyzed = pipeline["indicators"].process(aggregated)
 
-# 2. Store in database
+# Signal data is available in DataFrame columns
+signals_df = analyzed.filter(analyzed["signal"].is_not_null())
+
+# Key columns for database storage:
+# - signal: Pattern string (e.g., "2D-2U")
+# - type: Signal category ("reversal" or "continuation")
+# - bias: Direction ("long" or "short")
+# - target_prices: JSON string of target price array (e.g., "[155.0, 158.0, 160.0]")
+# - target_count: Integer count of targets
+
+print(signals_df.select(["timestamp", "symbol", "signal", "type", "bias", "target_prices", "target_count"]))
+```
+
+### Database Storage Example
+
+```python
+import sqlite3
+import polars as pl
+
+# Create database table
 conn = sqlite3.connect("trading.db")
 cursor = conn.cursor()
 
-# Create table
 cursor.execute("""
     CREATE TABLE IF NOT EXISTS signals (
-        signal_id TEXT PRIMARY KEY,
-        pattern TEXT,
+        timestamp TIMESTAMP,
         symbol TEXT,
         timeframe TEXT,
-        entry_price REAL,
-        current_stop REAL,
-        current_target REAL,
-        status TEXT,
-        created_at TEXT,
-        signal_metadata TEXT
+        signal TEXT,
+        type TEXT,
+        bias TEXT,
+        target_prices TEXT,  -- JSON array
+        target_count INTEGER,
+        PRIMARY KEY (timestamp, symbol, timeframe)
     )
 """)
 
-# Insert signal
-cursor.execute("""
-    INSERT INTO signals VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-""", (
-    signal.signal_id,
-    signal.pattern,
-    signal.symbol,
-    signal.timeframe,
-    signal.entry_price,
-    signal.stop_price,
-    signal.target_price,
-    signal.status.value,
-    signal.timestamp.isoformat(),
-    signal.to_json()
-))
+# Insert signals from DataFrame
+signals_df = analyzed.filter(pl.col("signal").is_not_null())
+
+for row in signals_df.iter_rows(named=True):
+    cursor.execute("""
+        INSERT OR REPLACE INTO signals
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    """, (
+        row["timestamp"].isoformat(),
+        row["symbol"],
+        row["timeframe"],
+        row["signal"],
+        row["type"],
+        row["bias"],
+        row["target_prices"],  # Already JSON string
+        row["target_count"]
+    ))
 
 conn.commit()
-
-# 3. Retrieve and reconstruct
-cursor.execute("SELECT signal_metadata FROM signals WHERE signal_id = ?",
-               (signal.signal_id,))
-json_data = cursor.fetchone()[0]
-
-# Restore complete signal object
-restored_signal = SignalMetadata.from_json(json_data)
-
-# 4. Continue trading operations
-print(f"Restored signal: {restored_signal.pattern}")
-print(f"Current stop: ${restored_signal.stop_price}")
-print(f"Changes made: {len(restored_signal.change_history)}")
-
-# Apply more updates
-if restored_signal.trail_stop(244.50, "continued_trail"):
-    print("Stop trailed successfully")
-
-    # Update database with new state
-    cursor.execute("""
-        UPDATE signals
-        SET current_stop = ?, signal_metadata = ?
-        WHERE signal_id = ?
-    """, (
-        restored_signal.stop_price,
-        restored_signal.to_json(),
-        restored_signal.signal_id
-    ))
-    conn.commit()
-
 conn.close()
+```
+
+### Querying Signal Data
+
+```python
+# Query signals with SQL
+cursor.execute("""
+    SELECT timestamp, symbol, signal, bias, target_prices, target_count
+    FROM signals
+    WHERE signal = '2D-2U' AND date(timestamp) = '2024-01-15'
+""")
+
+for row in cursor.fetchall():
+    timestamp, symbol, signal, bias, target_prices_json, target_count = row
+    print(f"{timestamp}: {signal} on {symbol}")
+    print(f"  Bias: {bias}")
+    print(f"  Targets: {target_prices_json}")  # "[155.0, 158.0, 160.0]"
+    print(f"  Count: {target_count}")
 ```
 
 ## Signal Status Management
@@ -382,15 +330,15 @@ signal.max_adverse_excursion = -1.15  # Worst unrealized loss
 
 ## Complete Metadata Fields
 
-The `SignalMetadata` object contains 30+ fields organized by category:
+The `SignalMetadata` object contains 25+ fields organized by category:
 
 **Core Signal Data:**
 - `pattern`, `category`, `bias`, `bar_count`
-- `entry_bar_index`, `trigger_bar_index`, `target_bar_index`
 
 **Price Levels:**
-- `entry_price`, `stop_price`, `target_price`
-- `original_stop`, `original_target`
+- `entry_price`, `stop_price`
+- `target_prices` (list of `TargetLevel` objects)
+- `original_stop`
 
 **Risk Management:**
 - `risk_amount`, `reward_amount`, `risk_reward_ratio`
@@ -409,7 +357,8 @@ The `SignalMetadata` object contains 30+ fields organized by category:
 - `entry_filled_price`, `exit_price`, `pnl`
 - `max_favorable_excursion`, `max_adverse_excursion`
 
-All fields support full serialization and database integration with type preservation.
+**Target Tracking** (via `TargetLevel` objects):
+- `price`, `hit`, `hit_timestamp`
 
 ## Real-World Trading Example
 
@@ -468,11 +417,12 @@ def monitor_signals_for_trading(raw_data):
         print(f"   Entry: ${signal.entry_price:.2f}")
         print(f"   Stop:  ${signal.stop_price:.2f}")
 
-        if signal.target_price:
-            print(f"   Target: ${signal.target_price:.2f}")
-            print(f"   Risk/Reward: {signal.risk_reward_ratio:.2f}:1")
+        if signal.target_prices:
+            target_list = [f"${t.price:.2f}" for t in signal.target_prices]
+            print(f"   Targets: {', '.join(target_list)}")
+            print(f"   Risk/Reward (first target): {signal.risk_reward_ratio:.2f}:1")
         else:
-            print(f"   Target: None (continuation signal)")
+            print(f"   Targets: None (continuation signal)")
 
         # Risk management
         risk_dollars = signal.risk_amount
@@ -507,7 +457,7 @@ def monitor_signals_for_trading(raw_data):
                 "quantity": position_size,
                 "entry_price": signal.entry_price,
                 "stop_loss": signal.stop_price,
-                "take_profit": signal.target_price,
+                "targets": [t.price for t in signal.target_prices],  # Multiple targets
                 "risk_amount": position_size * risk_dollars
             })
             print(f"\n🚀 TRADE READY: {signal.pattern} on {signal.symbol}")
@@ -523,7 +473,7 @@ def execute_trades(trade_candidates):
     for trade in trade_candidates:
         signal = trade["signal"]
 
-        # Example order placement (adapt to your broker's API)
+        # Example order placement with multiple targets (adapt to your broker's API)
         order_params = {
             "symbol": signal.symbol,
             "side": trade["action"],
@@ -531,14 +481,14 @@ def execute_trades(trade_candidates):
             "type": "LIMIT",
             "price": trade["entry_price"],
             "stop_loss": trade["stop_loss"],
-            "take_profit": trade["take_profit"]
+            "targets": trade["targets"]  # List of target prices
         }
 
         print(f"Placing order: {order_params}")
         # broker_api.place_bracket_order(**order_params)
 
-        # Store signal for tracking
-        # database.store_active_signal(signal.to_json())
+        # Store signal data for tracking (use DataFrame columns)
+        # database.store_active_signal(signal)
 
 # Usage example
 if __name__ == "__main__":
@@ -565,14 +515,15 @@ if __name__ == "__main__":
 - No wasted computation on incomplete JSON during pattern detection
 
 **Complete Trading Context:**
-- Entry, stop, and target prices calculated from actual market structure
+- Entry, stop, and multiple target prices calculated from actual market structure
 - Risk/reward ratios and position sizing based on real price levels
-- Signal metadata includes bar indices for verification
+- Target hit tracking for position scaling strategies
 
 **Database Integration:**
-- Store complete signal objects for tracking and analysis
-- Update stop/target levels as trades evolve
-- Maintain audit trail of all signal modifications
+- Store signal data as DataFrame columns for easy querying
+- Update stop levels as trades evolve
+- Maintain audit trail of all stop modifications
+- Target prices stored as JSON for database compatibility
 
 **Performance Optimized:**
 - Fast vectorized detection identifies patterns quickly
