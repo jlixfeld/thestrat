@@ -3648,8 +3648,12 @@ class TestTargetDetection:
             result, signal_index=9, bias="long", target_config=target_config
         )
 
-        # For long signal, all highs are descending, so no ascending progression = empty list
-        assert targets == [], "Should return empty list when no ascending targets found"
+        # For long signal with descending historical prices, we build ascending ladder
+        # Highs: [111, 106, 104, 103, 102, 101, 100, 99, 98] (indices 0-8)
+        # Skip most recent (98), start from 99
+        # Ascending ladder: 99, 100, 101, 102, 103, 104, 106, 111
+        assert len(targets) == 8, f"Should find 8 targets in ascending ladder, got {len(targets)}"
+        assert targets == [99.0, 100.0, 101.0, 102.0, 103.0, 104.0, 106.0, 111.0]
 
     def test_insufficient_history_empty_list(self):
         """Test that empty list is returned with insufficient historical data."""
@@ -3713,6 +3717,229 @@ class TestTargetDetection:
         targets = indicators._detect_targets_for_signal(result, signal_index=9, bias="long", target_config=None)
 
         assert targets == [], "Should return empty list when target_config is None"
+
+    def test_real_world_msft_short_targets(self):
+        """Test target detection using real MSFT data - validates price AND date."""
+        from thestrat.schemas import TargetConfig
+
+        # Real MSFT 1d data showing progression of lows with dates
+        test_data = [
+            ("2025-09-02", 496.81),  # Index 0
+            ("2025-09-03", 502.32),  # Index 1
+            ("2025-09-04", 503.15),  # Index 2
+            ("2025-09-05", 492.37),  # Index 3 - Lower_low structural bound
+            ("2025-09-08", 495.03),  # Index 4
+            ("2025-09-09", 497.70),  # Index 5
+            ("2025-09-10", 496.72),  # Index 6
+            ("2025-09-11", 497.88),  # Index 7
+            ("2025-09-12", 503.85),  # Index 8
+            ("2025-09-15", 507.00),  # Index 9
+            ("2025-09-16", 508.60),  # Index 10 - Most recent (skipped by algorithm)
+            ("2025-09-17", 505.93),  # Index 11 - SIGNAL BAR
+        ]
+
+        timestamps = [datetime.strptime(date, "%Y-%m-%d").replace(hour=4) for date, _ in test_data]
+        lows = [low for _, low in test_data]
+
+        data = DataFrame(
+            {
+                "timestamp": timestamps,
+                "open": [
+                    500.28,
+                    503.79,
+                    504.30,
+                    508.81,
+                    498.11,
+                    501.73,
+                    502.97,
+                    502.16,
+                    506.51,
+                    508.79,
+                    516.88,
+                    510.62,
+                ],
+                "high": [
+                    506.00,
+                    507.79,
+                    508.15,
+                    511.97,
+                    501.20,
+                    502.25,
+                    503.23,
+                    503.17,
+                    512.55,
+                    515.45,
+                    517.23,
+                    511.29,
+                ],
+                "low": lows,
+                "close": [
+                    505.12,
+                    505.35,
+                    507.97,
+                    495.00,
+                    498.20,
+                    498.41,
+                    500.37,
+                    501.01,
+                    509.90,
+                    515.36,
+                    509.04,
+                    510.02,
+                ],
+                "volume": [1000] * 12,
+                "symbol": ["MSFT"] * 12,
+                "timeframe": ["1d"] * 12,
+            }
+        )
+
+        config = IndicatorsConfig(
+            timeframe_configs=[
+                TimeframeItemConfig(
+                    timeframes=["1d"],
+                    target_config=TargetConfig(lower_bound="lower_low", merge_threshold_pct=0.0),
+                )
+            ]
+        )
+
+        indicators = Indicators(config)
+        result = indicators.process(data)
+
+        # Get targets for signal at index 11
+        target_config = config.timeframe_configs[0].target_config
+        target_prices = indicators._detect_targets_for_signal(
+            result, signal_index=11, bias="short", target_config=target_config
+        )
+
+        # Build expected targets with (date, price) tuples for validation
+        # Descending ladder: skip 508.60 (index 10), start from 507.00 (index 9)
+        expected = [
+            ("2025-09-15", 507.00),  # Index 9 - start of ladder
+            ("2025-09-12", 503.85),  # Index 8 - 503.85 < 507.00 ✓
+            ("2025-09-11", 497.88),  # Index 7 - 497.88 < 503.85 ✓
+            ("2025-09-10", 496.72),  # Index 6 - 496.72 < 497.88 ✓
+            ("2025-09-08", 495.03),  # Index 4 - 495.03 < 496.72 ✓
+            ("2025-09-05", 492.37),  # Index 3 - 492.37 < 495.03 ✓ (structural bound)
+        ]
+
+        expected_prices = [price for _, price in expected]
+
+        # Verify we got the right prices
+        assert target_prices == expected_prices, f"Expected {expected_prices}, got {target_prices}"
+
+        # Verify the prices came from the correct dates by checking indices
+        for i, (exp_date, exp_price) in enumerate(expected):
+            # Find this price in original data
+            matching_rows = [(idx, date, low) for idx, (date, low) in enumerate(test_data) if low == exp_price]
+            assert len(matching_rows) == 1, f"Price {exp_price} should appear exactly once in data"
+            idx, date, low = matching_rows[0]
+            assert date == exp_date, f"Target {i}: price {exp_price} should be from {exp_date}, got {date}"
+
+    def test_real_world_long_signal_ascending_targets(self):
+        """Test ascending ladder for long signals - validates price AND date."""
+        from thestrat.schemas import TargetConfig
+
+        # Synthetic data showing ascending highs for long signal scenario
+        # Simulates 2D-2U long reversal pattern
+        test_data = [
+            ("2025-10-01", 480.50),  # Index 0
+            ("2025-10-02", 485.20),  # Index 1
+            ("2025-10-03", 490.75),  # Index 2
+            ("2025-10-04", 495.40),  # Index 3 - Higher_high structural bound
+            ("2025-10-07", 492.80),  # Index 4
+            ("2025-10-08", 489.30),  # Index 5
+            ("2025-10-09", 491.15),  # Index 6
+            ("2025-10-10", 488.60),  # Index 7
+            ("2025-10-11", 486.25),  # Index 8
+            ("2025-10-14", 483.90),  # Index 9
+            ("2025-10-15", 481.20),  # Index 10 - Most recent (skipped by algorithm)
+            ("2025-10-16", 484.50),  # Index 11 - SIGNAL BAR (2D-2U long reversal)
+        ]
+
+        timestamps = [datetime.strptime(date, "%Y-%m-%d").replace(hour=4) for date, _ in test_data]
+        highs = [high for _, high in test_data]
+
+        data = DataFrame(
+            {
+                "timestamp": timestamps,
+                "open": [
+                    479.00,
+                    484.50,
+                    489.20,
+                    494.00,
+                    491.50,
+                    488.00,
+                    489.80,
+                    487.30,
+                    485.00,
+                    482.50,
+                    480.00,
+                    483.20,
+                ],
+                "high": highs,
+                "low": [477.50, 483.00, 488.50, 493.20, 488.60, 485.20, 487.90, 484.40, 482.15, 479.80, 477.10, 481.30],
+                "close": [
+                    479.80,
+                    485.00,
+                    490.30,
+                    494.80,
+                    489.20,
+                    486.50,
+                    490.50,
+                    485.80,
+                    483.40,
+                    481.00,
+                    478.50,
+                    484.20,
+                ],
+                "volume": [1000] * 12,
+                "symbol": ["TEST"] * 12,
+                "timeframe": ["1d"] * 12,
+            }
+        )
+
+        config = IndicatorsConfig(
+            timeframe_configs=[
+                TimeframeItemConfig(
+                    timeframes=["1d"],
+                    target_config=TargetConfig(upper_bound="higher_high", merge_threshold_pct=0.0),
+                )
+            ]
+        )
+
+        indicators = Indicators(config)
+        result = indicators.process(data)
+
+        # Get targets for long signal at index 11
+        target_config = config.timeframe_configs[0].target_config
+        target_prices = indicators._detect_targets_for_signal(
+            result, signal_index=11, bias="long", target_config=target_config
+        )
+
+        # Build expected targets with (date, price) tuples for validation
+        # Ascending ladder: skip 481.20 (index 10), start from 483.90 (index 9)
+        # For LONG, each target must be HIGHER than previous accepted target
+        expected = [
+            ("2025-10-14", 483.90),  # Index 9 - start of ladder
+            ("2025-10-11", 486.25),  # Index 8 - 486.25 > 483.90 ✓
+            ("2025-10-10", 488.60),  # Index 7 - 488.60 > 486.25 ✓
+            ("2025-10-09", 491.15),  # Index 6 - 491.15 > 488.60 ✓
+            ("2025-10-07", 492.80),  # Index 4 - 492.80 > 491.15 ✓
+            ("2025-10-04", 495.40),  # Index 3 - 495.40 > 492.80 ✓ (structural bound)
+        ]
+
+        expected_prices = [price for _, price in expected]
+
+        # Verify we got the right prices
+        assert target_prices == expected_prices, f"Expected {expected_prices}, got {target_prices}"
+
+        # Verify the prices came from the correct dates by checking indices
+        for i, (exp_date, exp_price) in enumerate(expected):
+            # Find this price in original data
+            matching_rows = [(idx, date, high) for idx, (date, high) in enumerate(test_data) if high == exp_price]
+            assert len(matching_rows) == 1, f"Price {exp_price} should appear exactly once in data"
+            idx, date, high = matching_rows[0]
+            assert date == exp_date, f"Target {i}: price {exp_price} should be from {exp_date}, got {date}"
 
 
 @pytest.mark.unit
