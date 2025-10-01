@@ -789,18 +789,28 @@ class Indicators(Component):
         if not all_prices:
             return []
 
-        # Apply descending/ascending ladder filter
-        # Skip the most recent bar, start from 2nd most recent
+        # Apply descending/ascending ladder filter with trigger bar validation
+        # The bar immediately before signal (i=0) is the trigger bar
+        # Targets must be beyond the trigger bar's price level
         # For short: build descending ladder (each target must be < previous accepted target)
         # For long: build ascending ladder (each target must be > previous accepted target)
         filtered_targets = []
+        trigger_price = None
         for i, price in enumerate(reversed(all_prices)):  # Scan backwards from most recent
             if i == 0:
-                # Skip most recent bar (bar immediately before signal)
+                # Save trigger bar's price for filtering (bar immediately before signal)
+                trigger_price = price
                 continue
             if not filtered_targets:
-                # Start with 2nd most recent bar
-                filtered_targets.append(price)
+                # First target must be beyond trigger bar's price
+                if bias == "long":
+                    # Long: target must be above trigger bar's high
+                    if price > trigger_price:
+                        filtered_targets.append(price)
+                else:  # short
+                    # Short: target must be below trigger bar's low
+                    if price < trigger_price:
+                        filtered_targets.append(price)
             else:
                 if bias == "long":
                     # For long: each target should be higher than last accepted target
@@ -830,8 +840,10 @@ class Indicators(Component):
                 bound_bars = bound_bars.sort("__row_idx", descending=True)
                 first_bound_row = bound_bars.row(0, named=True)
 
-                # Extract the price from the appropriate column
-                bound_price = float(first_bound_row[target_col])
+                # Extract the price from the structure column (not target column)
+                # For long signals: structure_col is higher_high/lower_high containing the bound price level
+                # For short signals: structure_col is higher_low/lower_low containing the bound price level
+                bound_price = float(first_bound_row[structure_col])
 
         # Trim targets to structure bound
         if bound_price is not None:
