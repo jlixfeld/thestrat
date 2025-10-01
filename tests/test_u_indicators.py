@@ -4650,6 +4650,100 @@ class TestTargetDetection:
         trigger_low = 100.0
         assert all(price < trigger_low for price in target_prices), f"All targets must be below trigger ({trigger_low})"
 
+    def test_signal_bar_creates_bound_extends_to_next_bound(self):
+        """
+        Test Issue #3: When signal bar's price IS the structural bound,
+        targets should extend to the next previous bound.
+
+        **Validates Issue #3 fix - Edge case detection**
+
+        Setup (based on MSFT 2025-09-25):
+        - Signal bar (09-25): low=505.04 which IS the lower_low bound
+        - Previous lower_low bound: 492.37 (at 09-05)
+        - Expected: Targets extend from 505.04 down to 492.37
+
+        Without fix: Would only find targets between trigger (506.92) and signal bar bound (505.04)
+        With fix: Extends to next bound (492.37) to find full target list
+        """
+        test_data = [
+            ("2025-09-05", 506.5, 511.97, 492.37, 495.0),  # SWING LOW → lower_low=492.37
+            ("2025-09-08", 498.1, 501.2, 495.03, 498.2),
+            ("2025-09-09", 501.7, 502.25, 497.7, 498.41),
+            ("2025-09-10", 503.0, 503.23, 496.72, 500.37),
+            ("2025-09-11", 502.2, 503.17, 497.88, 501.01),
+            ("2025-09-12", 506.5, 512.55, 503.85, 509.9),
+            ("2025-09-15", 508.8, 515.45, 507.0, 515.36),
+            ("2025-09-16", 516.9, 517.23, 508.6, 509.04),
+            ("2025-09-17", 510.6, 511.29, 505.93, 510.02),
+            ("2025-09-18", 511.5, 513.07, 507.66, 508.45),
+            ("2025-09-19", 510.6, 519.3, 510.31, 517.93),
+            ("2025-09-22", 515.6, 517.74, 512.54, 514.45),
+            ("2025-09-23", 513.8, 514.59, 507.31, 509.23),
+            ("2025-09-24", 510.4, 512.48, 506.92, 510.15),  # Trigger bar
+            ("2025-09-25", 508.3, 510.01, 505.04, 507.03),  # Signal bar - low=505.04 IS the bound
+        ]
+
+        timestamps = [datetime.strptime(date, "%Y-%m-%d").replace(hour=4) for date, *_ in test_data]
+        opens = [o for _, o, *_ in test_data]
+        highs = [h for _, _, h, *_ in test_data]
+        lows = [low for _, _, _, low, _ in test_data]
+        closes = [c for *_, c in test_data]
+
+        data = DataFrame(
+            {
+                "timestamp": timestamps,
+                "open": opens,
+                "high": highs,
+                "low": lows,
+                "close": closes,
+                "volume": [1000000] * len(test_data),
+                "symbol": ["MSFT"] * len(test_data),
+                "timeframe": ["1d"] * len(test_data),
+            }
+        )
+
+        config = IndicatorsConfig(
+            timeframe_configs=[
+                TimeframeItemConfig(
+                    timeframes=["1d"],
+                    swing_points=SwingPointsConfig(window=2, threshold=0.0),
+                    target_config=TargetConfig(lower_bound="lower_low", merge_threshold_pct=0.0),
+                )
+            ]
+        )
+
+        indicators = Indicators(config)
+        result = indicators.process(data)
+
+        # Get targets for signal at index 14 (09-25)
+        target_config = config.timeframe_configs[0].target_config
+        target_prices = indicators._detect_targets_for_signal(
+            result, signal_index=14, bias="short", target_config=target_config
+        )
+
+        # Expected: Signal bar's low (505.04) is a bound, so extend to next bound (492.37)
+        # Targets: descending from 505.93 down to 492.37
+        expected = [505.93, 503.85, 497.88, 496.72, 495.03, 492.37]
+
+        assert target_prices == expected, (
+            f"Expected {expected}, got {target_prices}. "
+            f"Signal bar low (505.04) is the bound - should extend to next bound (492.37). "
+            f"Trigger: 506.92, all targets < trigger."
+        )
+
+        # Verify all targets below trigger
+        trigger_low = 506.92
+        assert all(price < trigger_low for price in target_prices), f"All targets must be below trigger ({trigger_low})"
+
+        # Verify descending ladder
+        for i in range(len(target_prices) - 1):
+            assert target_prices[i] > target_prices[i + 1], (
+                f"Ladder must be descending: {target_prices[i]} > {target_prices[i + 1]}"
+            )
+
+        # Verify last target reaches the extended bound (not the signal bar bound)
+        assert target_prices[-1] == 492.37, "Last target should reach extended bound (492.37)"
+
 
 @pytest.mark.unit
 class TestPerTimeframeIndicators:
