@@ -845,24 +845,35 @@ class Indicators(Component):
                 # For short signals: structure_col is higher_low/lower_low containing the bound price level
                 bound_price = float(first_bound_row[structure_col])
 
-        # Trim targets to structure bound
+                # Edge case: Check if signal bar's price IS the bound (Issue #3)
+                # If so, extend search to next previous bound
+                signal_bar = df.row(signal_index, named=True)
+                signal_price = float(signal_bar[target_col])
+                epsilon = 0.01  # Tolerance for float comparison
+
+                if abs(signal_price - bound_price) < epsilon:
+                    # Signal bar creates the bound - search for next previous bound
+                    # Filter to bounds before the most recent one
+                    earlier_bounds = bound_bars.filter(col("__row_idx") < first_bound_row["__row_idx"])
+
+                    if len(earlier_bounds) > 0:
+                        # Get the next previous bound
+                        earlier_bounds = earlier_bounds.sort("__row_idx", descending=True)
+                        next_bound_row = earlier_bounds.row(0, named=True)
+                        bound_price = float(next_bound_row[structure_col])
+
+        # Trim targets to structure bound (Issues #1 & #2 fix)
         if bound_price is not None:
             final_targets = []
             for price in filtered_targets:
                 if bias == "long":
                     if price <= bound_price:
                         final_targets.append(price)
-                    else:
-                        # Stop at and include first target beyond bound
-                        final_targets.append(price)
-                        break
+                    # Removed: else clause that incorrectly included targets beyond bound
                 else:  # short
                     if price >= bound_price:
                         final_targets.append(price)
-                    else:
-                        # Stop at and include first target beyond bound
-                        final_targets.append(price)
-                        break
+                    # Removed: else clause that incorrectly included targets beyond bound
             filtered_targets = final_targets
 
         # Apply merge logic
