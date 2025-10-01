@@ -767,11 +767,9 @@ class Indicators(Component):
         merge_threshold_pct = target_config.merge_threshold_pct
         max_targets = target_config.max_targets
 
-        # Determine target type from bound
+        # Determine target column from structure bound
         # higher_high/lower_high -> targets are highs (long signals)
         # higher_low/lower_low -> targets are lows (short signals)
-        target_is_high = structure_bound in ["higher_high", "lower_high"]
-
         structure_col = structure_bound
 
         # Get data up to signal bar (not including signal bar itself)
@@ -780,72 +778,44 @@ class Indicators(Component):
         if len(historical_df) == 0:
             return []
 
-        # Detect local highs/lows using rolling windows (similar to market structure detection)
-        # Use same window approach as in _calculate_market_structure
-        window = 1  # Use minimal window for target detection
-        min_required = 2 * window + 1
-
-        if len(historical_df) < min_required:
-            return []
-
-        # Add row index if not already present
+        # Add row index for downstream sorting
         if "__row_idx" not in historical_df.columns:
             historical_df = historical_df.with_row_index("__row_idx")
 
-        # Detect local extremes
-        if target_is_high:
-            historical_df = historical_df.with_columns(
-                [col("high").rolling_max(window_size=2 * window + 1, center=True).alias("window_max")]
-            )
-            historical_df = historical_df.with_columns(
-                [
-                    (
-                        (col("__row_idx") >= window)
-                        & (col("__row_idx") < (len(historical_df) - window))
-                        & (col("high") == col("window_max"))
-                    ).alias("is_local_extreme")
-                ]
-            )
-        else:
-            historical_df = historical_df.with_columns(
-                [col("low").rolling_min(window_size=2 * window + 1, center=True).alias("window_min")]
-            )
-            historical_df = historical_df.with_columns(
-                [
-                    (
-                        (col("__row_idx") >= window)
-                        & (col("__row_idx") < (len(historical_df) - window))
-                        & (col("low") == col("window_min"))
-                    ).alias("is_local_extreme")
-                ]
-            )
+        # Extract all historical prices (no pre-filtering for local/progressive extremes)
+        # The descending/ascending ladder filter below will select the right targets
+        all_prices = historical_df.select(target_col).to_series().to_list()
 
-        # Filter to local extremes only
-        local_extremes = historical_df.filter(col("is_local_extreme"))
-
-        if len(local_extremes) == 0:
+        if not all_prices:
             return []
 
-        # Extract target prices
-        target_prices = local_extremes.select(target_col).to_series().to_list()
-
-        # Filter for ascending/descending progression
+        # Apply descending/ascending ladder filter
+        # Skip the most recent bar, start from 2nd most recent
+        # For short: build descending ladder (each target must be < previous accepted target)
+        # For long: build ascending ladder (each target must be > previous accepted target)
         filtered_targets = []
-        for price in reversed(target_prices):  # Scan backwards from most recent
+        for i, price in enumerate(reversed(all_prices)):  # Scan backwards from most recent
+            if i == 0:
+                # Skip most recent bar (bar immediately before signal)
+                continue
             if not filtered_targets:
+                # Start with 2nd most recent bar
                 filtered_targets.append(price)
             else:
                 if bias == "long":
-                    # For long: each target should be higher than previous
+                    # For long: each target should be higher than last accepted target
                     if price > filtered_targets[-1]:
                         filtered_targets.append(price)
                 else:  # short
-                    # For short: each target should be lower than previous
+                    # For short: each target should be lower than last accepted target
                     if price < filtered_targets[-1]:
                         filtered_targets.append(price)
 
         if not filtered_targets:
             return []
+
+        # Targets are in reverse chronological order (newest to oldest)
+        # This is the correct order for display and merging
 
         # Check for structure bound in structure column
         # Find most recent bar where structure column has a value (indicating swing point)
