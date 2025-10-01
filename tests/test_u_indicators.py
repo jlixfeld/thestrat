@@ -19,6 +19,7 @@ from thestrat.schemas import (
     IndicatorSchema,
     IndicatorsConfig,
     SwingPointsConfig,
+    TargetConfig,
     TimeframeItemConfig,
 )
 from thestrat.signals import SIGNALS
@@ -3328,7 +3329,6 @@ class TestTargetDetection:
 
     def test_local_extreme_detection_highs(self):
         """Test detection of local highs for long signals."""
-        from thestrat.schemas import TargetConfig
 
         # Create data with clear local highs
         data = DataFrame(
@@ -3370,7 +3370,6 @@ class TestTargetDetection:
 
     def test_local_extreme_detection_lows(self):
         """Test detection of local lows for short signals."""
-        from thestrat.schemas import TargetConfig
 
         # Create data with clear local lows
         data = DataFrame(
@@ -3411,7 +3410,6 @@ class TestTargetDetection:
 
     def test_ascending_progression_filtering(self):
         """Test that only ascending highs are included for long signals."""
-        from thestrat.schemas import TargetConfig
 
         # Create data where not all highs are progressively higher
         data = DataFrame(
@@ -3450,7 +3448,6 @@ class TestTargetDetection:
 
     def test_merge_logic_two_percent_threshold(self):
         """Test merge logic with 2% threshold."""
-        from thestrat.schemas import TargetConfig
 
         # Create data with targets within 2% of each other
         data = DataFrame(
@@ -3496,7 +3493,6 @@ class TestTargetDetection:
 
     def test_merge_logic_picks_higher_for_long(self):
         """Test that merge logic picks higher target for long signals."""
-        from thestrat.schemas import TargetConfig
 
         # Create data with two very close targets
         data = DataFrame(
@@ -3537,7 +3533,6 @@ class TestTargetDetection:
 
     def test_merge_logic_picks_lower_for_short(self):
         """Test that merge logic picks lower target for short signals."""
-        from thestrat.schemas import TargetConfig
 
         # Create data with two very close targets
         data = DataFrame(
@@ -3577,7 +3572,6 @@ class TestTargetDetection:
 
     def test_max_targets_limiting(self):
         """Test max_targets configuration limits number of targets."""
-        from thestrat.schemas import TargetConfig
 
         # Create data with many local highs
         data = DataFrame(
@@ -3615,7 +3609,6 @@ class TestTargetDetection:
 
     def test_no_ascending_targets_empty_list(self):
         """Test that empty list is returned when no ascending progression exists."""
-        from thestrat.schemas import TargetConfig
 
         # Create data with local highs that don't form ascending progression (all descending)
         data = DataFrame(
@@ -3657,7 +3650,6 @@ class TestTargetDetection:
 
     def test_insufficient_history_empty_list(self):
         """Test that empty list is returned with insufficient historical data."""
-        from thestrat.schemas import TargetConfig
 
         # Create minimal data (signal at index 1, almost no history)
         data = DataFrame(
@@ -3720,7 +3712,6 @@ class TestTargetDetection:
 
     def test_real_world_msft_short_targets(self):
         """Test target detection using real MSFT data - validates price AND date."""
-        from thestrat.schemas import TargetConfig
 
         # Real MSFT 1d data showing progression of lows with dates
         test_data = [
@@ -3837,7 +3828,6 @@ class TestTargetDetection:
 
     def test_real_world_long_signal_ascending_targets(self):
         """Test ascending ladder for long signals - validates price AND date."""
-        from thestrat.schemas import TargetConfig
 
         # Synthetic data showing ascending highs for long signal scenario
         # Simulates 2D-2U long reversal pattern
@@ -3943,7 +3933,6 @@ class TestTargetDetection:
 
     def test_edge_case_all_historical_prices_ascending_short(self):
         """Test short signal where all historical lows are ASCENDING chronologically."""
-        from thestrat.schemas import TargetConfig
 
         # Edge case: Short signal with ascending lows chronologically
         # In REVERSE chronological order (how targets are built), this becomes descending
@@ -4019,7 +4008,6 @@ class TestTargetDetection:
 
     def test_edge_case_all_historical_prices_descending_long(self):
         """Test long signal where all historical highs are DESCENDING chronologically."""
-        from thestrat.schemas import TargetConfig
 
         # Edge case: Long signal with descending highs chronologically
         # In REVERSE chronological order (how targets are built), this becomes ascending
@@ -4095,7 +4083,6 @@ class TestTargetDetection:
 
     def test_long_signal_with_lower_high_bound(self):
         """Test long signal using lower_high as upper bound (targets are still highs)."""
-        from thestrat.schemas import TargetConfig
 
         # Long signal using lower_high instead of higher_high
         # Targets should still be highs forming ascending ladder
@@ -4165,7 +4152,6 @@ class TestTargetDetection:
 
     def test_short_signal_with_higher_low_bound(self):
         """Test short signal using higher_low as lower bound (targets are still lows)."""
-        from thestrat.schemas import TargetConfig
 
         # Short signal using higher_low instead of lower_low
         # Targets should still be lows forming descending ladder
@@ -4235,7 +4221,6 @@ class TestTargetDetection:
 
     def test_merge_threshold_comprehensive(self):
         """Test merge threshold with exact price/date validation."""
-        from thestrat.schemas import TargetConfig
 
         # Test data with specific prices designed to test 2.5% merge threshold
         # Prices within 2.5% should merge; those beyond should remain separate
@@ -4310,6 +4295,360 @@ class TestTargetDetection:
             assert len(matching_rows) == 1, f"Price {exp_price} should appear exactly once"
             idx, date, low = matching_rows[0]
             assert date == exp_date, f"Target {i}: expected {exp_date}, got {date}"
+
+    def test_msft_long_signal_with_real_higher_high_bound(self):
+        """
+        Test long signal using real MSFT data structure with higher_high bound.
+
+        **Validates Bug Fix #1 (bound extraction) and Bug Fix #2 (trigger filtering)**
+
+        Setup:
+        - MSFT 09-26 2D-2U long reversal scenario
+        - Trigger bar (09-25): high=510.01
+        - Signal bar (09-26): high=513.94
+        - Higher_high structural bound: 519.3 (detected at 09-19)
+
+        Expected:
+        - Targets > 510.01 (trigger filtering)
+        - Ascending ladder: [512.48, 514.59, 517.74, 519.3]
+        - Last target reaches higher_high bound (519.3)
+
+        Bug #1 would cause: bound_price=510.01 (wrong!) → only [512.48]
+        Bug #2 wouldn't affect this case (512.48 > 510.01 already)
+        """
+        # MSFT data around 09-26 with structure that creates swing high at 519.3
+        test_data = [
+            ("2025-09-05", 506.5, 511.97, 492.37, 509.9),
+            ("2025-09-08", 498.1, 501.2, 495.03, 498.2),
+            ("2025-09-09", 501.7, 502.25, 497.7, 498.41),
+            ("2025-09-10", 503.0, 503.23, 496.72, 500.37),
+            ("2025-09-11", 502.2, 503.17, 497.88, 501.01),
+            ("2025-09-12", 506.5, 512.55, 503.85, 509.9),
+            ("2025-09-15", 508.8, 515.45, 507.0, 515.36),
+            ("2025-09-16", 516.9, 517.23, 508.6, 509.04),
+            ("2025-09-17", 510.6, 511.29, 505.93, 510.02),
+            ("2025-09-18", 511.5, 513.07, 507.66, 508.45),
+            ("2025-09-19", 510.6, 519.3, 510.31, 517.93),  # SWING HIGH → higher_high=519.3
+            ("2025-09-22", 515.6, 517.74, 512.54, 514.45),
+            ("2025-09-23", 513.8, 514.59, 507.31, 509.23),
+            ("2025-09-24", 510.4, 512.48, 506.92, 510.15),
+            ("2025-09-25", 508.3, 510.01, 505.04, 507.03),  # Trigger bar (2D)
+            ("2025-09-26", 510.1, 513.94, 506.62, 511.46),  # Signal bar (2U)
+        ]
+
+        timestamps = [datetime.strptime(date, "%Y-%m-%d").replace(hour=4) for date, *_ in test_data]
+        opens = [o for _, o, *_ in test_data]
+        highs = [h for _, _, h, *_ in test_data]
+        lows = [low for _, _, _, low, _ in test_data]
+        closes = [c for *_, c in test_data]
+
+        data = DataFrame(
+            {
+                "timestamp": timestamps,
+                "open": opens,
+                "high": highs,
+                "low": lows,
+                "close": closes,
+                "volume": [1000000] * len(test_data),
+                "symbol": ["MSFT"] * len(test_data),
+                "timeframe": ["1d"] * len(test_data),
+            }
+        )
+
+        config = IndicatorsConfig(
+            timeframe_configs=[
+                TimeframeItemConfig(
+                    timeframes=["1d"],
+                    swing_points=SwingPointsConfig(window=2, threshold=0.0),
+                    target_config=TargetConfig(upper_bound="higher_high", merge_threshold_pct=0.0),
+                )
+            ]
+        )
+
+        indicators = Indicators(config)
+        result = indicators.process(data)
+
+        # Get targets for signal at index 15 (09-26)
+        target_config = config.timeframe_configs[0].target_config
+        target_prices = indicators._detect_targets_for_signal(
+            result, signal_index=15, bias="long", target_config=target_config
+        )
+
+        # Expected targets: ascending ladder from 512.48 to 519.3
+        expected = [512.48, 514.59, 517.74, 519.3]
+
+        assert target_prices == expected, (
+            f"Expected {expected}, got {target_prices}. "
+            f"If only [512.48], Bug #1 (bound extraction) is present. "
+            f"Trigger bar high: 510.01, all targets should be > this value."
+        )
+
+        # Verify all targets above trigger (Bug #2 check)
+        trigger_high = 510.01
+        assert all(price > trigger_high for price in target_prices), (
+            f"All targets must be above trigger ({trigger_high})"
+        )
+
+        # Verify ascending ladder
+        for i in range(len(target_prices) - 1):
+            assert target_prices[i] < target_prices[i + 1], (
+                f"Ladder must be ascending: {target_prices[i]} < {target_prices[i + 1]}"
+            )
+
+        # Verify last target is the higher_high bound
+        assert target_prices[-1] == 519.3, "Last target should reach higher_high bound (519.3)"
+
+    def test_msft_short_signal_with_real_lower_low_bound(self):
+        """
+
+        Test short signal using real MSFT data structure with lower_low bound.
+
+        **Validates Bug Fix #1 (bound extraction) and Bug Fix #2 (trigger filtering)**
+
+        Setup:
+        - MSFT 09-25 2D-2D short continuation scenario
+        - Trigger bar (09-24): low=506.92
+        - Signal bar (09-25): low=505.04
+        - Lower_low structural bound: 492.37 (detected at 09-05)
+
+        Expected:
+        - Targets < 506.92 (trigger filtering - Bug #2 fix)
+        - Skip 507.31 (> 506.92, invalid target)
+        - Descending ladder: [505.93, 503.85, 497.88, 496.72, 495.03, 492.37]
+        - Last target reaches lower_low bound (492.37)
+
+        Bug #1 would cause: bound_price=506.92 (wrong!) → incorrect trimming
+        Bug #2 would cause: [507.31, 505.93, ...] with invalid 507.31 included
+        """
+        # MSFT data around 09-25 with structure that creates swing low at 492.37
+        test_data = [
+            ("2025-09-05", 506.5, 511.97, 492.37, 509.9),  # SWING LOW → lower_low=492.37
+            ("2025-09-08", 498.1, 501.2, 495.03, 498.2),
+            ("2025-09-09", 501.7, 502.25, 497.7, 498.41),
+            ("2025-09-10", 503.0, 503.23, 496.72, 500.37),
+            ("2025-09-11", 502.2, 503.17, 497.88, 501.01),
+            ("2025-09-12", 506.5, 512.55, 503.85, 509.9),
+            ("2025-09-15", 508.8, 515.45, 507.0, 515.36),
+            ("2025-09-16", 516.9, 517.23, 508.6, 509.04),
+            ("2025-09-17", 510.6, 511.29, 505.93, 510.02),
+            ("2025-09-18", 511.5, 513.07, 507.66, 508.45),
+            ("2025-09-19", 510.6, 519.3, 510.31, 517.93),
+            ("2025-09-22", 515.6, 517.74, 512.54, 514.45),
+            ("2025-09-23", 513.8, 514.59, 507.31, 509.23),
+            ("2025-09-24", 510.4, 512.48, 506.92, 510.15),  # Trigger bar (2D)
+            ("2025-09-25", 508.3, 510.01, 505.04, 507.03),  # Signal bar (2D)
+        ]
+
+        timestamps = [datetime.strptime(date, "%Y-%m-%d").replace(hour=4) for date, *_ in test_data]
+        opens = [o for _, o, *_ in test_data]
+        highs = [h for _, _, h, *_ in test_data]
+        lows = [low for _, _, _, low, _ in test_data]
+        closes = [c for *_, c in test_data]
+
+        data = DataFrame(
+            {
+                "timestamp": timestamps,
+                "open": opens,
+                "high": highs,
+                "low": lows,
+                "close": closes,
+                "volume": [1000000] * len(test_data),
+                "symbol": ["MSFT"] * len(test_data),
+                "timeframe": ["1d"] * len(test_data),
+            }
+        )
+
+        config = IndicatorsConfig(
+            timeframe_configs=[
+                TimeframeItemConfig(
+                    timeframes=["1d"],
+                    swing_points=SwingPointsConfig(window=2, threshold=0.0),
+                    target_config=TargetConfig(lower_bound="lower_low", merge_threshold_pct=0.0),
+                )
+            ]
+        )
+
+        indicators = Indicators(config)
+        result = indicators.process(data)
+
+        # Get targets for signal at index 14 (09-25)
+        target_config = config.timeframe_configs[0].target_config
+        target_prices = indicators._detect_targets_for_signal(
+            result, signal_index=14, bias="short", target_config=target_config
+        )
+
+        # Expected targets: descending ladder from 505.93 to 492.37
+        # 507.31 should be EXCLUDED (> 506.92 trigger)
+        expected = [505.93, 503.85, 497.88, 496.72, 495.03, 492.37]
+
+        assert target_prices == expected, (
+            f"Expected {expected}, got {target_prices}. "
+            f"If [507.31, ...], Bug #2 (trigger filtering) is present. "
+            f"Trigger bar low: 506.92, all targets should be < this value."
+        )
+
+        # Verify all targets below trigger (Bug #2 check)
+        trigger_low = 506.92
+        assert all(price < trigger_low for price in target_prices), (
+            f"All targets must be below trigger ({trigger_low}). Found: {[p for p in target_prices if p >= trigger_low]}"
+        )
+
+        # Verify descending ladder
+        for i in range(len(target_prices) - 1):
+            assert target_prices[i] > target_prices[i + 1], (
+                f"Ladder must be descending: {target_prices[i]} > {target_prices[i + 1]}"
+            )
+
+        # Verify last target is the lower_low bound
+        assert target_prices[-1] == 492.37, "Last target should reach lower_low bound (492.37)"
+
+    def test_trigger_filtering_excludes_invalid_long_targets(self):
+        """
+
+        Test that trigger filtering excludes targets below trigger for long signals.
+
+        **Specifically validates Bug Fix #2**
+
+        Creates scenario where:
+        - Trigger bar has high=100.0
+        - Historical bars (newest to oldest): 105.0, 102.0, 98.0, 95.0
+        - Trigger filtering: Only consider highs > 100.0 → excludes 98.0, 95.0
+        - Ladder building: Start with 105.0, can't add 102.0 (< 105.0 for ascending)
+        - Result: [105.0] (only target above trigger forming valid ascending ladder)
+        """
+        test_data = [
+            ("2025-10-01", 90.0, 95.0, 89.0, 94.0),  # high=95 < trigger
+            ("2025-10-02", 94.0, 98.0, 93.0, 97.0),  # high=98 < trigger
+            ("2025-10-03", 97.0, 102.0, 96.0, 101.0),  # high=102 > trigger but < 105
+            ("2025-10-04", 101.0, 105.0, 100.0, 104.0),  # high=105 > trigger ✓
+            ("2025-10-05", 99.0, 100.0, 98.0, 99.5),  # Trigger bar (high=100)
+            ("2025-10-06", 100.5, 103.0, 100.0, 102.5),  # Signal bar
+        ]
+
+        timestamps = [datetime.strptime(date, "%Y-%m-%d").replace(hour=4) for date, *_ in test_data]
+        opens = [o for _, o, *_ in test_data]
+        highs = [h for _, _, h, *_ in test_data]
+        lows = [low for _, _, _, low, _ in test_data]
+        closes = [c for *_, c in test_data]
+
+        data = DataFrame(
+            {
+                "timestamp": timestamps,
+                "open": opens,
+                "high": highs,
+                "low": lows,
+                "close": closes,
+                "volume": [1000] * len(test_data),
+                "symbol": ["TEST"] * len(test_data),
+                "timeframe": ["1d"] * len(test_data),
+            }
+        )
+
+        config = IndicatorsConfig(
+            timeframe_configs=[
+                TimeframeItemConfig(
+                    timeframes=["1d"],
+                    swing_points=SwingPointsConfig(window=1, threshold=0.0),
+                    target_config=TargetConfig(upper_bound="higher_high", merge_threshold_pct=0.0),
+                )
+            ]
+        )
+
+        indicators = Indicators(config)
+        result = indicators.process(data)
+
+        target_config = config.timeframe_configs[0].target_config
+        target_prices = indicators._detect_targets_for_signal(
+            result, signal_index=5, bias="long", target_config=target_config
+        )
+
+        # Ascending ladder: Start with 105.0 (> 100.0), can't add 102.0 (< 105.0)
+        expected = [105.0]
+
+        assert target_prices == expected, (
+            f"Expected {expected}, got {target_prices}. "
+            f"Trigger filtering should exclude 95.0 and 98.0 (< 100.0). "
+            f"Ladder logic excludes 102.0 (< 105.0 for ascending)."
+        )
+
+        # Verify no targets below trigger were included
+        trigger_high = 100.0
+        assert all(price > trigger_high for price in target_prices), (
+            f"All targets must be above trigger ({trigger_high})"
+        )
+
+    def test_trigger_filtering_excludes_invalid_short_targets(self):
+        """
+
+        Test that trigger filtering excludes targets above trigger for short signals.
+
+        **Specifically validates Bug Fix #2**
+
+        Creates scenario where:
+        - Trigger bar has low=100.0
+        - Historical bars (newest to oldest): 95.0, 98.0, 102.0, 105.0
+        - Trigger filtering: Only consider lows < 100.0 → excludes 102.0, 105.0
+        - Ladder building: Start with 95.0, can't add 98.0 (> 95.0 for descending)
+        - Result: [95.0] (only target below trigger forming valid descending ladder)
+        """
+        test_data = [
+            ("2025-10-01", 110.0, 111.0, 105.0, 106.0),  # low=105 > trigger
+            ("2025-10-02", 106.0, 107.0, 102.0, 103.0),  # low=102 > trigger
+            ("2025-10-03", 103.0, 104.0, 98.0, 99.0),  # low=98 < trigger but > 95
+            ("2025-10-04", 99.0, 100.0, 95.0, 96.0),  # low=95 < trigger ✓
+            ("2025-10-05", 100.5, 101.0, 100.0, 100.5),  # Trigger bar (low=100)
+            ("2025-10-06", 99.5, 100.0, 97.0, 97.5),  # Signal bar
+        ]
+
+        timestamps = [datetime.strptime(date, "%Y-%m-%d").replace(hour=4) for date, *_ in test_data]
+        opens = [o for _, o, *_ in test_data]
+        highs = [h for _, _, h, *_ in test_data]
+        lows = [low for _, _, _, low, _ in test_data]
+        closes = [c for *_, c in test_data]
+
+        data = DataFrame(
+            {
+                "timestamp": timestamps,
+                "open": opens,
+                "high": highs,
+                "low": lows,
+                "close": closes,
+                "volume": [1000] * len(test_data),
+                "symbol": ["TEST"] * len(test_data),
+                "timeframe": ["1d"] * len(test_data),
+            }
+        )
+
+        config = IndicatorsConfig(
+            timeframe_configs=[
+                TimeframeItemConfig(
+                    timeframes=["1d"],
+                    swing_points=SwingPointsConfig(window=1, threshold=0.0),
+                    target_config=TargetConfig(lower_bound="lower_low", merge_threshold_pct=0.0),
+                )
+            ]
+        )
+
+        indicators = Indicators(config)
+        result = indicators.process(data)
+
+        target_config = config.timeframe_configs[0].target_config
+        target_prices = indicators._detect_targets_for_signal(
+            result, signal_index=5, bias="short", target_config=target_config
+        )
+
+        # Descending ladder: Start with 95.0 (< 100.0), can't add 98.0 (> 95.0)
+        expected = [95.0]
+
+        assert target_prices == expected, (
+            f"Expected {expected}, got {target_prices}. "
+            f"Trigger filtering should exclude 102.0 and 105.0 (> 100.0). "
+            f"Ladder logic excludes 98.0 (> 95.0 for descending)."
+        )
+
+        # Verify no targets above trigger were included
+        trigger_low = 100.0
+        assert all(price < trigger_low for price in target_prices), f"All targets must be below trigger ({trigger_low})"
 
 
 @pytest.mark.unit
@@ -5851,7 +6190,6 @@ class TestEagerTargetEvaluation:
         from polars import List as PolarsListType
 
         from thestrat.factory import Factory
-        from thestrat.schemas import TargetConfig
 
         # Create data with clear reversal pattern
         data = create_sample_ohlcv_data(100)
@@ -5902,7 +6240,6 @@ class TestEagerTargetEvaluation:
     def test_target_count_matches_target_prices(self):
         """Test that target_count matches len(target_prices) for all signals."""
         from thestrat.factory import Factory
-        from thestrat.schemas import TargetConfig
 
         # Create larger dataset to ensure signals
         data = create_sample_ohlcv_data(200)
@@ -5941,7 +6278,6 @@ class TestEagerTargetEvaluation:
     def test_get_signal_object_single_row_validation(self):
         """Test that get_signal_object() validates single-row input."""
         from thestrat.factory import Factory
-        from thestrat.schemas import TargetConfig
 
         # Create data with signals
         data = create_sample_ohlcv_data(100)
@@ -5986,7 +6322,6 @@ class TestEagerTargetEvaluation:
     def test_target_level_with_id_field(self):
         """Test that TargetLevel objects created via get_signal_object() have id field."""
         from thestrat.factory import Factory
-        from thestrat.schemas import TargetConfig
 
         # Create data with signals
         data = create_sample_ohlcv_data(100)
@@ -6034,7 +6369,6 @@ class TestEagerTargetEvaluation:
     def test_native_list_type_no_json_conversion(self):
         """Test that target_prices uses native list type, not JSON strings."""
         from thestrat.factory import Factory
-        from thestrat.schemas import TargetConfig
 
         # Create data
         data = create_sample_ohlcv_data(100)
@@ -6076,7 +6410,6 @@ class TestEagerTargetEvaluation:
     def test_eager_evaluation_without_get_signal_object_call(self):
         """Test that targets are populated WITHOUT needing to call get_signal_object()."""
         from thestrat.factory import Factory
-        from thestrat.schemas import TargetConfig
 
         # Create data
         data = create_sample_ohlcv_data(150)
