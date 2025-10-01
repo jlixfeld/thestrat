@@ -3941,6 +3941,376 @@ class TestTargetDetection:
             idx, date, high = matching_rows[0]
             assert date == exp_date, f"Target {i}: price {exp_price} should be from {exp_date}, got {date}"
 
+    def test_edge_case_all_historical_prices_ascending_short(self):
+        """Test short signal where all historical lows are ASCENDING chronologically."""
+        from thestrat.schemas import TargetConfig
+
+        # Edge case: Short signal with ascending lows chronologically
+        # In REVERSE chronological order (how targets are built), this becomes descending
+        # which IS a valid ladder for shorts
+        test_data = [
+            ("2025-11-01", 480.0),  # Index 0
+            ("2025-11-02", 485.0),  # Index 1
+            ("2025-11-03", 490.0),  # Index 2
+            ("2025-11-04", 495.0),  # Index 3
+            ("2025-11-05", 500.0),  # Index 4
+            ("2025-11-06", 505.0),  # Index 5
+            ("2025-11-07", 510.0),  # Index 6
+            ("2025-11-08", 515.0),  # Index 7
+            ("2025-11-09", 520.0),  # Index 8 - skip (most recent)
+            ("2025-11-10", 525.0),  # Index 9 - SIGNAL BAR
+        ]
+
+        timestamps = [datetime.strptime(date, "%Y-%m-%d").replace(hour=4) for date, _ in test_data]
+        lows = [low for _, low in test_data]
+
+        data = DataFrame(
+            {
+                "timestamp": timestamps,
+                "open": [low + 5.0 for low in lows],
+                "high": [low + 10.0 for low in lows],
+                "low": lows,
+                "close": [low + 7.0 for low in lows],
+                "volume": [1000] * 10,
+                "symbol": ["TEST"] * 10,
+                "timeframe": ["1d"] * 10,
+            }
+        )
+
+        config = IndicatorsConfig(
+            timeframe_configs=[
+                TimeframeItemConfig(
+                    timeframes=["1d"],
+                    target_config=TargetConfig(lower_bound="lower_low", merge_threshold_pct=0.0),
+                )
+            ]
+        )
+
+        indicators = Indicators(config)
+        result = indicators.process(data)
+
+        target_config = config.timeframe_configs[0].target_config
+        target_prices = indicators._detect_targets_for_signal(
+            result, signal_index=9, bias="short", target_config=target_config
+        )
+
+        # Expected: descending ladder in reverse chronological order
+        # Skip 520.0 (idx 8), start at 515.0 (idx 7), descend to 480.0 (idx 0)
+        expected = [
+            ("2025-11-08", 515.0),  # Index 7
+            ("2025-11-07", 510.0),  # Index 6
+            ("2025-11-06", 505.0),  # Index 5
+            ("2025-11-05", 500.0),  # Index 4
+            ("2025-11-04", 495.0),  # Index 3
+            ("2025-11-03", 490.0),  # Index 2
+            ("2025-11-02", 485.0),  # Index 1
+            ("2025-11-01", 480.0),  # Index 0
+        ]
+
+        expected_prices = [price for _, price in expected]
+        assert target_prices == expected_prices, f"Expected {expected_prices}, got {target_prices}"
+
+        # Verify the correct bars were selected with date validation
+        for i, (exp_date, exp_price) in enumerate(expected):
+            matching_rows = [(idx, date, low) for idx, (date, low) in enumerate(test_data) if low == exp_price]
+            assert len(matching_rows) == 1, f"Price {exp_price} should appear exactly once"
+            idx, date, low = matching_rows[0]
+            assert date == exp_date, f"Target {i}: expected {exp_date}, got {date}"
+
+    def test_edge_case_all_historical_prices_descending_long(self):
+        """Test long signal where all historical highs are DESCENDING chronologically."""
+        from thestrat.schemas import TargetConfig
+
+        # Edge case: Long signal with descending highs chronologically
+        # In REVERSE chronological order (how targets are built), this becomes ascending
+        # which IS a valid ladder for longs
+        test_data = [
+            ("2025-11-01", 525.0),  # Index 0
+            ("2025-11-02", 520.0),  # Index 1
+            ("2025-11-03", 515.0),  # Index 2
+            ("2025-11-04", 510.0),  # Index 3
+            ("2025-11-05", 505.0),  # Index 4
+            ("2025-11-06", 500.0),  # Index 5
+            ("2025-11-07", 495.0),  # Index 6
+            ("2025-11-08", 490.0),  # Index 7
+            ("2025-11-09", 485.0),  # Index 8 - skip (most recent)
+            ("2025-11-10", 480.0),  # Index 9 - SIGNAL BAR
+        ]
+
+        timestamps = [datetime.strptime(date, "%Y-%m-%d").replace(hour=4) for date, _ in test_data]
+        highs = [high for _, high in test_data]
+
+        data = DataFrame(
+            {
+                "timestamp": timestamps,
+                "open": [high - 5.0 for high in highs],
+                "high": highs,
+                "low": [high - 10.0 for high in highs],
+                "close": [high - 3.0 for high in highs],
+                "volume": [1000] * 10,
+                "symbol": ["TEST"] * 10,
+                "timeframe": ["1d"] * 10,
+            }
+        )
+
+        config = IndicatorsConfig(
+            timeframe_configs=[
+                TimeframeItemConfig(
+                    timeframes=["1d"],
+                    target_config=TargetConfig(upper_bound="higher_high", merge_threshold_pct=0.0),
+                )
+            ]
+        )
+
+        indicators = Indicators(config)
+        result = indicators.process(data)
+
+        target_config = config.timeframe_configs[0].target_config
+        target_prices = indicators._detect_targets_for_signal(
+            result, signal_index=9, bias="long", target_config=target_config
+        )
+
+        # Expected: ascending ladder in reverse chronological order
+        # Skip 485.0 (idx 8), start at 490.0 (idx 7), ascend to 525.0 (idx 0)
+        expected = [
+            ("2025-11-08", 490.0),  # Index 7
+            ("2025-11-07", 495.0),  # Index 6
+            ("2025-11-06", 500.0),  # Index 5
+            ("2025-11-05", 505.0),  # Index 4
+            ("2025-11-04", 510.0),  # Index 3
+            ("2025-11-03", 515.0),  # Index 2
+            ("2025-11-02", 520.0),  # Index 1
+            ("2025-11-01", 525.0),  # Index 0
+        ]
+
+        expected_prices = [price for _, price in expected]
+        assert target_prices == expected_prices, f"Expected {expected_prices}, got {target_prices}"
+
+        # Verify the correct bars were selected with date validation
+        for i, (exp_date, exp_price) in enumerate(expected):
+            matching_rows = [(idx, date, high) for idx, (date, high) in enumerate(test_data) if high == exp_price]
+            assert len(matching_rows) == 1, f"Price {exp_price} should appear exactly once"
+            idx, date, high = matching_rows[0]
+            assert date == exp_date, f"Target {i}: expected {exp_date}, got {date}"
+
+    def test_long_signal_with_lower_high_bound(self):
+        """Test long signal using lower_high as upper bound (targets are still highs)."""
+        from thestrat.schemas import TargetConfig
+
+        # Long signal using lower_high instead of higher_high
+        # Targets should still be highs forming ascending ladder
+        test_data = [
+            ("2025-12-01", 475.20),  # Index 0
+            ("2025-12-02", 478.50),  # Index 1
+            ("2025-12-03", 481.30),  # Index 2
+            ("2025-12-04", 484.60),  # Index 3 - Lower_high structural bound
+            ("2025-12-07", 482.10),  # Index 4
+            ("2025-12-08", 479.80),  # Index 5
+            ("2025-12-09", 477.50),  # Index 6
+            ("2025-12-10", 476.20),  # Index 7 - Most recent (skipped)
+            ("2025-12-11", 478.90),  # Index 8 - SIGNAL BAR
+        ]
+
+        timestamps = [datetime.strptime(date, "%Y-%m-%d").replace(hour=4) for date, _ in test_data]
+        highs = [high for _, high in test_data]
+
+        data = DataFrame(
+            {
+                "timestamp": timestamps,
+                "open": [474.0, 477.5, 480.0, 483.5, 480.8, 478.5, 476.2, 475.0, 477.5],
+                "high": highs,
+                "low": [472.0, 475.5, 478.0, 481.5, 478.8, 476.5, 474.2, 473.0, 475.5],
+                "close": [475.0, 478.0, 481.0, 484.0, 481.5, 479.0, 476.8, 475.5, 478.5],
+                "volume": [1000] * 9,
+                "symbol": ["TEST"] * 9,
+                "timeframe": ["1d"] * 9,
+            }
+        )
+
+        config = IndicatorsConfig(
+            timeframe_configs=[
+                TimeframeItemConfig(
+                    timeframes=["1d"],
+                    target_config=TargetConfig(upper_bound="lower_high", merge_threshold_pct=0.0),
+                )
+            ]
+        )
+
+        indicators = Indicators(config)
+        result = indicators.process(data)
+
+        target_config = config.timeframe_configs[0].target_config
+        target_prices = indicators._detect_targets_for_signal(
+            result, signal_index=8, bias="long", target_config=target_config
+        )
+
+        # Ascending ladder from highs: skip 476.20, start from 477.50
+        # 477.50 (idx 6), 479.80 > 477.50 ✓, 482.10 > 479.80 ✓, 484.60 > 482.10 ✓
+        expected = [
+            ("2025-12-09", 477.50),
+            ("2025-12-08", 479.80),
+            ("2025-12-07", 482.10),
+            ("2025-12-04", 484.60),  # lower_high bound
+        ]
+
+        expected_prices = [price for _, price in expected]
+        assert target_prices == expected_prices, f"Expected {expected_prices}, got {target_prices}"
+
+        # Verify dates
+        for i, (exp_date, exp_price) in enumerate(expected):
+            matching_rows = [(idx, date, high) for idx, (date, high) in enumerate(test_data) if high == exp_price]
+            assert len(matching_rows) == 1, f"Price {exp_price} should appear exactly once"
+            idx, date, high = matching_rows[0]
+            assert date == exp_date, f"Target {i}: expected {exp_date}, got {date}"
+
+    def test_short_signal_with_higher_low_bound(self):
+        """Test short signal using higher_low as lower bound (targets are still lows)."""
+        from thestrat.schemas import TargetConfig
+
+        # Short signal using higher_low instead of lower_low
+        # Targets should still be lows forming descending ladder
+        test_data = [
+            ("2025-12-01", 510.30),  # Index 0
+            ("2025-12-02", 508.70),  # Index 1
+            ("2025-12-03", 506.50),  # Index 2
+            ("2025-12-04", 504.20),  # Index 3 - Higher_low structural bound
+            ("2025-12-07", 506.80),  # Index 4
+            ("2025-12-08", 509.10),  # Index 5
+            ("2025-12-09", 511.40),  # Index 6
+            ("2025-12-10", 513.60),  # Index 7 - Most recent (skipped)
+            ("2025-12-11", 512.10),  # Index 8 - SIGNAL BAR
+        ]
+
+        timestamps = [datetime.strptime(date, "%Y-%m-%d").replace(hour=4) for date, _ in test_data]
+        lows = [low for _, low in test_data]
+
+        data = DataFrame(
+            {
+                "timestamp": timestamps,
+                "open": [512.0, 510.5, 508.0, 506.0, 508.5, 510.8, 513.0, 515.2, 513.8],
+                "high": [514.0, 512.5, 510.0, 508.0, 510.5, 512.8, 515.0, 517.2, 515.8],
+                "low": lows,
+                "close": [511.5, 509.0, 507.0, 505.0, 507.5, 509.8, 512.0, 514.2, 512.8],
+                "volume": [1000] * 9,
+                "symbol": ["TEST"] * 9,
+                "timeframe": ["1d"] * 9,
+            }
+        )
+
+        config = IndicatorsConfig(
+            timeframe_configs=[
+                TimeframeItemConfig(
+                    timeframes=["1d"],
+                    target_config=TargetConfig(lower_bound="higher_low", merge_threshold_pct=0.0),
+                )
+            ]
+        )
+
+        indicators = Indicators(config)
+        result = indicators.process(data)
+
+        target_config = config.timeframe_configs[0].target_config
+        target_prices = indicators._detect_targets_for_signal(
+            result, signal_index=8, bias="short", target_config=target_config
+        )
+
+        # Descending ladder from lows: skip 513.60, start from 511.40
+        # 511.40 (idx 6), 509.10 < 511.40 ✓, 506.80 < 509.10 ✓, 504.20 < 506.80 ✓
+        expected = [
+            ("2025-12-09", 511.40),
+            ("2025-12-08", 509.10),
+            ("2025-12-07", 506.80),
+            ("2025-12-04", 504.20),  # higher_low bound
+        ]
+
+        expected_prices = [price for _, price in expected]
+        assert target_prices == expected_prices, f"Expected {expected_prices}, got {target_prices}"
+
+        # Verify dates
+        for i, (exp_date, exp_price) in enumerate(expected):
+            matching_rows = [(idx, date, low) for idx, (date, low) in enumerate(test_data) if low == exp_price]
+            assert len(matching_rows) == 1, f"Price {exp_price} should appear exactly once"
+            idx, date, low = matching_rows[0]
+            assert date == exp_date, f"Target {i}: expected {exp_date}, got {date}"
+
+    def test_merge_threshold_comprehensive(self):
+        """Test merge threshold with exact price/date validation."""
+        from thestrat.schemas import TargetConfig
+
+        # Test data with specific prices designed to test 2.5% merge threshold
+        # Prices within 2.5% should merge; those beyond should remain separate
+        test_data = [
+            ("2025-12-15", 490.00),  # Index 0
+            ("2025-12-16", 492.50),  # Index 1 - 0.51% from 490.00 (should merge)
+            ("2025-12-17", 495.00),  # Index 2 - 0.51% from 492.50 (should merge)
+            ("2025-12-18", 500.00),  # Index 3 - 1.01% from 495.00 (should merge)
+            ("2025-12-21", 505.00),  # Index 4 - 1.00% from 500.00 (should merge)
+            ("2025-12-22", 518.00),  # Index 5 - 2.57% from 505.00 (should NOT merge, new ladder rung)
+            ("2025-12-23", 520.00),  # Index 6 - 0.39% from 518.00 (should merge with 518)
+            ("2025-12-24", 530.00),  # Index 7 - 1.92% from 520.00 (should merge with 518/520 group)
+            ("2025-12-28", 540.00),  # Index 8 - Most recent (skipped)
+            ("2025-12-29", 535.00),  # Index 9 - SIGNAL BAR (short)
+        ]
+
+        timestamps = [datetime.strptime(date, "%Y-%m-%d").replace(hour=4) for date, _ in test_data]
+        lows = [low for _, low in test_data]
+
+        data = DataFrame(
+            {
+                "timestamp": timestamps,
+                "open": [low + 2 for low in lows],
+                "high": [low + 5 for low in lows],
+                "low": lows,
+                "close": [low + 3 for low in lows],
+                "volume": [1000] * 10,
+                "symbol": ["TEST"] * 10,
+                "timeframe": ["1d"] * 10,
+            }
+        )
+
+        config = IndicatorsConfig(
+            timeframe_configs=[
+                TimeframeItemConfig(
+                    timeframes=["1d"],
+                    target_config=TargetConfig(lower_bound="lower_low", merge_threshold_pct=0.025),  # 2.5%
+                )
+            ]
+        )
+
+        indicators = Indicators(config)
+        result = indicators.process(data)
+
+        target_config = config.timeframe_configs[0].target_config
+        target_prices = indicators._detect_targets_for_signal(
+            result, signal_index=9, bias="short", target_config=target_config
+        )
+
+        # Expected behavior (merge compares each item to GROUP START):
+        # Skip 540.00 (most recent)
+        # Start: 530.00 (idx 7)
+        # Group 1: 530 → check 520: |530-520|/530=1.89% ✓, check 518: |530-518|/530=2.26% ✓
+        #          → merged to 518.00 (lowest for short)
+        # 518 is new ladder start
+        # Group 2: 505 → check 500: |505-500|/505=0.99% ✓, check 495: |505-495|/505=1.98% ✓
+        #          check 492.5: |505-492.5|/505=2.48% ✓, check 490: |505-490|/505=2.97% ✗ STOP
+        #          → merged to 492.50 (lowest in group [505, 500, 495, 492.5])
+        # Group 3: 490 (standalone, beyond 2.5% threshold from 505)
+        expected = [
+            ("2025-12-22", 518.00),  # Merged from 530, 520, 518
+            ("2025-12-16", 492.50),  # Merged from 505, 500, 495, 492.5
+            ("2025-12-15", 490.00),  # Standalone (beyond threshold from 505)
+        ]
+
+        expected_prices = [price for _, price in expected]
+        assert target_prices == expected_prices, f"Expected {expected_prices}, got {target_prices}"
+
+        # Verify the correct bars were selected
+        for i, (exp_date, exp_price) in enumerate(expected):
+            matching_rows = [(idx, date, low) for idx, (date, low) in enumerate(test_data) if low == exp_price]
+            assert len(matching_rows) == 1, f"Price {exp_price} should appear exactly once"
+            idx, date, low = matching_rows[0]
+            assert date == exp_date, f"Target {i}: expected {exp_date}, got {date}"
+
 
 @pytest.mark.unit
 class TestPerTimeframeIndicators:
