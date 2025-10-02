@@ -5309,6 +5309,134 @@ class TestIndividualSignalPatterns:
 
 
 @pytest.mark.unit
+class TestSignalEntryStopPrices:
+    """
+    Test suite for validating entry/stop prices use setup bar methodology.
+
+    These tests verify that signal entry and stop prices are correctly calculated
+    from the setup bar (the bar immediately before the trigger) rather than the trigger bar,
+    ensuring proper TheStrat methodology implementation per issue #25.
+    """
+
+    @pytest.mark.parametrize(
+        "pattern_type",
+        [
+            # 3-bar reversal patterns (long)
+            "1-2D-2U",
+            "3-1-2U",
+            "3-2D-2U",
+            "2D-1-2U",
+            # 2-bar reversal patterns (long)
+            "2D-2U",
+            # 3-bar reversal patterns (short)
+            "1-2U-2D",
+            "3-1-2D",
+            "3-2U-2D",
+            "2U-1-2D",
+            # 2-bar reversal patterns (short)
+            "2U-2D",
+            # Continuation patterns (long)
+            "2U-2U",
+            "2U-1-2U",
+            # Continuation patterns (short)
+            "2D-2D",
+            "2D-1-2D",
+            # NOTE: MSFT real market data patterns excluded from this test
+            # because they don't reliably detect with extend_data=True
+            # (extension creates different instances of the same pattern)
+            # These patterns are validated in dedicated MSFT-specific tests
+        ],
+    )
+    def test_entry_stop_prices_match_expected_from_setup_bar(self, pattern_type):
+        """
+        Verify entry/stop prices match expected values from setup bar.
+
+        This test ensures that the signal detection correctly uses the setup bar
+        (the bar immediately before the trigger) rather than the trigger bar for
+        entry and stop price calculation.
+
+        The setup bar is ALWAYS 1 position back from the trigger bar:
+        - 2-bar pattern (2D-2U): Bar 1=2D (setup), Bar 2=2U (trigger)
+        - 3-bar pattern (3-2D-2U): Bar 1=3, Bar 2=2D (setup), Bar 3=2U (trigger)
+        - 3-bar pattern (3-1-2U): Bar 1=3, Bar 2=1 (setup), Bar 3=2U (trigger)
+
+        Entry/Stop calculation:
+        - Long signals: entry = setup_high, stop = setup_low
+        - Short signals: entry = setup_low, stop = setup_high
+
+        Args:
+            pattern_type: Pattern name from PatternDataFactory
+        """
+        from tests.utils.pattern_data_factory import PatternDataFactory
+
+        # Skip context-dependent patterns that require complex market structure
+        if PatternDataFactory.is_context_pattern(pattern_type):
+            pytest.skip(f"Context pattern {pattern_type} requires complex market structure - skipped")
+
+        # Get expected values from factory (single source of truth)
+        expected = PatternDataFactory.get_expected_values(pattern_type)
+
+        # Create pattern-specific test data
+        data = PatternDataFactory.create(pattern_type, extend_data=True)
+
+        # Configure indicators with minimal swing point settings for reliable detection
+        indicators = Indicators(
+            IndicatorsConfig(
+                timeframe_configs=[
+                    TimeframeItemConfig(
+                        timeframes=["all"],
+                        swing_points=SwingPointsConfig(window=1, threshold=0.1),
+                    )
+                ]
+            )
+        )
+
+        # Process data through indicators
+        result = indicators.process(data)
+
+        # Filter for the expected pattern (handles MSFT suffix removal)
+        base_pattern = expected["pattern"]
+        signals = result.filter(col("signal") == base_pattern)
+
+        # Verify signal was detected
+        assert len(signals) > 0, (
+            f"Expected {pattern_type} signal not detected. "
+            f"Description: {PatternDataFactory.get_pattern_description(pattern_type)}"
+        )
+
+        # Get first signal row
+        signal_row = signals.row(0, named=True)
+
+        # CRITICAL: Verify entry/stop match factory expected values
+        assert signal_row["entry_price"] == pytest.approx(expected["expected_entry"], rel=1e-6), (
+            f"{pattern_type}: Entry price mismatch.\n"
+            f"Expected {expected['expected_entry']} (from setup bar high/low),\n"
+            f"Got {signal_row['entry_price']}"
+        )
+
+        assert signal_row["stop_price"] == pytest.approx(expected["expected_stop"], rel=1e-6), (
+            f"{pattern_type}: Stop price mismatch.\n"
+            f"Expected {expected['expected_stop']} (from setup bar low/high),\n"
+            f"Got {signal_row['stop_price']}"
+        )
+
+        # Verify bias matches
+        assert signal_row["bias"] == expected["bias"], (
+            f"{pattern_type}: Bias mismatch. Expected {expected['bias']}, got {signal_row['bias']}"
+        )
+
+        # Verify entry/stop relationship is correct for bias
+        if expected["bias"] == "long":
+            assert signal_row["entry_price"] > signal_row["stop_price"], (
+                f"{pattern_type}: Long signal should have entry > stop"
+            )
+        else:  # short
+            assert signal_row["stop_price"] > signal_row["entry_price"], (
+                f"{pattern_type}: Short signal should have stop > entry"
+            )
+
+
+@pytest.mark.unit
 class TestIndicatorsTimestampHandling:
     """Test cases for timestamp conversion edge cases in Indicators."""
 

@@ -27,7 +27,8 @@ class PatternDataFactory:
             "high": [102.0, 101.8, 100.0, 102.0, 105.0],
             "low": [99.0, 100.5, 98.5, 100.0, 102.5],
             "close": [101.0, 101.0, 99.5, 101.5, 104.0],
-            # Setup bar is index 2 (2D), trigger is index 3 (2U)
+            # Bar 1=1 (inside), Bar 2=2D (setup), Bar 3=2U (trigger)
+            # Setup bar is ALWAYS 1 position back from trigger
             "expected_entry": 100.0,  # Setup bar (2D) high
             "expected_stop": 98.5,  # Setup bar (2D) low
         },
@@ -40,9 +41,10 @@ class PatternDataFactory:
             "high": [102.0, 103.5, 101.8, 103.0, 107.0],
             "low": [99.0, 98.0, 100.0, 101.5, 104.0],
             "close": [101.0, 103.0, 101.0, 102.5, 106.0],
-            # Setup bar is index 2 (1), trigger is index 3 (2U)
-            "expected_entry": 101.8,  # Setup bar (1) high
-            "expected_stop": 100.0,  # Setup bar (1) low
+            # Bar 1=3 (outside), Bar 2=1 (inside - setup), Bar 3=2U (trigger)
+            # Setup bar is ALWAYS 1 position back from trigger
+            "expected_entry": 101.8,  # Setup bar (1 - inside) high
+            "expected_stop": 100.0,  # Setup bar (1 - inside) low
         },
         # 3-2D-2U (outside, down, up)
         "3-2D-2U": {
@@ -53,7 +55,8 @@ class PatternDataFactory:
             "high": [102.0, 103.5, 99.0, 101.0, 104.0],
             "low": [99.0, 98.0, 97.5, 99.0, 101.5],
             "close": [101.0, 103.0, 98.5, 100.5, 103.5],
-            # Setup bar is index 2 (2D), trigger is index 3 (2U)
+            # Bar 1=3 (outside), Bar 2=2D (setup), Bar 3=2U (trigger)
+            # Setup bar is ALWAYS 1 position back from trigger
             "expected_entry": 99.0,  # Setup bar (2D) high
             "expected_stop": 97.5,  # Setup bar (2D) low
         },
@@ -94,7 +97,8 @@ class PatternDataFactory:
             "high": [102.0, 101.8, 103.5, 100.0, 97.0],
             "low": [99.0, 100.0, 101.5, 97.5, 95.0],
             "close": [101.0, 101.5, 103.0, 98.0, 96.5],
-            # Setup bar is index 2 (2U), trigger is index 3 (2D)
+            # Bar 1=1 (inside), Bar 2=2U (setup), Bar 3=2D (trigger)
+            # Setup bar is ALWAYS 1 position back from trigger
             "expected_entry": 101.5,  # Setup bar (2U) low
             "expected_stop": 103.5,  # Setup bar (2U) high
         },
@@ -107,9 +111,10 @@ class PatternDataFactory:
             "high": [102.0, 103.5, 101.8, 99.0, 96.0],
             "low": [99.0, 98.0, 100.0, 97.5, 94.0],
             "close": [101.0, 103.0, 101.0, 98.5, 95.5],
-            # Setup bar is index 2 (1), trigger is index 3 (2D)
-            "expected_entry": 100.0,  # Setup bar (1) low
-            "expected_stop": 101.8,  # Setup bar (1) high
+            # Bar 1=3 (outside), Bar 2=1 (inside - setup), Bar 3=2D (trigger)
+            # Setup bar is ALWAYS 1 position back from trigger
+            "expected_entry": 100.0,  # Setup bar (1 - inside) low
+            "expected_stop": 101.8,  # Setup bar (1 - inside) high
         },
         # 3-2U-2D (outside, up, down)
         "3-2U-2D": {
@@ -120,7 +125,8 @@ class PatternDataFactory:
             "high": [102.0, 103.5, 104.0, 100.0, 97.0],
             "low": [99.0, 98.0, 101.5, 98.0, 95.0],
             "close": [101.0, 103.0, 103.5, 99.0, 96.5],
-            # Setup bar is index 2 (2U), trigger is index 3 (2D)
+            # Bar 1=3 (outside), Bar 2=2U (setup), Bar 3=2D (trigger)
+            # Setup bar is ALWAYS 1 position back from trigger
             "expected_entry": 101.5,  # Setup bar (2U) low
             "expected_stop": 104.0,  # Setup bar (2U) high
         },
@@ -174,9 +180,10 @@ class PatternDataFactory:
             "high": [102.0, 104.0, 103.8, 106.0, 108.0],
             "low": [99.0, 101.5, 102.0, 103.5, 105.5],
             "close": [101.0, 103.0, 103.0, 105.0, 107.0],
-            # Setup bar is index 2 (1), trigger is index 3 (2U)
-            "expected_entry": 103.8,  # Setup bar (1) high
-            "expected_stop": 102.0,  # Setup bar (1) low
+            # Bar 1=2U (first up), Bar 2=1 (inside - setup), Bar 3=2U (trigger)
+            # Setup bar is ALWAYS 1 position back from trigger
+            "expected_entry": 103.8,  # Setup bar (1 - inside) high
+            "expected_stop": 102.0,  # Setup bar (1 - inside) low
         },
         # ===== CONTINUATION PATTERNS (SHORT) =====
         # 2D-2D (down, down)
