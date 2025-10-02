@@ -598,13 +598,12 @@ class Indicators(Component):
 
         # Process all patterns to build entry/stop expressions
         for pattern, signal_config in SIGNALS.items():
-            bar_count = signal_config["bar_count"]
             bias = signal_config["bias"]
 
-            # Setup bar is (bar_count - 1) positions back from current bar
-            # For 2-bar patterns: setup is 1 bar back
-            # For 3-bar patterns: setup is 2 bars back
-            setup_offset = bar_count - 1
+            # Setup bar is ALWAYS 1 position back from trigger bar
+            # Example: 3-2D-2U -> Bar 1=3, Bar 2=2D (setup), Bar 3=2U (trigger)
+            # Example: 2D-2U -> Bar 1=2D (setup), Bar 2=2U (trigger)
+            setup_offset = 1
 
             # Get setup bar OHLC
             setup_high = col("high").shift(setup_offset)
