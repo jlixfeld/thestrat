@@ -184,8 +184,8 @@ class SignalMetadata:
     bar_count: int
 
     # Price levels (required)
-    entry_price: float  # Trigger bar high (long) or low (short)
-    stop_price: float  # Trigger bar low (long) or high (short)
+    entry_price: float  # Setup bar high (long) or low (short) - breakout level
+    stop_price: float  # Setup bar low (long) or high (short) - invalidation level
 
     # Context (required)
     timestamp: datetime

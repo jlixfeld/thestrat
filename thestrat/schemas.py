@@ -786,6 +786,28 @@ class IndicatorSchema(BaseModel):
             "values": ["long", "short"],
         },
     )
+    entry_price: float | None = Field(
+        default=None,
+        description="Entry price from setup bar (high for long, low for short)",
+        json_schema_extra={
+            "polars_dtype": Float64,
+            "output": True,
+            "category": "signals",
+            "nullable": True,
+            "note": "Setup bar is the bar being broken/continued, not the trigger bar",
+        },
+    )
+    stop_price: float | None = Field(
+        default=None,
+        description="Stop price from setup bar (low for long, high for short)",
+        json_schema_extra={
+            "polars_dtype": Float64,
+            "output": True,
+            "category": "signals",
+            "nullable": True,
+            "note": "Setup bar is the bar being broken/continued, not the trigger bar",
+        },
+    )
     target_prices: list[float] | None = Field(
         default=None,
         description="List of target prices for reversal signals (most recent first)",
