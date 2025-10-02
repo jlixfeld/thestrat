@@ -590,6 +590,46 @@ class Indicators(Component):
             ]
         )
 
+        # Calculate entry/stop prices from setup bar (not trigger bar)
+        # For each pattern, we need to look back to the setup bar based on bar_count
+        # Build expressions for entry/stop based on detected signal patterns
+        entry_price_expr = lit(None, dtype=Float64)
+        stop_price_expr = lit(None, dtype=Float64)
+
+        # Process all patterns to build entry/stop expressions
+        for pattern, signal_config in SIGNALS.items():
+            bar_count = signal_config["bar_count"]
+            bias = signal_config["bias"]
+
+            # Setup bar is (bar_count - 1) positions back from current bar
+            # For 2-bar patterns: setup is 1 bar back
+            # For 3-bar patterns: setup is 2 bars back
+            setup_offset = bar_count - 1
+
+            # Get setup bar OHLC
+            setup_high = col("high").shift(setup_offset)
+            setup_low = col("low").shift(setup_offset)
+
+            # Pattern matches when signal column equals this pattern
+            pattern_match = col("signal") == pattern
+
+            if bias == "long":
+                # Long: entry at setup bar high, stop at setup bar low
+                entry_price_expr = when(pattern_match).then(setup_high).otherwise(entry_price_expr)
+                stop_price_expr = when(pattern_match).then(setup_low).otherwise(stop_price_expr)
+            else:  # short
+                # Short: entry at setup bar low, stop at setup bar high
+                entry_price_expr = when(pattern_match).then(setup_low).otherwise(entry_price_expr)
+                stop_price_expr = when(pattern_match).then(setup_high).otherwise(stop_price_expr)
+
+        # Add entry/stop price columns
+        df = df.with_columns(
+            [
+                entry_price_expr.alias("entry_price"),
+                stop_price_expr.alias("stop_price"),
+            ]
+        )
+
         # Clean up temporary columns
         df = df.drop(["scenario_2", "scenario_1", "scenario_0", "pattern_2bar", "pattern_3bar"])
 
@@ -658,7 +698,8 @@ class Indicators(Component):
         Create SignalMetadata object from single-row DataFrame.
 
         Decoupled from pipeline - can be called standalone with database query results.
-        Expects DataFrame with exactly 1 row containing signal data with pre-calculated targets.
+        Expects DataFrame with exactly 1 row containing signal data with pre-calculated
+        entry/stop prices and targets.
 
         Args:
             df: DataFrame with exactly 1 row containing signal data
@@ -667,7 +708,7 @@ class Indicators(Component):
             SignalMetadata object with targets parsed from DataFrame
 
         Raises:
-            ValueError: If df doesn't have exactly 1 row
+            ValueError: If df doesn't have exactly 1 row or missing required columns
 
         Example:
             # Query database for specific signal
@@ -690,6 +731,14 @@ class Indicators(Component):
         # Extract row data
         row = df.row(0, named=True)
 
+        # Validate required columns exist
+        if "entry_price" not in row or "stop_price" not in row:
+            raise ValueError(
+                "DataFrame missing required 'entry_price' and/or 'stop_price' columns. "
+                "These columns must be calculated during signal detection in the full pipeline. "
+                "Run the complete Indicators.process() pipeline to generate these columns."
+            )
+
         # Parse target_prices from native list (not JSON)
         target_prices = []
         if row.get("target_prices") is not None:
@@ -701,13 +750,16 @@ class Indicators(Component):
         pattern = row["signal"]
         config = SIGNALS.get(pattern, {})
 
-        # Determine entry/stop from trigger bar (current bar)
-        if row["bias"] == "long":
-            entry_price = float(row["high"])
-            stop_price = float(row["low"])
-        else:  # short
-            entry_price = float(row["low"])
-            stop_price = float(row["high"])
+        # Use pre-calculated entry/stop prices from setup bar
+        entry_price = float(row["entry_price"]) if row["entry_price"] is not None else None
+        stop_price = float(row["stop_price"]) if row["stop_price"] is not None else None
+
+        if entry_price is None or stop_price is None:
+            raise ValueError(
+                f"Signal has null entry_price or stop_price. Pattern: {pattern}, "
+                f"entry_price: {entry_price}, stop_price: {stop_price}. "
+                "This indicates the signal was detected without sufficient historical data for setup bar lookup."
+            )
 
         # Create SignalMetadata
         signal = SignalMetadata(
