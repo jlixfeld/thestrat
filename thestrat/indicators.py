@@ -8,8 +8,8 @@ vectorized calculations using Polars operations.
 from typing import TYPE_CHECKING
 
 from pandas import DataFrame as PandasDataFrame
+from polars import Boolean, Float64, Int32, String, col, concat_str, lit, when
 from polars import DataFrame as PolarsDataFrame
-from polars import Float64, Int32, String, col, concat_str, lit, when
 
 from .base import Component
 from .schemas import IndicatorsConfig, TimeframeItemConfig
@@ -629,8 +629,148 @@ class Indicators(Component):
             ]
         )
 
-        # Clean up temporary columns
-        df = df.drop(["scenario_2", "scenario_1", "scenario_0", "pattern_2bar", "pattern_3bar"])
+        # Calculate signal at structure point indicators
+        # Check if market structure columns exist (they may not if _calculate_market_structure wasn't called)
+        has_market_structure = all(
+            col_name in df.columns for col_name in ["higher_high", "lower_high", "higher_low", "lower_low"]
+        )
+
+        if not has_market_structure:
+            # Market structure columns don't exist - set all signal_at_structure flags to None
+            df = df.with_columns(
+                [
+                    lit(None, dtype=Boolean).alias("signal_at_higher_high"),
+                    lit(None, dtype=Boolean).alias("signal_at_lower_high"),
+                    lit(None, dtype=Boolean).alias("signal_at_higher_low"),
+                    lit(None, dtype=Boolean).alias("signal_at_lower_low"),
+                ]
+            )
+            # Clean up temporary signal pattern columns (no _bar_count or market structure to clean)
+            df = df.drop(["scenario_2", "scenario_1", "scenario_0", "pattern_2bar", "pattern_3bar"])
+        else:
+            # Market structure columns exist - proceed with normal detection
+            # Build bar_count lookup expression from SIGNALS dict
+            bar_count_expr = lit(None, dtype=Int32)
+            for pattern, signal_config in SIGNALS.items():
+                bar_count_expr = (
+                    when(col("signal") == pattern).then(lit(signal_config["bar_count"])).otherwise(bar_count_expr)
+                )
+
+            df = df.with_columns([bar_count_expr.alias("_bar_count")])
+
+            # Epsilon for float comparison (0.01 tolerance)
+            epsilon = lit(0.01)
+
+            # signal_at_higher_high: check all constituent bars' highs against higher_high
+            signal_at_higher_high_expr = (
+                when(col("signal").is_null())
+                .then(None)
+                .otherwise(
+                    when(col("higher_high").is_null())
+                    .then(False)
+                    .otherwise(
+                        # 2-bar: check bars at i and i-1
+                        when(col("_bar_count") == 2)
+                        .then(
+                            ((col("high") - col("higher_high")).abs() < epsilon)
+                            | ((col("high").shift(1) - col("higher_high")).abs() < epsilon)
+                        )
+                        # 3-bar: check bars at i, i-1, and i-2
+                        .when(col("_bar_count") == 3)
+                        .then(
+                            ((col("high") - col("higher_high")).abs() < epsilon)
+                            | ((col("high").shift(1) - col("higher_high")).abs() < epsilon)
+                            | ((col("high").shift(2) - col("higher_high")).abs() < epsilon)
+                        )
+                        .otherwise(False)
+                    )
+                )
+            )
+
+            # signal_at_lower_high: check all constituent bars' highs against lower_high
+            signal_at_lower_high_expr = (
+                when(col("signal").is_null())
+                .then(None)
+                .otherwise(
+                    when(col("lower_high").is_null())
+                    .then(False)
+                    .otherwise(
+                        when(col("_bar_count") == 2)
+                        .then(
+                            ((col("high") - col("lower_high")).abs() < epsilon)
+                            | ((col("high").shift(1) - col("lower_high")).abs() < epsilon)
+                        )
+                        .when(col("_bar_count") == 3)
+                        .then(
+                            ((col("high") - col("lower_high")).abs() < epsilon)
+                            | ((col("high").shift(1) - col("lower_high")).abs() < epsilon)
+                            | ((col("high").shift(2) - col("lower_high")).abs() < epsilon)
+                        )
+                        .otherwise(False)
+                    )
+                )
+            )
+
+            # signal_at_higher_low: check all constituent bars' lows against higher_low
+            signal_at_higher_low_expr = (
+                when(col("signal").is_null())
+                .then(None)
+                .otherwise(
+                    when(col("higher_low").is_null())
+                    .then(False)
+                    .otherwise(
+                        when(col("_bar_count") == 2)
+                        .then(
+                            ((col("low") - col("higher_low")).abs() < epsilon)
+                            | ((col("low").shift(1) - col("higher_low")).abs() < epsilon)
+                        )
+                        .when(col("_bar_count") == 3)
+                        .then(
+                            ((col("low") - col("higher_low")).abs() < epsilon)
+                            | ((col("low").shift(1) - col("higher_low")).abs() < epsilon)
+                            | ((col("low").shift(2) - col("higher_low")).abs() < epsilon)
+                        )
+                        .otherwise(False)
+                    )
+                )
+            )
+
+            # signal_at_lower_low: check all constituent bars' lows against lower_low
+            signal_at_lower_low_expr = (
+                when(col("signal").is_null())
+                .then(None)
+                .otherwise(
+                    when(col("lower_low").is_null())
+                    .then(False)
+                    .otherwise(
+                        when(col("_bar_count") == 2)
+                        .then(
+                            ((col("low") - col("lower_low")).abs() < epsilon)
+                            | ((col("low").shift(1) - col("lower_low")).abs() < epsilon)
+                        )
+                        .when(col("_bar_count") == 3)
+                        .then(
+                            ((col("low") - col("lower_low")).abs() < epsilon)
+                            | ((col("low").shift(1) - col("lower_low")).abs() < epsilon)
+                            | ((col("low").shift(2) - col("lower_low")).abs() < epsilon)
+                        )
+                        .otherwise(False)
+                    )
+                )
+            )
+
+            # Apply all 4 signal-at-structure columns
+            df = df.with_columns(
+                [
+                    signal_at_higher_high_expr.alias("signal_at_higher_high"),
+                    signal_at_lower_high_expr.alias("signal_at_lower_high"),
+                    signal_at_higher_low_expr.alias("signal_at_higher_low"),
+                    signal_at_lower_low_expr.alias("signal_at_lower_low"),
+                ]
+            )
+
+            # Clean up temporary columns (including _bar_count)
+            df = df.drop(["scenario_2", "scenario_1", "scenario_0", "pattern_2bar", "pattern_3bar", "_bar_count"])
 
         # Populate targets eagerly for database integration
         df = self._populate_targets_in_dataframe(df, config)

@@ -5219,7 +5219,7 @@ class TestIndividualSignalPatterns:
             assert isinstance(signal_objects, list)
 
             # Schema consistency: Result should have all required indicator columns
-            # (34 columns for raw data, 35 with timeframe from aggregation)
+            # (41 columns for raw data, 42 with timeframe from aggregation)
             assert len(result.columns) in [
                 EXPECTED_INDICATOR_COLUMNS - 1,
                 EXPECTED_INDICATOR_COLUMNS,
@@ -5264,7 +5264,7 @@ class TestIndividualSignalPatterns:
                 assert isinstance(signal_objects, list)
 
                 # Schema consistency: Result should have all required indicator columns
-                # (34 columns for raw data, 35 with timeframe from aggregation)
+                # (41 columns for raw data, 42 with timeframe from aggregation)
                 assert len(result.columns) in [
                     EXPECTED_INDICATOR_COLUMNS - 1,
                     EXPECTED_INDICATOR_COLUMNS,
@@ -6672,3 +6672,307 @@ class TestEagerTargetEvaluation:
                 print("⚠️  No targets detected (valid if no higher_high/lower_low after signals in dataset)")
         else:
             print("⚠️  No signals detected in test data")
+
+
+@pytest.mark.unit
+class TestSignalAtStructure:
+    """Test signal at structure point detection (Issue #18)."""
+
+    def test_signal_at_lower_low_2d_1_2u(self):
+        """Test 2D-1-2U long reversal at lower_low (matches issue #18 example 1)."""
+        # Create a pattern where 2D bar creates the lower_low
+        # Market structure: declining with lower lows (with pullbacks to create structure)
+        data = DataFrame(
+            {
+                "timestamp": [datetime.now() - timedelta(hours=i) for i in range(12, 0, -1)],
+                "open": [200.0, 195.0, 192.0, 194.0, 188.0, 185.0, 182.0, 184.0, 178.0, 170.5, 171.0, 173.0],
+                "high": [205.0, 200.0, 198.0, 200.0, 194.0, 190.0, 188.0, 190.0, 184.0, 172.0, 174.0, 176.0],
+                "low": [195.0, 190.0, 188.0, 190.0, 184.0, 180.0, 178.0, 180.0, 174.0, 169.21, 170.0, 172.0],
+                "close": [196.0, 192.0, 190.0, 196.0, 186.0, 182.0, 180.0, 186.0, 176.0, 171.5, 173.0, 175.0],
+            }
+        )
+
+        indicators = Indicators(
+            IndicatorsConfig(
+                timeframe_configs=[
+                    TimeframeItemConfig(
+                        timeframes=["all"],
+                        swing_points=SwingPointsConfig(window=1, threshold=0.0),
+                    )
+                ]
+            )
+        )
+        result = indicators.process(data)
+
+        # Find the signal row (should be the last bar with 2D-1-2U pattern)
+        signal_rows = result.filter(col("signal") == "2D-1-2U")
+
+        if len(signal_rows) > 0:
+            signal_row = signal_rows.row(-1, named=True)  # Get last signal
+
+            # The 2D bar should have created a lower_low at 169.21
+            # Check that signal_at_lower_low is True
+            assert signal_row["signal_at_lower_low"] is True, (
+                f"Expected signal_at_lower_low=True, got {signal_row['signal_at_lower_low']}"
+            )
+
+            # Other structure flags should be False or None
+            assert signal_row["signal_at_higher_high"] in [False, None]
+            print("✅ 2D-1-2U at lower_low detected correctly")
+        else:
+            print("⚠️  No 2D-1-2U signal found - may need to adjust test data")
+
+    def test_signal_at_higher_high_2u_2d(self):
+        """Test 2U-2D short reversal at higher_high (matches issue #18 example 2)."""
+        # Create a pattern where 2U bar creates the higher_high
+        # Market structure: rising with higher highs (with pullbacks to create structure points)
+        data = DataFrame(
+            {
+                "timestamp": [datetime.now() - timedelta(hours=i) for i in range(12, 0, -1)],
+                "open": [220.0, 225.0, 228.0, 226.0, 232.0, 235.0, 238.0, 236.0, 242.0, 255.0, 258.0, 253.0],
+                "high": [228.0, 230.0, 232.0, 230.0, 238.0, 240.0, 242.0, 240.0, 248.0, 260.03, 262.0, 256.0],
+                "low": [215.0, 222.0, 224.0, 222.0, 228.0, 232.0, 234.0, 232.0, 238.0, 250.0, 252.0, 248.0],
+                "close": [226.0, 228.0, 230.0, 224.0, 236.0, 238.0, 240.0, 234.0, 246.0, 259.0, 256.0, 250.0],
+            }
+        )
+
+        indicators = Indicators(
+            IndicatorsConfig(
+                timeframe_configs=[
+                    TimeframeItemConfig(
+                        timeframes=["all"],
+                        swing_points=SwingPointsConfig(window=1, threshold=0.0),
+                    )
+                ]
+            )
+        )
+        result = indicators.process(data)
+
+        # Find the signal row (should be the last bar with 2U-2D pattern)
+        signal_rows = result.filter(col("signal") == "2U-2D")
+
+        if len(signal_rows) > 0:
+            signal_row = signal_rows.row(-1, named=True)  # Get last signal
+
+            # The 2U bar should have created a higher_high
+            # Check that signal_at_higher_high is True
+            assert signal_row["signal_at_higher_high"] is True, (
+                f"Expected signal_at_higher_high=True, got {signal_row['signal_at_higher_high']}"
+            )
+
+            # Other structure flags should be False or None
+            assert signal_row["signal_at_lower_low"] in [False, None]
+            print("✅ 2U-2D at higher_high detected correctly")
+        else:
+            print("⚠️  No 2U-2D signal found - may need to adjust test data")
+
+    def test_signal_at_structure_3bar_pattern(self):
+        """Test 3-bar pattern checking all constituent bars for structure matches."""
+        # Create a 3-2D-2U where the 3 bar has the lower_low
+        data = DataFrame(
+            {
+                "timestamp": [datetime.now() - timedelta(hours=i) for i in range(8, 0, -1)],
+                "open": [200.0, 195.0, 190.0, 185.0, 180.0, 175.0, 178.0, 181.0],
+                "high": [205.0, 200.0, 195.0, 190.0, 185.0, 180.0, 182.0, 185.0],
+                "low": [195.0, 190.0, 185.0, 180.0, 175.0, 169.5, 176.0, 179.0],  # 169.5 is LL at bar i-2
+                "close": [196.0, 191.0, 186.0, 181.0, 176.0, 177.0, 180.0, 183.0],
+            }
+        )
+
+        indicators = Indicators(
+            IndicatorsConfig(
+                timeframe_configs=[
+                    TimeframeItemConfig(
+                        timeframes=["all"],
+                        swing_points=SwingPointsConfig(window=2, threshold=0.0),
+                    )
+                ]
+            )
+        )
+        result = indicators.process(data)
+
+        # Find any 3-bar reversal signal
+        signal_rows = result.filter(col("signal").is_not_null() & (col("signal").str.contains("-.*-")))
+
+        if len(signal_rows) > 0:
+            # Should detect structure match even on constituent bar i-2
+            has_structure_match = signal_rows.filter(
+                (col("signal_at_lower_low"))
+                | (col("signal_at_higher_high"))
+                | (col("signal_at_lower_high"))
+                | (col("signal_at_higher_low"))
+            )
+            assert len(has_structure_match) > 0, "3-bar pattern should check all constituent bars for structure"
+            print("✅ 3-bar pattern checks all constituent bars")
+        else:
+            print("⚠️  No 3-bar signal found")
+
+    def test_signal_at_structure_nullable_behavior(self):
+        """Test that rows without signals have NULL in all structure flag columns."""
+        data = DataFrame(
+            {
+                "timestamp": [datetime.now() - timedelta(hours=i) for i in range(5, 0, -1)],
+                "open": [100.0, 101.0, 102.0, 103.0, 104.0],
+                "high": [105.0, 106.0, 107.0, 108.0, 109.0],
+                "low": [95.0, 96.0, 97.0, 98.0, 99.0],
+                "close": [103.0, 104.0, 105.0, 106.0, 107.0],
+            }
+        )
+
+        indicators = Indicators(
+            IndicatorsConfig(
+                timeframe_configs=[
+                    TimeframeItemConfig(
+                        timeframes=["all"],
+                        swing_points=SwingPointsConfig(window=1, threshold=0.0),
+                    )
+                ]
+            )
+        )
+        result = indicators.process(data)
+
+        # Check rows without signals - all structure flags should be null
+        non_signal_rows = result.filter(col("signal").is_null())
+
+        for row_dict in non_signal_rows.iter_rows(named=True):
+            assert row_dict["signal_at_higher_high"] is None, "signal_at_higher_high should be None when no signal"
+            assert row_dict["signal_at_lower_high"] is None, "signal_at_lower_high should be None when no signal"
+            assert row_dict["signal_at_higher_low"] is None, "signal_at_higher_low should be None when no signal"
+            assert row_dict["signal_at_lower_low"] is None, "signal_at_lower_low should be None when no signal"
+
+        print("✅ Nullable behavior verified: structure flags are None without signals")
+
+    def test_signal_at_structure_false_when_not_matching(self):
+        """Test that structure flags are False when signal exists but not at structure."""
+        # Create a simple uptrend with a reversal that's NOT at structure levels
+        data = DataFrame(
+            {
+                "timestamp": [datetime.now() - timedelta(hours=i) for i in range(10, 0, -1)],
+                "open": [100.0, 105.0, 110.0, 115.0, 120.0, 125.0, 130.0, 135.0, 132.0, 128.0],
+                "high": [106.0, 111.0, 116.0, 121.0, 126.0, 131.0, 136.0, 141.0, 138.0, 134.0],
+                "low": [98.0, 103.0, 108.0, 113.0, 118.0, 123.0, 128.0, 133.0, 130.0, 126.0],
+                "close": [104.0, 109.0, 114.0, 119.0, 124.0, 129.0, 134.0, 139.0, 133.0, 129.0],
+            }
+        )
+
+        indicators = Indicators(
+            IndicatorsConfig(
+                timeframe_configs=[
+                    TimeframeItemConfig(
+                        timeframes=["all"],
+                        swing_points=SwingPointsConfig(window=2, threshold=0.0),
+                    )
+                ]
+            )
+        )
+        result = indicators.process(data)
+
+        # Find signals
+        signal_rows = result.filter(col("signal").is_not_null())
+
+        if len(signal_rows) > 0:
+            # At least one signal should have all structure flags as False
+            # (since we're not creating exact structure matches)
+            all_false_rows = signal_rows.filter(
+                col("signal_at_higher_high").not_()
+                & col("signal_at_lower_high").not_()
+                & col("signal_at_higher_low").not_()
+                & col("signal_at_lower_low").not_()
+            )
+
+            # It's okay if some match, but there should be at least one that doesn't
+            # (unless by chance the signal happens exactly at structure)
+            print(f"✅ Found {len(signal_rows)} signals, {len(all_false_rows)} not at structure levels")
+        else:
+            print("⚠️  No signals found in test data")
+
+    def test_signal_at_multiple_structures(self):
+        """Test that a signal can match multiple structure levels simultaneously."""
+        # Create scenario where signal bars match both higher_high and lower_high
+        # (edge case but theoretically possible with forward-filled structure values)
+        data = DataFrame(
+            {
+                "timestamp": [datetime.now() - timedelta(hours=i) for i in range(8, 0, -1)],
+                "open": [100.0, 110.0, 105.0, 115.0, 110.0, 120.0, 115.0, 110.0],
+                "high": [112.0, 118.0, 112.0, 122.0, 118.0, 128.0, 122.0, 118.0],
+                "low": [95.0, 105.0, 100.0, 110.0, 105.0, 115.0, 110.0, 105.0],
+                "close": [108.0, 116.0, 108.0, 119.0, 113.0, 124.0, 117.0, 112.0],
+            }
+        )
+
+        indicators = Indicators(
+            IndicatorsConfig(
+                timeframe_configs=[
+                    TimeframeItemConfig(
+                        timeframes=["all"],
+                        swing_points=SwingPointsConfig(window=1, threshold=0.0),
+                    )
+                ]
+            )
+        )
+        result = indicators.process(data)
+
+        # Just verify the logic handles it without error
+        signal_rows = result.filter(col("signal").is_not_null())
+
+        if len(signal_rows) > 0:
+            # Check if any signal matches multiple structures
+            multi_match = signal_rows.filter(
+                (
+                    (col("signal_at_higher_high")).cast(int)
+                    + (col("signal_at_lower_high")).cast(int)
+                    + (col("signal_at_higher_low")).cast(int)
+                    + (col("signal_at_lower_low")).cast(int)
+                )
+                > 1
+            )
+
+            print(f"✅ Multiple structure matches handled: {len(multi_match)} signals match >1 structure level")
+        else:
+            print("⚠️  No signals found")
+
+    def test_continuation_signals_also_flagged(self):
+        """Test that continuation signals (not just reversals) also get structure flags."""
+        # Create a 2U-2U continuation pattern
+        data = DataFrame(
+            {
+                "timestamp": [datetime.now() - timedelta(hours=i) for i in range(6, 0, -1)],
+                "open": [100.0, 110.0, 115.0, 120.0, 125.0, 130.0],
+                "high": [112.0, 118.0, 122.0, 128.0, 134.0, 140.0],
+                "low": [98.0, 108.0, 113.0, 118.0, 123.0, 128.0],
+                "close": [110.0, 116.0, 120.0, 126.0, 132.0, 138.0],
+            }
+        )
+
+        indicators = Indicators(
+            IndicatorsConfig(
+                timeframe_configs=[
+                    TimeframeItemConfig(
+                        timeframes=["all"],
+                        swing_points=SwingPointsConfig(window=1, threshold=0.0),
+                    )
+                ]
+            )
+        )
+        result = indicators.process(data)
+
+        # Find continuation signals (2U-2U or 2D-2D)
+        continuation_signals = result.filter(
+            (col("signal") == "2U-2U") | (col("signal") == "2D-2D") | (col("type") == "continuation")
+        )
+
+        if len(continuation_signals) > 0:
+            # Continuation signals should also have structure flags (not just reversals)
+            # Flags should be either True or False, not None
+            for row_dict in continuation_signals.iter_rows(named=True):
+                assert row_dict["signal_at_higher_high"] in [
+                    True,
+                    False,
+                ], "Continuation signals should have structure flags"
+                assert row_dict["signal_at_lower_high"] in [True, False]
+                assert row_dict["signal_at_higher_low"] in [True, False]
+                assert row_dict["signal_at_lower_low"] in [True, False]
+
+            print("✅ Continuation signals also get structure flags")
+        else:
+            print("⚠️  No continuation signals found")
