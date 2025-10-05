@@ -872,6 +872,28 @@ class IndicatorSchema(BaseModel):
         json_schema_extra={"polars_dtype": Boolean, "output": True, "category": "mother_bar", "nullable": False},
     )
 
+    # Signal at Structure Point Columns
+    signal_at_higher_high: bool | None = Field(
+        default=None,
+        description="True when any constituent bar's high equals higher_high structure level (null when no signal)",
+        json_schema_extra={"polars_dtype": Boolean, "output": True, "category": "signals", "nullable": True},
+    )
+    signal_at_lower_high: bool | None = Field(
+        default=None,
+        description="True when any constituent bar's high equals lower_high structure level (null when no signal)",
+        json_schema_extra={"polars_dtype": Boolean, "output": True, "category": "signals", "nullable": True},
+    )
+    signal_at_higher_low: bool | None = Field(
+        default=None,
+        description="True when any constituent bar's low equals higher_low structure level (null when no signal)",
+        json_schema_extra={"polars_dtype": Boolean, "output": True, "category": "signals", "nullable": True},
+    )
+    signal_at_lower_low: bool | None = Field(
+        default=None,
+        description="True when any constituent bar's low equals lower_low structure level (null when no signal)",
+        json_schema_extra={"polars_dtype": Boolean, "output": True, "category": "signals", "nullable": True},
+    )
+
     @classmethod
     def get_column_descriptions(cls) -> dict[str, str]:
         """
