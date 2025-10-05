@@ -147,7 +147,7 @@ Raw OHLCV → Aggregation → Multi-timeframe data → Indicators → Analysis w
 **Key Data Requirements:**
 - Input: `timestamp`, `open`, `high`, `low`, `close`, `volume`, `symbol` columns
 - Aggregation adds: `timeframe` column
-- Indicators output: All 38 `IndicatorSchema` columns always present
+- Indicators output: All 41 `IndicatorSchema` columns always present
 - Signals: `signal`, `type`, `bias` columns (None when no patterns)
 
 ### Test Structure
@@ -201,7 +201,7 @@ All configs use Pydantic v2 with strict validation. Asset class validation inclu
 
 - **No Pandas**: Internal processing uses Polars exclusively for performance
 - **No Manual Validation**: All validation handled by Pydantic schemas
-- **Schema Consistency**: All 38 `IndicatorSchema` columns must always be present in output
+- **Schema Consistency**: All 41 `IndicatorSchema` columns must always be present in output
 - **Timeframe Column**: Added by aggregation, required by indicators for per-TF processing
 - **Asset Classes**: crypto, equities, fx, futures, commodities with specific timezone rules
 - **Private Repository**: Code is view-only, no license for copying or redistribution

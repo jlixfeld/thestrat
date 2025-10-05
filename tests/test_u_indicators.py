@@ -5219,7 +5219,7 @@ class TestIndividualSignalPatterns:
             assert isinstance(signal_objects, list)
 
             # Schema consistency: Result should have all required indicator columns
-            # (38 columns for raw data, 39 with timeframe from aggregation)
+            # (41 columns for raw data, 42 with timeframe from aggregation)
             assert len(result.columns) in [
                 EXPECTED_INDICATOR_COLUMNS - 1,
                 EXPECTED_INDICATOR_COLUMNS,
@@ -5264,7 +5264,7 @@ class TestIndividualSignalPatterns:
                 assert isinstance(signal_objects, list)
 
                 # Schema consistency: Result should have all required indicator columns
-                # (38 columns for raw data, 39 with timeframe from aggregation)
+                # (41 columns for raw data, 42 with timeframe from aggregation)
                 assert len(result.columns) in [
                     EXPECTED_INDICATOR_COLUMNS - 1,
                     EXPECTED_INDICATOR_COLUMNS,
