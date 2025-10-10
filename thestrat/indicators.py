@@ -933,8 +933,9 @@ class Indicators(Component):
                     [
                         col("target_prices_right").alias("target_prices"),
                         col("target_count_right").alias("target_count"),
-                        col("signal_entry_gap_right").alias("signal_entry_gap"),
-                        col("signal_path_gaps_right").alias("signal_path_gaps"),
+                        # Use coalesce to preserve defaults for non-signal rows
+                        pl.coalesce([col("signal_entry_gap_right"), lit(False)]).alias("signal_entry_gap"),
+                        pl.coalesce([col("signal_path_gaps_right"), lit(0)]).alias("signal_path_gaps"),
                     ]
                 )
                 .drop(["target_prices_right", "target_count_right", "signal_entry_gap_right", "signal_path_gaps_right"])
