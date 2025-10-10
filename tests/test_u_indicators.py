@@ -7248,3 +7248,57 @@ class TestSignalGapDetection:
         )
 
         assert signal_path_gaps == 0, "No target, so no path gaps"
+
+    def test_gap_columns_have_defaults_not_null_for_non_signal_rows(self):
+        """Test that signal_entry_gap and signal_path_gaps are False/0 (not NULL) for rows without signals."""
+        import polars as pl
+
+        from thestrat.indicators import Indicators
+        from thestrat.schemas import IndicatorsConfig, TargetConfig, TimeframeItemConfig
+
+        # Create data with mix of signal and non-signal rows
+        # Row 0-1: No signal, Row 2: Signal (2D-2U pattern)
+        df = pl.DataFrame(
+            {
+                "timestamp": pl.datetime_range(
+                    start=pl.datetime(2024, 1, 1),
+                    end=pl.datetime(2024, 1, 1) + pl.duration(hours=4),
+                    interval="1h",
+                    eager=True,
+                ),
+                "open": [100.0, 98.0, 96.0, 97.0, 99.0],  # 2D-2U pattern at row 2
+                "high": [101.0, 99.0, 97.0, 99.0, 101.0],
+                "low": [99.0, 97.0, 95.0, 96.0, 98.0],
+                "close": [99.5, 97.5, 95.5, 98.5, 100.5],
+            }
+        )
+
+        config = IndicatorsConfig(
+            timeframe_configs=[
+                TimeframeItemConfig(
+                    timeframes=["all"],
+                    target_config=TargetConfig(upper_bound="higher_high", lower_bound="lower_low", max_targets=3),
+                )
+            ]
+        )
+        indicators = Indicators(config)
+        result = indicators.process(df)
+
+        # Verify rows without signals have False/0 defaults (not NULL)
+        non_signal_rows = result.filter(pl.col("signal").is_null())
+
+        # Check signal_entry_gap is False (not NULL)
+        assert non_signal_rows["signal_entry_gap"].null_count() == 0, (
+            "signal_entry_gap should not be NULL for non-signal rows"
+        )
+        assert non_signal_rows["signal_entry_gap"].to_list() == [False] * len(non_signal_rows), (
+            "signal_entry_gap should be False for non-signal rows"
+        )
+
+        # Check signal_path_gaps is 0 (not NULL)
+        assert non_signal_rows["signal_path_gaps"].null_count() == 0, (
+            "signal_path_gaps should not be NULL for non-signal rows"
+        )
+        assert non_signal_rows["signal_path_gaps"].to_list() == [0] * len(non_signal_rows), (
+            "signal_path_gaps should be 0 for non-signal rows"
+        )
