@@ -828,6 +828,26 @@ class IndicatorSchema(BaseModel):
             "nullable": True,
         },
     )
+    has_entry_gap: bool = Field(
+        default=False,
+        description="True if entry bar gaps above/below trigger bar (forward momentum indicator)",
+        json_schema_extra={
+            "polars_dtype": Boolean,
+            "output": True,
+            "category": "signals",
+            "nullable": False,
+        },
+    )
+    has_path_gaps: bool = Field(
+        default=False,
+        description="True if gaps exist in historical path from target formation to trigger (target quality indicator)",
+        json_schema_extra={
+            "polars_dtype": Boolean,
+            "output": True,
+            "category": "signals",
+            "nullable": False,
+        },
+    )
 
     # Special Pattern Columns
     hammer: bool = Field(
