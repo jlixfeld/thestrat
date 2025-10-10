@@ -840,12 +840,18 @@ class IndicatorSchema(BaseModel):
     )
     signal_path_gaps: int = Field(
         default=0,
-        description="Count of gaps in historical path from target formation to trigger (target quality indicator)",
+        description="Number of gaps in historical path from target formation to trigger bar - higher counts indicate volatile/gappy price action that may produce unreliable target levels",
         json_schema_extra={
             "polars_dtype": Int32,
             "output": True,
             "category": "signals",
             "nullable": False,
+            "interpretation": {
+                0: "Clean formation - target established through continuous price movement",
+                "1-2": "Moderate gaps - some price discontinuity in target formation",
+                "3+": "Gappy formation - target may be less reliable due to volatile/erratic price action",
+            },
+            "note": "Counts backward in time from trigger bar to highest target formation point",
         },
     )
 

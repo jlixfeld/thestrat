@@ -7138,6 +7138,44 @@ class TestSignalGapDetection:
 
         assert signal_path_gaps == 1, "Should detect 1 gap in path from target to trigger (between bar 1 and bar 2)"
 
+    def test_multiple_path_gaps_detection(self):
+        """Test detection of multiple gaps in signal path."""
+        import polars as pl
+
+        from thestrat.indicators import Indicators
+        from thestrat.schemas import IndicatorsConfig, TimeframeItemConfig
+
+        # Create data with target at bar 0, and 3 gaps in the path to trigger
+        df = pl.DataFrame(
+            {
+                "timestamp": pl.datetime_range(
+                    start=pl.datetime(2024, 1, 1),
+                    end=pl.datetime(2024, 1, 1) + pl.duration(hours=7),
+                    interval="1h",
+                    eager=True,
+                ),
+                "open": [95.0, 96.0, 99.0, 102.0, 105.0, 103.0, 104.0, 103.0],
+                "high": [120.0, 97.0, 100.0, 103.0, 106.0, 104.0, 105.0, 104.0],  # Target at 120 (bar 0)
+                # Gaps: bar 1->2 (97 to 99), bar 2->3 (100 to 102), bar 3->4 (103 to 105)
+                "low": [94.0, 95.0, 99.0, 102.0, 105.0, 102.0, 103.0, 102.0],
+                "close": [95.5, 96.5, 99.5, 102.5, 105.5, 103.5, 104.5, 103.5],
+            }
+        )
+
+        config = IndicatorsConfig(timeframe_configs=[TimeframeItemConfig(timeframes=["all"])])
+        indicators = Indicators(config)
+
+        # Test: signal at index 7, target at 120 (from bar 0), 3 gaps in path
+        signal_entry_gap, signal_path_gaps = indicators._detect_signal_gaps(
+            df=df,
+            signal_index=7,
+            bias="long",
+            highest_target=120.0,
+            gap_threshold_pct=0.5,
+        )
+
+        assert signal_path_gaps == 3, "Should detect 3 gaps in path from target to trigger"
+
     def test_no_path_gaps_with_clean_formation(self):
         """Test that no path gaps are detected with clean target formation."""
         import polars as pl

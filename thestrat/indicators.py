@@ -16,6 +16,7 @@ from .schemas import IndicatorsConfig, TimeframeItemConfig
 from .signals import SIGNALS
 
 if TYPE_CHECKING:
+    from .schemas import GapDetectionConfig
     from .signals import SignalMetadata
 
 
@@ -64,6 +65,20 @@ class Indicators(Component):
 
         # No config found - this should not happen with proper validation
         raise ValueError(f"No configuration found for timeframe '{timeframe}'. Check your timeframe_configs.")
+
+    def _get_gap_config(self, config: TimeframeItemConfig) -> "GapDetectionConfig":
+        """
+        Get gap detection configuration from timeframe config, using defaults if not specified.
+
+        Args:
+            config: TimeframeItemConfig containing optional gap_detection config
+
+        Returns:
+            GapDetectionConfig (either from config or default instance)
+        """
+        from .schemas import GapDetectionConfig
+
+        return config.gap_detection if config.gap_detection is not None else GapDetectionConfig()
 
     def process(self, data: PolarsDataFrame | PandasDataFrame) -> PolarsDataFrame:
         """
@@ -181,13 +196,6 @@ class Indicators(Component):
         Returns:
             DataFrame with independent indicators added
         """
-        # Get gap detection configuration from the passed config
-        gap_detection_config = config.gap_detection
-        if gap_detection_config is None:
-            from .schemas import GapDetectionConfig
-
-            gap_detection_config = GapDetectionConfig()  # Use defaults
-
         df = data.clone()
 
         # Combine all independent calculations in a single with_columns operation
@@ -408,13 +416,6 @@ class Indicators(Component):
         Calculate Strat-specific patterns: continuity, in_force, scenario, signal,
         hammer, shooter, kicker, f23, pmg, motherbar_problems.
         """
-        # Get gap detection configuration from the passed config
-        gap_detection_config = config.gap_detection
-        if gap_detection_config is None:
-            from .schemas import GapDetectionConfig
-
-            gap_detection_config = GapDetectionConfig()  # Use defaults
-
         df = data.clone()
 
         # Calculate basic Strat patterns - step 1: continuity first
@@ -844,22 +845,23 @@ class Indicators(Component):
                 # Get all bars from target formation forward to trigger
                 path_bars = historical_df.filter(col("timestamp") >= target_bar_idx).sort("timestamp")
 
-                # Count gaps in this path
+                # Count gaps in this path using vectorized operations
                 if len(path_bars) > 1:
-                    for i in range(1, len(path_bars)):
-                        prev_bar = path_bars.row(i - 1, named=True)
-                        curr_bar = path_bars.row(i, named=True)
+                    if bias == "long":
+                        # For long signals, check if current bar low gaps above previous high
+                        gaps = path_bars.with_columns(
+                            [((col("low") - col("high").shift(1)) / col("high").shift(1) * 100).alias("gap_pct")]
+                        )
+                    else:  # short
+                        # For short signals, check if current bar high gaps below previous low
+                        gaps = path_bars.with_columns(
+                            [((col("low").shift(1) - col("high")) / col("high") * 100).alias("gap_pct")]
+                        )
 
-                        # Check for gap between consecutive bars
-                        if bias == "long":
-                            # For long signals, check if current bar low gaps above previous high
-                            gap_pct = (curr_bar["low"] - prev_bar["high"]) / prev_bar["high"] * 100
-                        else:  # short
-                            # For short signals, check if current bar high gaps below previous low
-                            gap_pct = (prev_bar["low"] - curr_bar["high"]) / curr_bar["high"] * 100
-
-                        if gap_pct > gap_threshold_pct:
-                            signal_path_gaps += 1
+                    # Count gaps exceeding threshold (first row will be null from shift, filter it out)
+                    signal_path_gaps = gaps.filter(
+                        col("gap_pct").is_not_null() & (col("gap_pct") > gap_threshold_pct)
+                    ).height
 
         return signal_entry_gap, signal_path_gaps
 
@@ -1217,13 +1219,8 @@ class Indicators(Component):
 
     def _calculate_advanced_patterns(self, data: PolarsDataFrame, config: TimeframeItemConfig) -> PolarsDataFrame:
         """Calculate advanced Strat patterns: kicker, f23, pmg, motherbar_problems."""
-        # Get gap detection configuration from the passed config
-        gap_detection_config = config.gap_detection
-        if gap_detection_config is None:
-            from .schemas import GapDetectionConfig
-
-            gap_detection_config = GapDetectionConfig()  # Use defaults
-
+        # Get gap detection configuration
+        gap_detection_config = self._get_gap_config(config)
         gap_threshold = gap_detection_config.threshold
 
         df = data.clone()
