@@ -7015,7 +7015,7 @@ class TestSignalGapDetection:
         indicators = Indicators(config)
 
         # Test: trigger at index 2, entry at index 3, gap between them
-        has_entry_gap, has_path_gaps = indicators._detect_signal_gaps(
+        signal_entry_gap, signal_path_gaps = indicators._detect_signal_gaps(
             df=df,
             signal_index=2,
             bias="long",
@@ -7023,8 +7023,8 @@ class TestSignalGapDetection:
             gap_threshold_pct=0.5,
         )
 
-        assert has_entry_gap is True, "Should detect entry gap (101 > 100 by 1%)"
-        assert has_path_gaps is False, "No targets, so no path gaps"
+        assert signal_entry_gap is True, "Should detect entry gap (101 > 100 by 1%)"
+        assert signal_path_gaps == 0, "No targets, so no path gaps"
 
     def test_entry_gap_detection_short_signal(self):
         """Test entry gap detection for short signals."""
@@ -7053,7 +7053,7 @@ class TestSignalGapDetection:
         indicators = Indicators(config)
 
         # Test: trigger at index 2, entry at index 3, gap between them
-        has_entry_gap, has_path_gaps = indicators._detect_signal_gaps(
+        signal_entry_gap, signal_path_gaps = indicators._detect_signal_gaps(
             df=df,
             signal_index=2,
             bias="short",
@@ -7061,7 +7061,8 @@ class TestSignalGapDetection:
             gap_threshold_pct=0.5,
         )
 
-        assert has_entry_gap is True, "Should detect entry gap (98.5 < 100 by 1.5%)"
+        assert signal_entry_gap is True, "Should detect entry gap (98.5 < 100 by 1.5%)"
+        assert signal_path_gaps == 0, "No targets, so no path gaps"
 
     def test_no_entry_gap_when_no_next_bar(self):
         """Test that entry gap is False when entry bar doesn't exist."""
@@ -7089,7 +7090,7 @@ class TestSignalGapDetection:
         indicators = Indicators(config)
 
         # Test: trigger at last bar (index 2), no entry bar available
-        has_entry_gap, has_path_gaps = indicators._detect_signal_gaps(
+        signal_entry_gap, signal_path_gaps = indicators._detect_signal_gaps(
             df=df,
             signal_index=2,
             bias="long",
@@ -7097,7 +7098,8 @@ class TestSignalGapDetection:
             gap_threshold_pct=0.5,
         )
 
-        assert has_entry_gap is False, "No entry bar exists, so no gap"
+        assert signal_entry_gap is False, "No entry bar exists, so no gap"
+        assert signal_path_gaps == 0, "No targets, so no path gaps"
 
     def test_path_gaps_detection_long_signal(self):
         """Test path gap detection for long signals."""
@@ -7126,7 +7128,7 @@ class TestSignalGapDetection:
         indicators = Indicators(config)
 
         # Test: signal at index 5, target at 110 (from bar 0), gap in path
-        has_entry_gap, has_path_gaps = indicators._detect_signal_gaps(
+        signal_entry_gap, signal_path_gaps = indicators._detect_signal_gaps(
             df=df,
             signal_index=5,
             bias="long",
@@ -7134,7 +7136,7 @@ class TestSignalGapDetection:
             gap_threshold_pct=0.5,
         )
 
-        assert has_path_gaps is True, "Should detect gap in path from target to trigger"
+        assert signal_path_gaps == 1, "Should detect 1 gap in path from target to trigger (between bar 1 and bar 2)"
 
     def test_no_path_gaps_with_clean_formation(self):
         """Test that no path gaps are detected with clean target formation."""
@@ -7163,7 +7165,7 @@ class TestSignalGapDetection:
         indicators = Indicators(config)
 
         # Test: signal at index 4, target at 110 (from bar 0), no gaps in path
-        has_entry_gap, has_path_gaps = indicators._detect_signal_gaps(
+        signal_entry_gap, signal_path_gaps = indicators._detect_signal_gaps(
             df=df,
             signal_index=4,
             bias="long",
@@ -7171,7 +7173,7 @@ class TestSignalGapDetection:
             gap_threshold_pct=0.5,
         )
 
-        assert has_path_gaps is False, "No gaps in clean formation"
+        assert signal_path_gaps == 0, "No gaps in clean formation"
 
     def test_no_path_gaps_when_no_target(self):
         """Test that path gaps is False when there's no target."""
@@ -7199,7 +7201,7 @@ class TestSignalGapDetection:
         indicators = Indicators(config)
 
         # Test: no target provided
-        has_entry_gap, has_path_gaps = indicators._detect_signal_gaps(
+        signal_entry_gap, signal_path_gaps = indicators._detect_signal_gaps(
             df=df,
             signal_index=2,
             bias="long",
@@ -7207,4 +7209,4 @@ class TestSignalGapDetection:
             gap_threshold_pct=0.5,
         )
 
-        assert has_path_gaps is False, "No target, so no path gaps"
+        assert signal_path_gaps == 0, "No target, so no path gaps"
