@@ -795,8 +795,9 @@ class Indicators(Component):
 
         **Path Gap Detection:**
         Counts number of gaps in the historical path from highest target formation
-        to trigger bar. Critical for assessing target quality - gappy paths indicate
-        volatile/unreliable target levels.
+        to trigger bar, limited to recent 200 bars (prevents searching infinite history).
+        Critical for assessing target quality - gappy paths indicate volatile/unreliable
+        target levels. Returns 0 if target not found within lookback window.
 
         Args:
             df: Full DataFrame with historical data
@@ -828,8 +829,16 @@ class Indicators(Component):
         signal_path_gaps = 0
 
         if highest_target is not None:
-            # Get historical data up to and including trigger bar
+            # Limit lookback to reasonable window (prevents searching infinite history)
+            max_lookback_bars = 200  # Captures typical swing structure timeframes
+            lookback_start_idx = max(0, signal_index - max_lookback_bars)
+
+            # Get historical data up to and including trigger bar, limited by lookback
             historical_df = df.slice(0, signal_index + 1)
+
+            # Add row index if not already present
+            if "__row_idx" not in historical_df.columns:
+                historical_df = historical_df.with_row_index("__row_idx")
 
             # Find when highest target was established
             if bias == "long":
@@ -838,30 +847,34 @@ class Indicators(Component):
                 target_bars = historical_df.filter(col("low") <= highest_target)
 
             if len(target_bars) > 0:
-                # Get earliest bar that reached target (sort by timestamp)
-                target_bars = target_bars.sort("timestamp")
-                target_bar_idx = target_bars.select(col("timestamp")).row(0)[0]
+                # Filter to target bars within lookback window
+                target_bars_recent = target_bars.filter(col("__row_idx") >= lookback_start_idx)
 
-                # Get all bars from target formation forward to trigger
-                path_bars = historical_df.filter(col("timestamp") >= target_bar_idx).sort("timestamp")
+                if len(target_bars_recent) > 0:
+                    # Get earliest bar within lookback window (sort by timestamp)
+                    target_bars_recent = target_bars_recent.sort("timestamp")
+                    target_bar_idx = target_bars_recent.select(col("timestamp")).row(0)[0]
 
-                # Count gaps in this path using vectorized operations
-                if len(path_bars) > 1:
-                    if bias == "long":
-                        # For long signals, check if current bar low gaps above previous high
-                        gaps = path_bars.with_columns(
-                            [((col("low") - col("high").shift(1)) / col("high").shift(1) * 100).alias("gap_pct")]
-                        )
-                    else:  # short
-                        # For short signals, check if current bar high gaps below previous low
-                        gaps = path_bars.with_columns(
-                            [((col("low").shift(1) - col("high")) / col("high") * 100).alias("gap_pct")]
-                        )
+                    # Get all bars from target formation forward to trigger
+                    path_bars = historical_df.filter(col("timestamp") >= target_bar_idx).sort("timestamp")
 
-                    # Count gaps exceeding threshold (first row will be null from shift, filter it out)
-                    signal_path_gaps = gaps.filter(
-                        col("gap_pct").is_not_null() & (col("gap_pct") > gap_threshold_pct)
-                    ).height
+                    # Count gaps in this path using vectorized operations
+                    if len(path_bars) > 1:
+                        if bias == "long":
+                            # For long signals, check if current bar low gaps above previous high
+                            gaps = path_bars.with_columns(
+                                [((col("low") - col("high").shift(1)) / col("high").shift(1) * 100).alias("gap_pct")]
+                            )
+                        else:  # short
+                            # For short signals, check if current bar high gaps below previous low
+                            gaps = path_bars.with_columns(
+                                [((col("low").shift(1) - col("high")) / col("high") * 100).alias("gap_pct")]
+                            )
+
+                        # Count gaps exceeding threshold (first row will be null from shift, filter it out)
+                        signal_path_gaps = gaps.filter(
+                            col("gap_pct").is_not_null() & (col("gap_pct") > gap_threshold_pct)
+                        ).height
 
         return signal_entry_gap, signal_path_gaps
 

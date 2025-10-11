@@ -7302,3 +7302,113 @@ class TestSignalGapDetection:
         assert non_signal_rows["signal_path_gaps"].to_list() == [0] * len(non_signal_rows), (
             "signal_path_gaps should be 0 for non-signal rows"
         )
+
+    def test_lookback_limit_prevents_infinite_history_search(self):
+        """Test that path gap detection uses 200-bar lookback limit and doesn't search infinite history."""
+        import polars as pl
+
+        from thestrat.indicators import Indicators
+        from thestrat.schemas import IndicatorsConfig, TimeframeItemConfig
+
+        # Create 250 bars of data where:
+        # - Target price (150.0) was reached at bar 20 (far in the past)
+        # - Many gaps occur early in the history (bars 20-100)
+        # - Signal triggered at bar 249 (recent)
+        # Without lookback limit: would count ALL gaps from bar 20 onwards (potentially 20-30+ gaps)
+        # With 200-bar lookback: only searches bars 49-249, should find fewer gaps (0-5 gaps)
+
+        num_bars = 250
+        base_price = 100.0
+
+        # Create timestamps
+        timestamps = pl.datetime_range(
+            start=pl.datetime(2024, 1, 1),
+            end=pl.datetime(2024, 1, 1) + pl.duration(hours=num_bars - 1),
+            interval="1h",
+            eager=True,
+        )
+
+        # Create price data:
+        # - Bar 20: spike to 150.0 (target formed)
+        # - Bars 21-100: many gaps (volatile period)
+        # - Bars 101-249: cleaner price action with fewer gaps
+        opens = []
+        highs = []
+        lows = []
+        closes = []
+
+        for i in range(num_bars):
+            if i == 20:
+                # Target bar: spike to 150.0
+                opens.append(base_price)
+                highs.append(150.0)  # Target price
+                lows.append(base_price - 1)
+                closes.append(base_price + 1)
+            elif 21 <= i <= 100:
+                # Volatile period with many gaps (every 3rd bar gaps up by 2%)
+                if i % 3 == 0:
+                    # Gap up
+                    prev_high = highs[i - 1]
+                    gap_low = prev_high * 1.02  # 2% gap
+                    opens.append(gap_low)
+                    highs.append(gap_low + 2)
+                    lows.append(gap_low)
+                    closes.append(gap_low + 1)
+                else:
+                    # Normal bar
+                    opens.append(base_price + (i - 20) * 0.1)
+                    highs.append(base_price + (i - 20) * 0.1 + 1)
+                    lows.append(base_price + (i - 20) * 0.1 - 1)
+                    closes.append(base_price + (i - 20) * 0.1 + 0.5)
+            else:
+                # Clean period (bars 0-19 and 101-249): minimal gaps
+                opens.append(base_price + (i % 10) * 0.5)
+                highs.append(base_price + (i % 10) * 0.5 + 1)
+                lows.append(base_price + (i % 10) * 0.5 - 1)
+                closes.append(base_price + (i % 10) * 0.5 + 0.5)
+
+        df = pl.DataFrame(
+            {
+                "timestamp": timestamps,
+                "open": opens,
+                "high": highs,
+                "low": lows,
+                "close": closes,
+            }
+        )
+
+        config = IndicatorsConfig(timeframe_configs=[TimeframeItemConfig(timeframes=["all"])])
+        indicators = Indicators(config)
+
+        # Test: signal at index 249 (last bar), target at 150.0 (from bar 20)
+        # Lookback limit of 200 means we only search bars 49-249 for target formation
+        # Bar 20 is OUTSIDE the lookback window, so we won't find the target there
+        signal_entry_gap, signal_path_gaps = indicators._detect_signal_gaps(
+            df=df, signal_index=249, bias="long", highest_target=150.0, gap_threshold_pct=0.5
+        )
+
+        # With 200-bar lookback, target at bar 20 is outside window (20 < 49)
+        # So we should find NO target formation and therefore 0 path gaps
+        assert signal_path_gaps == 0, (
+            f"With 200-bar lookback from index 249, target at bar 20 is outside window "
+            f"(lookback starts at bar 49). Expected 0 path gaps, got {signal_path_gaps}"
+        )
+
+        # Now test with target INSIDE the lookback window (bar 100)
+        # Create data where target is at bar 100 (within 200-bar lookback from bar 249)
+        df_inside = df.clone()
+        # Set bar 100 high to 150.0
+        df_inside = df_inside.with_columns(
+            pl.when(pl.col("timestamp") == timestamps[100]).then(150.0).otherwise(pl.col("high")).alias("high")
+        )
+
+        signal_entry_gap2, signal_path_gaps2 = indicators._detect_signal_gaps(
+            df=df_inside, signal_index=249, bias="long", highest_target=150.0, gap_threshold_pct=0.5
+        )
+
+        # With target at bar 100 (inside lookback window 49-249), we should find it
+        # and count gaps from bar 100 to 249 (should be 0-5 gaps in the clean period)
+        assert 0 <= signal_path_gaps2 <= 10, (
+            f"With target at bar 100 (inside lookback window), expected 0-10 path gaps "
+            f"in clean period, got {signal_path_gaps2}"
+        )
