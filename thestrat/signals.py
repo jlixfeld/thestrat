@@ -196,10 +196,6 @@ class SignalMetadata:
     # Multi-target support (for reversals)
     target_prices: list[TargetLevel] = field(default_factory=list)
 
-    # Gap detection fields
-    signal_entry_gap: bool = False
-    signal_path_gaps: int = 0
-
     # Original values (for tracking changes)
     original_stop: float = field(init=False)
 
