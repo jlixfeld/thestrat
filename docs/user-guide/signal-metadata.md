@@ -2,6 +2,8 @@
 
 **Complete guide to signal metadata objects, examples, and database integration**
 
+> **📖 New to TheStrat patterns?** See the [Pattern Terminology and Visual Guide](pattern-terminology.md) for definitions and diagrams of all reversal and continuation patterns.
+
 TheStrat signals return rich metadata objects that provide comprehensive trading information including entry/stop/target levels, risk management data, and change tracking capabilities.
 
 ## Overview
@@ -59,6 +61,19 @@ Risk/Reward (first target): 2.50
 
 ### Reversal Signals
 
+#### Understanding Reversal Signal Price Levels
+
+For reversal signals, price levels come from the **setup bar** (the bar being reversed):
+
+- **Entry Price:** Setup bar high (long) or low (short) - the breakout/breakdown level
+- **Stop Price:** Setup bar low (long) or high (short) - the invalidation level
+- **First Target:** Setup bar high (long) or low (short) - same as entry, what's being broken
+- **Additional Targets:** Ladder of highs/lows extending to structural bounds
+
+See [Pattern Terminology](pattern-terminology.md) for visual diagrams and detailed explanations.
+
+#### Code Examples
+
 Reversal signals have entry, stop, and multiple target prices:
 
 ```python
@@ -68,12 +83,13 @@ long_reversal = SignalMetadata(
     category=SignalCategory.REVERSAL,
     bias=SignalBias.LONG,
     bar_count=2,
-    entry_price=125.50,
-    stop_price=123.75,
+    entry_price=125.50,    # Setup bar (2D) high
+    stop_price=123.75,     # Setup bar (2D) low
     target_prices=[
-        TargetLevel(price=129.00),
-        TargetLevel(price=131.50),
-        TargetLevel(price=134.00)
+        TargetLevel(price=125.50),  # First target: setup bar high
+        TargetLevel(price=129.00),  # Additional ladder targets
+        TargetLevel(price=131.50),  # extending to higher_high
+        TargetLevel(price=134.00)   # structural bound
     ],
     timestamp=datetime.now()
 )
@@ -84,12 +100,13 @@ short_reversal = SignalMetadata(
     category=SignalCategory.REVERSAL,
     bias=SignalBias.SHORT,
     bar_count=2,
-    entry_price=98.25,
-    stop_price=99.50,
+    entry_price=98.25,     # Setup bar (2U) low
+    stop_price=99.50,      # Setup bar (2U) high
     target_prices=[
-        TargetLevel(price=95.00),
-        TargetLevel(price=93.50),
-        TargetLevel(price=92.00)
+        TargetLevel(price=98.25),  # First target: setup bar low
+        TargetLevel(price=95.00),  # Additional ladder targets
+        TargetLevel(price=93.50),  # descending to lower_low
+        TargetLevel(price=92.00)   # structural bound
     ],
     timestamp=datetime.now()
 )
@@ -648,3 +665,10 @@ if __name__ == "__main__":
 - Fast vectorized detection identifies patterns quickly
 - `get_signal_object()` creates rich metadata objects from single-row queries
 - Native type conversion eliminates JSON parsing overhead
+
+## Related Documentation
+
+- [Pattern Terminology and Visual Guide](pattern-terminology.md) - Definitions, diagrams, and price level rules
+- [DataFrame Schema](dataframe-schema.md) - Output column specifications
+- [Asset Classes](asset-classes.md) - Timezone and session configuration
+- [Examples](examples.md) - Real-world usage examples

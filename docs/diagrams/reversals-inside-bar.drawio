@@ -1,0 +1,164 @@
+<mxfile host="Electron" modified="2024-10-20T12:00:00.000Z" agent="Draw.io" version="22.0.0" etag="sample" type="device">
+  <diagram name="Page-1" id="pattern-reversals-inside-bar">
+    <mxGraphModel dx="1422" dy="844" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+
+        <!-- Title -->
+        <mxCell id="title" value="Inside Bar Reversals" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=18;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="300" y="20" width="250" height="30" as="geometry"/>
+        </mxCell>
+
+        <!-- 2d-1-2u Pattern Label -->
+        <mxCell id="pattern1-label" value="2d-1-2u" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=14;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="80" y="60" width="120" height="30" as="geometry"/>
+        </mxCell>
+
+        <!-- Pattern 1: Bar 0 - 2D (Red candle body) -->
+        <mxCell id="p1-bar0-body" value="" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d32f2f;strokeColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="70" y="150" width="20" height="80" as="geometry"/>
+        </mxCell>
+        <!-- Pattern 1: Bar 0 - 2D (Wick) -->
+        <mxCell id="p1-bar0-wick" value="" style="endArrow=none;html=1;strokeColor=#000000;strokeWidth=2;" edge="1" parent="1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="80" y="140" as="sourcePoint"/>
+            <mxPoint x="80" y="240" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+        <!-- Pattern 1: Bar 0 Label -->
+        <mxCell id="p1-bar0-label" value="Setup" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;fontColor=#666666" vertex="1" parent="1">
+          <mxGeometry x="60" y="250" width="40" height="20" as="geometry"/>
+        </mxCell>
+
+        <!-- Pattern 1: Bar 1 - Inside (Yellow candle body) -->
+        <mxCell id="p1-bar1-body" value="" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffd54f;strokeColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="100" y="165" width="20" height="50" as="geometry"/>
+        </mxCell>
+        <!-- Pattern 1: Bar 1 - Inside (Wick) -->
+        <mxCell id="p1-bar1-wick" value="" style="endArrow=none;html=1;strokeColor=#000000;strokeWidth=2;" edge="1" parent="1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="110" y="160" as="sourcePoint"/>
+            <mxPoint x="110" y="220" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+        <!-- Pattern 1: Bar 1 Label -->
+        <mxCell id="p1-bar1-label" value="Inside" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;fontColor=#666666" vertex="1" parent="1">
+          <mxGeometry x="90" y="250" width="40" height="20" as="geometry"/>
+        </mxCell>
+
+        <!-- Pattern 1: Bar 2 - 2U (Green candle body) -->
+        <mxCell id="p1-bar2-body" value="" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#388e3c;strokeColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="130" y="110" width="20" height="70" as="geometry"/>
+        </mxCell>
+        <!-- Pattern 1: Bar 2 - 2U (Wick) -->
+        <mxCell id="p1-bar2-wick" value="" style="endArrow=none;html=1;strokeColor=#000000;strokeWidth=2;" edge="1" parent="1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="140" y="100" as="sourcePoint"/>
+            <mxPoint x="140" y="190" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+        <!-- Pattern 1: Bar 2 Label -->
+        <mxCell id="p1-bar2-label" value="Trigger" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;fontColor=#666666" vertex="1" parent="1">
+          <mxGeometry x="120" y="250" width="40" height="20" as="geometry"/>
+        </mxCell>
+
+        <!-- Pattern 1: First Target Line (Green) -->
+        <mxCell id="p1-target-line" value="" style="endArrow=none;html=1;strokeColor=#4caf50;strokeWidth=3;" edge="1" parent="1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="65" y="150" as="sourcePoint"/>
+            <mxPoint x="160" y="150" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="p1-target-label" value="First Target" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;fontColor=#4caf50;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="165" y="145" width="70" height="20" as="geometry"/>
+        </mxCell>
+
+        <!-- Pattern 1: Trigger Line (Black dashed) -->
+        <mxCell id="p1-trigger-line" value="" style="endArrow=none;html=1;strokeColor=#000000;strokeWidth=2;dashed=1;dashPattern=5 5;" edge="1" parent="1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="65" y="110" as="sourcePoint"/>
+            <mxPoint x="160" y="110" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="p1-trigger-label" value="Trigger" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;fontColor=#000000" vertex="1" parent="1">
+          <mxGeometry x="165" y="105" width="50" height="20" as="geometry"/>
+        </mxCell>
+
+        <!-- 2u-1-2d Pattern Label -->
+        <mxCell id="pattern2-label" value="2u-1-2d" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=14;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="310" y="60" width="120" height="30" as="geometry"/>
+        </mxCell>
+
+        <!-- Pattern 2: Bar 0 - 2U (Green candle body) -->
+        <mxCell id="p2-bar0-body" value="" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#388e3c;strokeColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="300" y="110" width="20" height="70" as="geometry"/>
+        </mxCell>
+        <mxCell id="p2-bar0-wick" value="" style="endArrow=none;html=1;strokeColor=#000000;strokeWidth=2;" edge="1" parent="1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="310" y="100" as="sourcePoint"/>
+            <mxPoint x="310" y="190" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="p2-bar0-label" value="Setup" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;fontColor=#666666" vertex="1" parent="1">
+          <mxGeometry x="290" y="250" width="40" height="20" as="geometry"/>
+        </mxCell>
+
+        <!-- Pattern 2: Bar 1 - Inside (Yellow) -->
+        <mxCell id="p2-bar1-body" value="" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffd54f;strokeColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="330" y="125" width="20" height="50" as="geometry"/>
+        </mxCell>
+        <mxCell id="p2-bar1-wick" value="" style="endArrow=none;html=1;strokeColor=#000000;strokeWidth=2;" edge="1" parent="1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="340" y="120" as="sourcePoint"/>
+            <mxPoint x="340" y="180" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="p2-bar1-label" value="Inside" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;fontColor=#666666" vertex="1" parent="1">
+          <mxGeometry x="320" y="250" width="40" height="20" as="geometry"/>
+        </mxCell>
+
+        <!-- Pattern 2: Bar 2 - 2D (Red) -->
+        <mxCell id="p2-bar2-body" value="" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d32f2f;strokeColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="360" y="150" width="20" height="80" as="geometry"/>
+        </mxCell>
+        <mxCell id="p2-bar2-wick" value="" style="endArrow=none;html=1;strokeColor=#000000;strokeWidth=2;" edge="1" parent="1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="370" y="140" as="sourcePoint"/>
+            <mxPoint x="370" y="240" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="p2-bar2-label" value="Trigger" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;fontColor=#666666" vertex="1" parent="1">
+          <mxGeometry x="350" y="250" width="40" height="20" as="geometry"/>
+        </mxCell>
+
+        <!-- Pattern 2: First Target Line -->
+        <mxCell id="p2-target-line" value="" style="endArrow=none;html=1;strokeColor=#4caf50;strokeWidth=3;" edge="1" parent="1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="295" y="190" as="sourcePoint"/>
+            <mxPoint x="390" y="190" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="p2-target-label" value="First Target" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;fontColor=#4caf50;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="395" y="185" width="70" height="20" as="geometry"/>
+        </mxCell>
+
+        <!-- Pattern 2: Trigger Line -->
+        <mxCell id="p2-trigger-line" value="" style="endArrow=none;html=1;strokeColor=#000000;strokeWidth=2;dashed=1;dashPattern=5 5;" edge="1" parent="1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="295" y="230" as="sourcePoint"/>
+            <mxPoint x="390" y="230" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="p2-trigger-label" value="Trigger" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;fontColor=#000000" vertex="1" parent="1">
+          <mxGeometry x="395" y="225" width="50" height="20" as="geometry"/>
+        </mxCell>
+
+        <!-- Note about 3-bar patterns -->
+        <mxCell id="note" value="Yellow candles indicate inside bars (compression before breakout/breakdown)" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=11;fontColor=#666666;fontStyle=2" vertex="1" parent="1">
+          <mxGeometry x="150" y="290" width="550" height="30" as="geometry"/>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
