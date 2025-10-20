@@ -918,18 +918,18 @@ class Indicators(Component):
         return signal
 
     def _detect_targets_for_signal(
-        self, df: PolarsDataFrame, signal_index: int, bias: str, target_config
+        self, df: PolarsDataFrame, trigger_index: int, bias: str, target_config
     ) -> list[float]:
         """
         Detect multiple target levels for a signal using vectorized operations.
 
-        Detects all relevant local highs (long) or lows (short) between signal bar
+        Detects all relevant local highs (long) or lows (short) between trigger bar
         and configured bound, applies merge logic, and returns targets in
         reverse chronological order.
 
         Args:
             df: DataFrame with market structure columns
-            signal_index: Index of signal bar
+            trigger_index: Index of trigger bar (where pattern completes)
             bias: Signal bias ("long" or "short")
             target_config: TargetConfig with detection parameters
 
@@ -964,8 +964,8 @@ class Indicators(Component):
         # higher_low/lower_low -> targets are lows (short signals)
         structure_col = structure_bound
 
-        # Get data up to signal bar (not including signal bar itself)
-        historical_df = df.slice(0, signal_index)
+        # Get data up to trigger bar (not including trigger bar itself)
+        historical_df = df.slice(0, trigger_index)
 
         if len(historical_df) == 0:
             return []
@@ -1037,14 +1037,14 @@ class Indicators(Component):
                 # For short signals: structure_col is higher_low/lower_low containing the bound price level
                 bound_price = float(first_bound_row[structure_col])
 
-                # Edge case: Check if signal bar's price IS the bound (Issue #3)
+                # Edge case: Check if trigger bar's price IS the bound (Issue #3)
                 # If so, extend search to next previous bound
-                signal_bar = df.row(signal_index, named=True)
-                signal_price = float(signal_bar[target_col])
+                trigger_bar = df.row(trigger_index, named=True)
+                trigger_price = float(trigger_bar[target_col])
                 epsilon = 0.01  # Tolerance for float comparison
 
-                if abs(signal_price - bound_price) < epsilon:
-                    # Signal bar creates the bound - search for next previous bound
+                if abs(trigger_price - bound_price) < epsilon:
+                    # Trigger bar creates the bound - search for next previous bound
                     # Filter to bounds before the most recent one
                     earlier_bounds = bound_bars.filter(col("__row_idx") < first_bound_row["__row_idx"])
 

@@ -10,15 +10,17 @@ This guide establishes clear terminology for TheStrat patterns and provides visu
 
 - The bar being broken (reversals) or continued (continuations)
 - Provides the entry and stop price levels
-- For 2-bar patterns: First bar
-- For 3-bar patterns: First bar (before inside bar)
+- **Always the bar immediately before the trigger bar** (regardless of pattern type)
+- In 2-bar patterns (e.g., 2D-2U): The first directional bar (2D)
+- In 3-bar patterns (e.g., 2D-1-2U): The inside bar (1)
 
-**Trigger Bar** (aka Signal Bar)
+**Trigger Bar**
 
 - The bar that completes and confirms the pattern
 - Where the signal is detected in the DataFrame
-- For 2-bar patterns: Second bar
-- For 3-bar patterns: Third bar (after inside bar)
+- **Always the final bar of the pattern** (regardless of pattern type)
+- In 2-bar patterns (e.g., 2D-2U): The second directional bar (2U)
+- In 3-bar patterns (e.g., 2D-1-2U): The final directional bar (2U)
 
 **Inside Bar**
 
@@ -40,31 +42,14 @@ This guide establishes clear terminology for TheStrat patterns and provides visu
 - **Long signals:** Setup bar low (invalidation if broken)
 - **Short signals:** Setup bar high (invalidation if broken)
 
-**First Target**
-
-- The high/low of the setup bar (what's being broken)
-- **Long signals:** Setup bar high
-- **Short signals:** Setup bar low
-- Always the first element in `target_prices` list for reversals
-
 **Target Ladder**
 
-- Series of additional targets extending to structural bounds
-- **Long signals:** Ascending ladder of higher highs to `higher_high` or `lower_high` bound
-- **Short signals:** Descending ladder of lower lows to `lower_low` or `higher_low` bound
-
-### Bar Indexing Convention
-
-**For 2-bar patterns (e.g., 2D-2U):**
-
-- Bar 0: Setup bar (2D)
-- Bar 1: Trigger/Signal bar (2U)
-
-**For 3-bar patterns (e.g., 2D-1-2U):**
-
-- Bar 0: Setup bar (2D)
-- Bar 1: Inside bar (1)
-- Bar 2: Trigger/Signal bar (2U)
+- Series of target price levels extending to structural bounds
+- Detected from historical bars before the trigger bar
+- **Long signals:** Ascending ladder of highs (each target higher than previous) extending to `higher_high` or `lower_high` bound
+- **Short signals:** Descending ladder of lows (each target lower than previous) extending to `lower_low` or `higher_low` bound
+- First target must be beyond the trigger bar's price (above trigger high for long, below trigger low for short)
+- Targets are arranged in reverse chronological order (most recent bar first)
 
 ## Visual Pattern Guide
 
@@ -74,19 +59,19 @@ This guide establishes clear terminology for TheStrat patterns and provides visu
 
 **Patterns:** 2d-1-2u, 2u-1-2d, 3-1-2u, 3-1-2d
 
-- Yellow candle = Inside bar (compression)
-- Green line = First target (setup bar high/low)
-- Black dashed line = Trigger level (pattern completion)
+- Yellow candle = Inside bar (compression), also the setup bar
+- Entry/Stop levels from setup bar (inside bar) high/low
+- Targets extend from historical bars beyond trigger bar
 
 ### 2-Bar Reversals
 
 ![2-Bar Reversals](../../diagrams/reversals-2bar.drawio)
 
-**Patterns:** 2d-2u, 2u-2d, 3-2-2
+**Patterns:** 2d-2u, 2u-2d
 
-- Green line = First target under/over setup bar
 - Two bars form the reversal pattern
-- Simple breakout/breakdown structure
+- Setup bar provides entry/stop levels
+- Targets extend from historical bars beyond trigger bar
 
 ### 1-Bar Rev-Strat
 
@@ -94,9 +79,9 @@ This guide establishes clear terminology for TheStrat patterns and provides visu
 
 **Patterns:** 1-3u, 1-3d
 
-- Inside bar followed by large breakout bar (3-bar)
-- Green line marks first target
-- Explosive breakout from compression
+- Inside bar (setup) followed by large breakout bar (3 outside bar trigger)
+- Entry/Stop from inside bar (setup bar)
+- Targets extend from historical bars
 
 ### 2-Bar Rev-Strat
 
@@ -105,8 +90,8 @@ This guide establishes clear terminology for TheStrat patterns and provides visu
 **Patterns:** 1-2d-2u, 1-2u-2d, 1-3-2u, 1-3-2d
 
 - Pattern starts with inside bar (1)
-- Green line marks first target
-- Combination of compression and directional bars
+- Setup bar is the middle bar (2D/2U or 3 bar)
+- Entry/Stop from setup bar, targets from historical bars
 
 ### 3-2 Context Reversals
 
@@ -134,10 +119,10 @@ This guide establishes clear terminology for TheStrat patterns and provides visu
 
 **Detailed 2D-2U Example** showing:
 
-- Setup Bar (2D) with entry at high, stop at low
-- Trigger Bar (2U) completing the pattern
-- First target = setup bar high
-- Target ladder extending to higher_high bound
+- Setup Bar (2D) provides entry at high, stop at low
+- Trigger Bar (2U) completes the pattern
+- Target ladder detected from historical bars
+- Targets extend to higher_high bound
 - Actual price levels from real market data
 
 ## Price Level Rules
@@ -146,17 +131,21 @@ This guide establishes clear terminology for TheStrat patterns and provides visu
 
 - **Entry:** Setup bar high
 - **Stop:** Setup bar low
-- **First Target:** Setup bar high (same as entry)
-- **Additional Targets:** Ascending ladder to `higher_high` or `lower_high` bound
-- **Relationship:** `stop < entry ≤ first_target < target_2 < ... < bound`
+- **Targets:** Ascending ladder of historical highs extending to `higher_high` or `lower_high` bound
+  - First target must be above trigger bar high
+  - Each subsequent target higher than previous
+  - Maximum targets determined by `max_targets` config
+- **Relationship:** `stop < entry` and `trigger_high < target_1 < target_2 < ... ≤ bound`
 
 ### Short Reversals (e.g., 2U-2D, 2U-1-2D)
 
 - **Entry:** Setup bar low
 - **Stop:** Setup bar high
-- **First Target:** Setup bar low (same as entry)
-- **Additional Targets:** Descending ladder to `lower_low` or `higher_low` bound
-- **Relationship:** `stop > entry ≥ first_target > target_2 > ... > bound`
+- **Targets:** Descending ladder of historical lows extending to `lower_low` or `higher_low` bound
+  - First target must be below trigger bar low
+  - Each subsequent target lower than previous
+  - Maximum targets determined by `max_targets` config
+- **Relationship:** `stop > entry` and `trigger_low > target_1 > target_2 > ... ≥ bound`
 
 ### Continuations (All patterns)
 
@@ -255,17 +244,17 @@ See [Signal Metadata Guide](signal-metadata.md) for complete field documentation
 
 ## Common Questions
 
-**Q: Why is entry_price the same as first target for reversals?**
+**Q: How are targets calculated for reversals?**
 
-A: For reversals, the entry is at the setup bar's high (long) or low (short) - the level being broken. The first target is also this same level, representing what's being broken. Additional targets extend beyond this in a ladder.
+A: Targets are detected from historical bars before the trigger bar. The algorithm scans backwards through price history, building an ascending (long) or descending (short) ladder of highs/lows. The first target must be beyond the trigger bar's price level, and each subsequent target must continue the progression. Targets extend up to the configured structural bound (`higher_high`, `lower_high`, `higher_low`, or `lower_low`).
 
 **Q: How are targets different from entry for continuations?**
 
 A: Continuations have no targets - they're trend-following signals. Entry and stop come from the setup bar, but there's no target ladder since you're riding the trend.
 
-**Q: What's the difference between trigger bar and signal bar?**
+**Q: What does the trigger bar do?**
 
-A: They're the same bar - different terminology for the same concept. "Trigger bar" emphasizes it completes the pattern, "signal bar" emphasizes it's where the signal is detected in the DataFrame.
+A: The trigger bar completes and confirms the pattern. It's the bar where the signal is detected in the DataFrame. The setup bar provides the trading levels (entry/stop), while the trigger bar validates that the pattern is complete.
 
 **Q: Why does setup bar matter more than trigger bar?**
 
