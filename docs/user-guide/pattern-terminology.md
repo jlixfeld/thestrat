@@ -55,7 +55,7 @@ This guide establishes clear terminology for TheStrat patterns and provides visu
 
 ### Inside Bar Reversals
 
-![Inside Bar Reversals](../../diagrams/reversals-inside-bar.drawio)
+![Inside Bar Reversals](../diagrams/reversals-inside-bar.drawio.png)
 
 **Patterns:** 2d-1-2u, 2u-1-2d, 3-1-2u, 3-1-2d
 
@@ -65,7 +65,7 @@ This guide establishes clear terminology for TheStrat patterns and provides visu
 
 ### 2-Bar Reversals
 
-![2-Bar Reversals](../../diagrams/reversals-2bar.drawio)
+![2-Bar Reversals](../diagrams/reversals-2bar.drawio.png)
 
 **Patterns:** 2d-2u, 2u-2d
 
@@ -73,29 +73,20 @@ This guide establishes clear terminology for TheStrat patterns and provides visu
 - Setup bar provides entry/stop levels
 - Targets extend from historical bars beyond trigger bar
 
-### 1-Bar Rev-Strat
+### Rev-Strat Patterns
 
-![1-Bar Rev-Strat](../../diagrams/reversals-1bar-revstrat.drawio)
+![Rev-Strat Patterns](../diagrams/reversals-revstrat.drawio.png)
 
-**Patterns:** 1-3u, 1-3d
-
-- Inside bar (setup) followed by large breakout bar (3 outside bar trigger)
-- Entry/Stop from inside bar (setup bar)
-- Targets extend from historical bars
-
-### 2-Bar Rev-Strat
-
-![2-Bar Rev-Strat](../../diagrams/reversals-2bar-revstrat.drawio)
-
-**Patterns:** 1-2d-2u, 1-2u-2d, 1-3-2u, 1-3-2d
+**Patterns:** 1-3u, 1-3d, 1-2d-2u, 1-2u-2d, 1-3-2u, 1-3-2d
 
 - Pattern starts with inside bar (1)
-- Setup bar is the middle bar (2D/2U or 3 bar)
+- Setup bar is the middle bar (directional or outside bar)
+- Trigger bar is the final breakout bar
 - Entry/Stop from setup bar, targets from historical bars
 
 ### 3-2 Context Reversals
 
-![3-2 Reversals](../../diagrams/reversals-3-2.drawio)
+![3-2 Reversals](../diagrams/reversals-3-2.drawio.png)
 
 **Patterns:** 3-2u, 3-2d
 
@@ -105,7 +96,7 @@ This guide establishes clear terminology for TheStrat patterns and provides visu
 
 ### Inside Bar Continuations
 
-![Inside Bar Continuations](../../diagrams/continuations-inside-bar.drawio)
+![Inside Bar Continuations](../diagrams/continuations-inside-bar.drawio.png)
 
 **Patterns:** 2u-1-2u, 2d-1-2d, 3-1-2u, 3-1-2d
 
@@ -115,7 +106,7 @@ This guide establishes clear terminology for TheStrat patterns and provides visu
 
 ### Pattern Anatomy Example
 
-![Pattern Anatomy](../../diagrams/pattern-anatomy-example.drawio)
+![Pattern Anatomy](../diagrams/pattern-anatomy-example.drawio.png)
 
 **Detailed 2D-2U Example** showing:
 
