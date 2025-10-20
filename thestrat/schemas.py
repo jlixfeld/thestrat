@@ -828,32 +828,6 @@ class IndicatorSchema(BaseModel):
             "nullable": True,
         },
     )
-    signal_entry_gap: bool = Field(
-        default=False,
-        description="True if entry bar gaps above/below trigger bar (forward momentum indicator)",
-        json_schema_extra={
-            "polars_dtype": Boolean,
-            "output": True,
-            "category": "signals",
-            "nullable": False,
-        },
-    )
-    signal_path_gaps: int = Field(
-        default=0,
-        description="Number of gaps in historical path from target formation to trigger bar - higher counts indicate volatile/gappy price action that may produce unreliable target levels",
-        json_schema_extra={
-            "polars_dtype": Int32,
-            "output": True,
-            "category": "signals",
-            "nullable": False,
-            "interpretation": {
-                0: "Clean formation - target established through continuous price movement",
-                "1-2": "Moderate gaps - some price discontinuity in target formation",
-                "3+": "Gappy formation - target may be less reliable due to volatile/erratic price action",
-            },
-            "note": "Counts backward in time from trigger bar to highest target formation point",
-        },
-    )
 
     # Special Pattern Columns
     hammer: bool = Field(

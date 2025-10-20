@@ -778,136 +778,24 @@ class Indicators(Component):
 
         return df
 
-    def _detect_signal_gaps(
-        self,
-        df: PolarsDataFrame,
-        signal_index: int,
-        bias: str,
-        highest_target: float | None,
-        gap_threshold_pct: float,
-    ) -> tuple[bool, int]:
-        """
-        Detect entry gap and count path gaps for a signal.
-
-        **Entry Gap Detection:**
-        Checks if the entry bar (bar after trigger) gaps above/below the trigger bar.
-        Returns False if entry bar doesn't exist in dataset (common at data boundaries).
-
-        **Path Gap Detection:**
-        Counts number of gaps in the historical path from highest target formation
-        to trigger bar, limited to recent 200 bars (prevents searching infinite history).
-        Critical for assessing target quality - gappy paths indicate volatile/unreliable
-        target levels. Returns 0 if target not found within lookback window.
-
-        Args:
-            df: Full DataFrame with historical data
-            signal_index: Index of the trigger bar (where signal is detected)
-            bias: Signal bias ("long" or "short")
-            highest_target: Highest target price (None if no targets)
-            gap_threshold_pct: Gap threshold percentage (e.g., 0.5 for 0.5%)
-
-        Returns:
-            Tuple of (signal_entry_gap: bool, signal_path_gaps: int)
-        """
-        # Check for entry gap (forward in time)
-        signal_entry_gap = False
-        if signal_index + 1 < len(df):
-            # Entry bar exists - check for gap
-            trigger_bar = df.row(signal_index, named=True)
-            entry_bar = df.row(signal_index + 1, named=True)
-
-            if bias == "long":
-                # Long: check if entry bar low gaps above trigger bar high
-                gap_pct = (entry_bar["low"] - trigger_bar["high"]) / trigger_bar["high"] * 100
-                signal_entry_gap = gap_pct > gap_threshold_pct
-            else:  # short
-                # Short: check if entry bar high gaps below trigger bar low
-                gap_pct = (trigger_bar["low"] - entry_bar["high"]) / entry_bar["high"] * 100
-                signal_entry_gap = gap_pct > gap_threshold_pct
-
-        # Count path gaps (backward in time)
-        signal_path_gaps = 0
-
-        if highest_target is not None:
-            # Limit lookback to reasonable window (prevents searching infinite history)
-            max_lookback_bars = 200  # Captures typical swing structure timeframes
-            lookback_start_idx = max(0, signal_index - max_lookback_bars)
-
-            # Get historical data up to and including trigger bar, limited by lookback
-            historical_df = df.slice(0, signal_index + 1)
-
-            # Add row index if not already present
-            if "__row_idx" not in historical_df.columns:
-                historical_df = historical_df.with_row_index("__row_idx")
-
-            # Find when highest target was established
-            if bias == "long":
-                target_bars = historical_df.filter(col("high") >= highest_target)
-            else:  # short
-                target_bars = historical_df.filter(col("low") <= highest_target)
-
-            if len(target_bars) > 0:
-                # Filter to target bars within lookback window
-                target_bars_recent = target_bars.filter(col("__row_idx") >= lookback_start_idx)
-
-                if len(target_bars_recent) > 0:
-                    # Get earliest bar within lookback window (sort by timestamp)
-                    target_bars_recent = target_bars_recent.sort("timestamp")
-                    target_bar_idx = target_bars_recent.select(col("timestamp")).row(0)[0]
-
-                    # Get all bars from target formation forward to trigger
-                    path_bars = historical_df.filter(col("timestamp") >= target_bar_idx).sort("timestamp")
-
-                    # Count gaps in this path using vectorized operations
-                    if len(path_bars) > 1:
-                        if bias == "long":
-                            # For long signals, check if current bar low gaps above previous high
-                            gaps = path_bars.with_columns(
-                                [((col("low") - col("high").shift(1)) / col("high").shift(1) * 100).alias("gap_pct")]
-                            )
-                        else:  # short
-                            # For short signals, check if current bar high gaps below previous low
-                            gaps = path_bars.with_columns(
-                                [((col("low").shift(1) - col("high")) / col("high") * 100).alias("gap_pct")]
-                            )
-
-                        # Count gaps exceeding threshold (first row will be null from shift, filter it out)
-                        signal_path_gaps = gaps.filter(
-                            col("gap_pct").is_not_null() & (col("gap_pct") > gap_threshold_pct)
-                        ).height
-
-        return signal_entry_gap, signal_path_gaps
-
     def _populate_targets_in_dataframe(self, df: PolarsDataFrame, config: "TimeframeItemConfig") -> PolarsDataFrame:
         """
-        Populate target_prices, target_count, and gap detection fields for all signal rows.
+        Populate target_prices and target_count for all signal rows.
 
         Args:
             df: DataFrame with signal column populated
-            config: TimeframeItemConfig with target_config and gap_detection config
+            config: TimeframeItemConfig with target_config
 
         Returns:
-            DataFrame with target_prices (List[Float64]), target_count, signal_entry_gap, and signal_path_gaps populated
+            DataFrame with target_prices (List[Float64]) and target_count populated
         """
         import polars as pl
 
         # Handle both TimeframeItemConfig objects and dict configs (for backward compatibility in tests)
         if isinstance(config, dict):
             target_config = config.get("target_config")
-            gap_config = config.get("gap_detection")
         else:
             target_config = config.target_config if config else None
-            gap_config = config.gap_detection if config else None
-
-        # Get gap threshold from config
-        if gap_config is None:
-            from .schemas import GapDetectionConfig
-
-            gap_config = GapDetectionConfig()
-        gap_threshold_pct = gap_config.threshold * 100  # Convert to percentage
-
-        # Initialize gap columns with default values
-        df = df.with_columns([lit(False).alias("signal_entry_gap"), lit(0).alias("signal_path_gaps")])
 
         if target_config is None:
             return df
@@ -921,20 +809,11 @@ class Indicators(Component):
         updates = []
         for row in signal_rows.iter_rows(named=True):
             targets = self._detect_targets_for_signal(df_with_idx, row["__row_idx"], row["bias"], target_config)
-
-            # Detect gaps for this signal
-            highest_target = targets[0] if targets else None
-            signal_entry_gap, signal_path_gaps = self._detect_signal_gaps(
-                df_with_idx, row["__row_idx"], row["bias"], highest_target, gap_threshold_pct
-            )
-
             updates.append(
                 {
                     "row_idx": row["__row_idx"],
                     "target_prices": targets if targets else None,
                     "target_count": len(targets) if targets else None,
-                    "signal_entry_gap": signal_entry_gap,
-                    "signal_path_gaps": signal_path_gaps,
                 }
             )
 
@@ -946,12 +825,9 @@ class Indicators(Component):
                     [
                         col("target_prices_right").alias("target_prices"),
                         col("target_count_right").alias("target_count"),
-                        # Use coalesce to preserve defaults for non-signal rows
-                        pl.coalesce([col("signal_entry_gap_right"), lit(False)]).alias("signal_entry_gap"),
-                        pl.coalesce([col("signal_path_gaps_right"), lit(0)]).alias("signal_path_gaps"),
                     ]
                 )
-                .drop(["target_prices_right", "target_count_right", "signal_entry_gap_right", "signal_path_gaps_right"])
+                .drop(["target_prices_right", "target_count_right"])
             )
 
         return df_with_idx.drop("__row_idx")
@@ -1025,10 +901,6 @@ class Indicators(Component):
                 "This indicates the signal was detected without sufficient historical data for setup bar lookup."
             )
 
-        # Extract gap detection fields (default to False/0 if not present)
-        signal_entry_gap = row.get("signal_entry_gap", False)
-        signal_path_gaps = row.get("signal_path_gaps", 0)
-
         # Create SignalMetadata
         signal = SignalMetadata(
             pattern=pattern,
@@ -1038,8 +910,6 @@ class Indicators(Component):
             entry_price=entry_price,
             stop_price=stop_price,
             target_prices=target_prices,
-            signal_entry_gap=signal_entry_gap,
-            signal_path_gaps=signal_path_gaps,
             timestamp=row["timestamp"],
             symbol=row.get("symbol"),
             timeframe=row.get("timeframe"),
@@ -1233,7 +1103,6 @@ class Indicators(Component):
 
     def _calculate_advanced_patterns(self, data: PolarsDataFrame, config: TimeframeItemConfig) -> PolarsDataFrame:
         """Calculate advanced Strat patterns: kicker, f23, pmg, motherbar_problems."""
-        # Get gap detection configuration
         gap_detection_config = self._get_gap_config(config)
         gap_threshold = gap_detection_config.threshold
 
