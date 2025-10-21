@@ -10,7 +10,7 @@ TheStrat classifies individual bars based on their relationship to the previous 
 
 **Scenario "1" - Inside Bar**
 - Current bar's high ≤ previous bar's high AND low ≥ previous bar's low
-- Consolidation/compression - bar is completely contained within previous bar's range
+- Consolidation/consolidation - bar is completely contained within previous bar's range
 - Creates potential for breakout in either direction
 
 **Scenario "2U" - Directional Up**
@@ -23,7 +23,7 @@ TheStrat classifies individual bars based on their relationship to the previous 
 - Downward directional move
 - Labeled "2D" in pattern names
 
-**Scenario "3" - Outside Bar (Expansion)**
+**Scenario "3" - Outside Bar (Expansion or Broadening formation on a lower timeframe)**
 - Current bar makes both a higher high AND lower low
 - Expansion - completely engulfs previous bar's range
 - Labeled "3" in pattern names
@@ -79,8 +79,8 @@ All TheStrat patterns are built from combinations of these scenarios (e.g., "2D-
 
 **Patterns:** 2d-1-2u, 2u-1-2d, 3-1-2u, 3-1-2d
 
-- Yellow candle = Inside bar (compression), also the setup bar
-- Entry/Stop levels from setup bar (inside bar) high/low
+- Yellow candle = Inside bar (consolidation), also the setup bar
+- Setup bar provides entry/stop levels
 - Targets extend from historical bars beyond trigger bar
 
 ### 2-Bar Reversals
@@ -97,12 +97,11 @@ All TheStrat patterns are built from combinations of these scenarios (e.g., "2D-
 
 ![Rev-Strat Patterns](../diagrams/reversals-revstrat.drawio.png)
 
-**Patterns:** 1-3u, 1-3d, 1-2d-2u, 1-2u-2d, 1-3-2u, 1-3-2d
+**Patterns:** 1-3u, 1-3d, 1-2d-2u, 1-2u-2d
 
 - Pattern starts with inside bar (1)
-- Setup bar is the middle bar (directional or outside bar)
-- Trigger bar is the final breakout bar
-- Entry/Stop from setup bar, targets from historical bars
+- Setup bar provides entry/stop levels
+- Targets extend from historical bars beyond trigger bar
 
 ### 3-2 Context Reversals
 
@@ -111,14 +110,14 @@ All TheStrat patterns are built from combinations of these scenarios (e.g., "2D-
 **Patterns:** 3-2u, 3-2d
 
 - Context-dependent patterns (require continuity analysis)
-- 3-bar followed by 2-bar in opposite direction
+- Scenario 3 in one direction countered by a scenario 2 in the other
 - Reversal determined by previous trend context
 
 ### Inside Bar Continuations
 
 ![Inside Bar Continuations](../diagrams/continuations-inside-bar.drawio.png)
 
-**Patterns:** 2u-1-2u, 2d-1-2d, 3-1-2u, 3-1-2d
+**Patterns:** 2u-1-2u, 2d-1-2d
 
 - Yellow candle = Inside bar
 - Green line = Entry level (setup bar high/low)
@@ -171,34 +170,28 @@ All TheStrat patterns are built from combinations of these scenarios (e.g., "2D-
 **2-Bar Patterns:**
 
 - `2D-2U` - Down bar followed by up bar (simple reversal)
+- `3-2U` - Outside bar followed by a reversal in the opposite direction.
 
 **3-Bar Patterns:**
 
 - `1-2D-2U` - Inside, down, up (Rev Strat)
-- `3-1-2U` - Context, inside, up
-- `3-2D-2U` - Context, down, up
+- `3-1-2U` - Outside, inside, up
+- `3-2D-2U` - Outside, down, up
 - `2D-1-2U` - Down, inside, up
-
-**Context Patterns:**
-
-- `3-2U` - Context-dependent reversal (requires downtrend)
 
 ### Reversal Patterns - Short Bias
 
 **2-Bar Patterns:**
 
 - `2U-2D` - Up bar followed by down bar (simple reversal)
+- `3-2D` - Outside bar followed by a reversal in the opposite direction.
 
 **3-Bar Patterns:**
 
 - `1-2U-2D` - Inside, up, down (Rev Strat)
-- `3-1-2D` - Context, inside, down
-- `3-2U-2D` - Context, up, down
+- `3-1-2D` - Outside, inside, down
+- `3-2U-2D` - Outside, up, down
 - `2U-1-2D` - Up, inside, down
-
-**Context Patterns:**
-
-- `3-2D` - Context-dependent reversal (requires uptrend)
 
 ### Continuation Patterns - Long Bias
 
@@ -226,50 +219,9 @@ All TheStrat patterns are built from combinations of these scenarios (e.g., "2D-
 
 **Signal Detection:** `thestrat/indicators.py`
 
-- `_detect_signals()`: Pattern matching
-- `_detect_targets_for_signal()`: Target ladder detection
-
 **Signal Objects:** `thestrat/signals.py`
 
-- `SignalMetadata`: Complete signal data
-- `TargetLevel`: Individual target tracking
-
 **Configuration:** `thestrat/schemas.py`
-
-- `TargetConfig`: Target detection settings
-- `upper_bound`, `lower_bound`: Structural boundaries
-
-### Database Schema
-
-**DataFrame Columns:**
-
-- `signal`: Pattern name (e.g., "2D-2U")
-- `type`: "reversal" or "continuation"
-- `bias`: "long" or "short"
-- `entry_price`: From setup bar high/low
-- `stop_price`: From setup bar low/high
-- `target_prices`: List[Float64] - setup bar first, then ladder
-- `target_count`: Number of targets
-
-See [Signal Metadata Guide](signal-metadata.md) for complete field documentation.
-
-## Common Questions
-
-**Q: How are targets calculated for reversals?**
-
-A: Targets are detected from historical bars before the trigger bar. The algorithm scans backwards through price history, building an ascending (long) or descending (short) ladder of highs/lows. The first target must be beyond the trigger bar's price level, and each subsequent target must continue the progression. Targets extend up to the configured structural bound (`higher_high`, `lower_high`, `higher_low`, or `lower_low`).
-
-**Q: How are targets different from entry for continuations?**
-
-A: Continuations have no targets - they're trend-following signals. Entry and stop come from the setup bar, but there's no target ladder since you're riding the trend.
-
-**Q: What does the trigger bar do?**
-
-A: The trigger bar completes and confirms the pattern. It's the bar where the signal is detected in the DataFrame. The setup bar provides the trading levels (entry/stop), while the trigger bar validates that the pattern is complete.
-
-**Q: Why does setup bar matter more than trigger bar?**
-
-A: The setup bar provides the actual trading levels (entry and stop). The trigger bar just confirms the pattern is complete. Think of setup as "what you're trading" and trigger as "when you trade it."
 
 ## Related Documentation
 
