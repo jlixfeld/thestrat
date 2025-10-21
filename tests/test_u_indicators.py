@@ -2366,7 +2366,7 @@ class TestSignalMetadataIntegration:
             assert len(signal.target_prices) == 0  # Continuations have no targets
 
     @pytest.mark.skip(
-        reason="Test validates old implementation details - entry/stop from trigger bar index-1. New implementation uses signal bar's own high/low which is more correct."
+        reason="Test validates old implementation details - entry/stop from trigger bar index-1. New implementation uses trigger bar's own high/low which is more correct."
     )
     def test_get_signal_objects_comprehensive(self):
         """Test comprehensive signal object creation with exact price validation for ALL signal types."""
@@ -3359,7 +3359,7 @@ class TestTargetDetection:
         # Trigger target detection at last bar (index 9) as if there's a signal
         target_config = config.timeframe_configs[0].target_config
         targets = indicators._detect_targets_for_signal(
-            result, signal_index=9, bias="long", target_config=target_config
+            result, trigger_index=9, bias="long", target_config=target_config
         )
 
         # Should detect local highs: 105, 108, 110, 112 (progressively higher)
@@ -3399,7 +3399,7 @@ class TestTargetDetection:
 
         target_config = config.timeframe_configs[0].target_config
         targets = indicators._detect_targets_for_signal(
-            result, signal_index=9, bias="short", target_config=target_config
+            result, trigger_index=9, bias="short", target_config=target_config
         )
 
         # Should detect local lows progressively lower
@@ -3439,7 +3439,7 @@ class TestTargetDetection:
 
         target_config = config.timeframe_configs[0].target_config
         targets = indicators._detect_targets_for_signal(
-            result, signal_index=9, bias="long", target_config=target_config
+            result, trigger_index=9, bias="long", target_config=target_config
         )
 
         # Should only get ascending highs (filtering out lower highs)
@@ -3479,7 +3479,7 @@ class TestTargetDetection:
 
         target_config = config.timeframe_configs[0].target_config
         targets = indicators._detect_targets_for_signal(
-            result, signal_index=9, bias="long", target_config=target_config
+            result, trigger_index=9, bias="long", target_config=target_config
         )
 
         # With 2% merge, close targets should be merged
@@ -3522,7 +3522,7 @@ class TestTargetDetection:
 
         target_config = config.timeframe_configs[0].target_config
         targets = indicators._detect_targets_for_signal(
-            result, signal_index=5, bias="long", target_config=target_config
+            result, trigger_index=5, bias="long", target_config=target_config
         )
 
         # Should include the higher value (105.5) when merging, not 105
@@ -3562,7 +3562,7 @@ class TestTargetDetection:
 
         target_config = config.timeframe_configs[0].target_config
         targets = indicators._detect_targets_for_signal(
-            result, signal_index=5, bias="short", target_config=target_config
+            result, trigger_index=5, bias="short", target_config=target_config
         )
 
         # Should include the lower value (94.5) when merging, not 95
@@ -3601,7 +3601,7 @@ class TestTargetDetection:
 
         target_config = config.timeframe_configs[0].target_config
         targets = indicators._detect_targets_for_signal(
-            result, signal_index=19, bias="long", target_config=target_config
+            result, trigger_index=19, bias="long", target_config=target_config
         )
 
         # Should be limited to max_targets
@@ -3638,7 +3638,7 @@ class TestTargetDetection:
 
         target_config = config.timeframe_configs[0].target_config
         targets = indicators._detect_targets_for_signal(
-            result, signal_index=9, bias="long", target_config=target_config
+            result, trigger_index=9, bias="long", target_config=target_config
         )
 
         # For long signal with descending historical prices, we build ascending ladder
@@ -3679,7 +3679,7 @@ class TestTargetDetection:
 
         target_config = config.timeframe_configs[0].target_config
         targets = indicators._detect_targets_for_signal(
-            result, signal_index=1, bias="long", target_config=target_config
+            result, trigger_index=1, bias="long", target_config=target_config
         )
 
         # Should handle gracefully with minimal history
@@ -3706,7 +3706,7 @@ class TestTargetDetection:
         result = indicators.process(data)
 
         # Call with None config
-        targets = indicators._detect_targets_for_signal(result, signal_index=9, bias="long", target_config=None)
+        targets = indicators._detect_targets_for_signal(result, trigger_index=9, bias="long", target_config=None)
 
         assert targets == [], "Should return empty list when target_config is None"
 
@@ -3799,7 +3799,7 @@ class TestTargetDetection:
         # Get targets for signal at index 11
         target_config = config.timeframe_configs[0].target_config
         target_prices = indicators._detect_targets_for_signal(
-            result, signal_index=11, bias="short", target_config=target_config
+            result, trigger_index=11, bias="short", target_config=target_config
         )
 
         # Build expected targets with (date, price) tuples for validation
@@ -3903,7 +3903,7 @@ class TestTargetDetection:
         # Get targets for long signal at index 11
         target_config = config.timeframe_configs[0].target_config
         target_prices = indicators._detect_targets_for_signal(
-            result, signal_index=11, bias="long", target_config=target_config
+            result, trigger_index=11, bias="long", target_config=target_config
         )
 
         # Build expected targets with (date, price) tuples for validation
@@ -3980,7 +3980,7 @@ class TestTargetDetection:
 
         target_config = config.timeframe_configs[0].target_config
         target_prices = indicators._detect_targets_for_signal(
-            result, signal_index=9, bias="short", target_config=target_config
+            result, trigger_index=9, bias="short", target_config=target_config
         )
 
         # Expected: descending ladder in reverse chronological order
@@ -4055,7 +4055,7 @@ class TestTargetDetection:
 
         target_config = config.timeframe_configs[0].target_config
         target_prices = indicators._detect_targets_for_signal(
-            result, signal_index=9, bias="long", target_config=target_config
+            result, trigger_index=9, bias="long", target_config=target_config
         )
 
         # Expected: ascending ladder in reverse chronological order
@@ -4128,7 +4128,7 @@ class TestTargetDetection:
 
         target_config = config.timeframe_configs[0].target_config
         target_prices = indicators._detect_targets_for_signal(
-            result, signal_index=8, bias="long", target_config=target_config
+            result, trigger_index=8, bias="long", target_config=target_config
         )
 
         # Ascending ladder from highs: skip 476.20, start from 477.50
@@ -4197,7 +4197,7 @@ class TestTargetDetection:
 
         target_config = config.timeframe_configs[0].target_config
         target_prices = indicators._detect_targets_for_signal(
-            result, signal_index=8, bias="short", target_config=target_config
+            result, trigger_index=8, bias="short", target_config=target_config
         )
 
         # Descending ladder from lows: skip 513.60, start from 511.40
@@ -4267,7 +4267,7 @@ class TestTargetDetection:
 
         target_config = config.timeframe_configs[0].target_config
         target_prices = indicators._detect_targets_for_signal(
-            result, signal_index=9, bias="short", target_config=target_config
+            result, trigger_index=9, bias="short", target_config=target_config
         )
 
         # Expected behavior (merge compares each item to GROUP START):
@@ -4371,7 +4371,7 @@ class TestTargetDetection:
         # Get targets for signal at index 15 (09-26)
         target_config = config.timeframe_configs[0].target_config
         target_prices = indicators._detect_targets_for_signal(
-            result, signal_index=15, bias="long", target_config=target_config
+            result, trigger_index=15, bias="long", target_config=target_config
         )
 
         # Expected targets: ascending ladder from 512.48 to 519.3
@@ -4474,7 +4474,7 @@ class TestTargetDetection:
         # Get targets for signal at index 14 (09-25)
         target_config = config.timeframe_configs[0].target_config
         target_prices = indicators._detect_targets_for_signal(
-            result, signal_index=14, bias="short", target_config=target_config
+            result, trigger_index=14, bias="short", target_config=target_config
         )
 
         # Expected targets: descending ladder from 505.93 to 492.37
@@ -4559,7 +4559,7 @@ class TestTargetDetection:
 
         target_config = config.timeframe_configs[0].target_config
         target_prices = indicators._detect_targets_for_signal(
-            result, signal_index=5, bias="long", target_config=target_config
+            result, trigger_index=5, bias="long", target_config=target_config
         )
 
         # Ascending ladder: Start with 105.0 (> 100.0), can't add 102.0 (< 105.0)
@@ -4634,7 +4634,7 @@ class TestTargetDetection:
 
         target_config = config.timeframe_configs[0].target_config
         target_prices = indicators._detect_targets_for_signal(
-            result, signal_index=5, bias="short", target_config=target_config
+            result, trigger_index=5, bias="short", target_config=target_config
         )
 
         # Descending ladder: Start with 95.0 (< 100.0), can't add 98.0 (> 95.0)
@@ -4652,7 +4652,7 @@ class TestTargetDetection:
 
     def test_signal_bar_creates_bound_extends_to_next_bound(self):
         """
-        Test Issue #3: When signal bar's price IS the structural bound,
+        Test Issue #3: When trigger bar's price IS the structural bound,
         targets should extend to the next previous bound.
 
         **Validates Issue #3 fix - Edge case detection**
@@ -4662,7 +4662,7 @@ class TestTargetDetection:
         - Previous lower_low bound: 492.37 (at 09-05)
         - Expected: Targets extend from 505.04 down to 492.37
 
-        Without fix: Would only find targets between trigger (506.92) and signal bar bound (505.04)
+        Without fix: Would only find targets between trigger (506.92) and trigger bar bound (505.04)
         With fix: Extends to next bound (492.37) to find full target list
         """
         test_data = [
@@ -4718,7 +4718,7 @@ class TestTargetDetection:
         # Get targets for signal at index 14 (09-25)
         target_config = config.timeframe_configs[0].target_config
         target_prices = indicators._detect_targets_for_signal(
-            result, signal_index=14, bias="short", target_config=target_config
+            result, trigger_index=14, bias="short", target_config=target_config
         )
 
         # Expected: Signal bar's low (505.04) is a bound, so extend to next bound (492.37)
@@ -4741,7 +4741,7 @@ class TestTargetDetection:
                 f"Ladder must be descending: {target_prices[i]} > {target_prices[i + 1]}"
             )
 
-        # Verify last target reaches the extended bound (not the signal bar bound)
+        # Verify last target reaches the extended bound (not the trigger bar bound)
         assert target_prices[-1] == 492.37, "Last target should reach extended bound (492.37)"
 
 
@@ -6888,7 +6888,7 @@ class TestSignalAtStructure:
 
     def test_signal_at_multiple_structures(self):
         """Test that a signal can match multiple structure levels simultaneously."""
-        # Create scenario where signal bars match both higher_high and lower_high
+        # Create scenario where trigger bars match both higher_high and lower_high
         # (edge case but theoretically possible with forward-filled structure values)
         data = DataFrame(
             {
