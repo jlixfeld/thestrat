@@ -4,6 +4,32 @@ This guide establishes clear terminology for TheStrat patterns and provides visu
 
 ## Core Terminology
 
+### Scenarios
+
+TheStrat classifies individual bars based on their relationship to the previous bar:
+
+**Scenario "1" - Inside Bar**
+- Current bar's high ≤ previous bar's high AND low ≥ previous bar's low
+- Consolidation/compression - bar is completely contained within previous bar's range
+- Creates potential for breakout in either direction
+
+**Scenario "2U" - Directional Up**
+- Current bar makes a higher high but doesn't make a lower low
+- Upward directional move
+- Labeled "2U" in pattern names
+
+**Scenario "2D" - Directional Down**
+- Current bar makes a lower low but doesn't make a higher high
+- Downward directional move
+- Labeled "2D" in pattern names
+
+**Scenario "3" - Outside Bar (Expansion)**
+- Current bar makes both a higher high AND lower low
+- Expansion - completely engulfs previous bar's range
+- Labeled "3" in pattern names
+
+All TheStrat patterns are built from combinations of these scenarios (e.g., "2D-2U", "2D-1-2U", "3-2U").
+
 ### Bar Roles
 
 **Setup Bar**
@@ -21,12 +47,6 @@ This guide establishes clear terminology for TheStrat patterns and provides visu
 - **Always the final bar of the pattern** (regardless of pattern type)
 - In 2-bar patterns (e.g., 2D-2U): The second directional bar (2U)
 - In 3-bar patterns (e.g., 2D-1-2U): The final directional bar (2U)
-
-**Inside Bar**
-
-- Bar with high ≤ previous bar's high AND low ≥ previous bar's low
-- Creates compression before breakout/breakdown
-- Appears in 3-bar patterns (labeled "1" in pattern names)
 
 ### Price Levels
 
