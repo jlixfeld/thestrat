@@ -986,27 +986,17 @@ class Indicators(Component):
         if "__row_idx" not in historical_df.columns:
             historical_df = historical_df.with_row_index("__row_idx")
 
-        # Extract all historical prices (no pre-filtering for local/progressive extremes)
-        # The descending/ascending ladder filter below will select the right targets
-        all_prices = historical_df.select(target_col).to_series().to_list()
-
-        if not all_prices:
-            return []
-
         # Get trigger bar's price for validation
         # Per documentation: "First target must be above trigger bar high" (long)
         # or "First target must be below trigger bar low" (short)
         trigger_bar = df.row(trigger_index, named=True)
         trigger_price = float(trigger_bar[target_col])
 
-        # Apply ascending/descending ladder filter with trigger bar validation
-        # Search from historical bars before setup bar (or before inside bar for rev-strats)
-        # But validate that first target is beyond TRIGGER bar's price
-        #
-        # Ladder logic:
-        # - LONG: When sorted oldest→newest in TIME, prices should be ASCENDING
-        # - SHORT: When sorted oldest→newest in TIME, prices should be DESCENDING
-        # Return format: newest→oldest in TIME (reverse chronological order)
+        # Extract all historical prices in chronological order (oldest→newest)
+        all_prices = historical_df.select(target_col).to_series().to_list()
+
+        if not all_prices:
+            return []
 
         # Step 1: Filter to prices beyond trigger bar
         qualifying_prices = []
@@ -1021,28 +1011,42 @@ class Indicators(Component):
         if not qualifying_prices:
             return []
 
-        # Step 2: Build ladder by scanning oldest→newest (forward chronological)
-        # For LONG: keep prices that form ascending sequence
-        # For SHORT: keep prices that form descending sequence
-        filtered_targets = []
-        for price in qualifying_prices:  # Already in oldest→newest order
-            if not filtered_targets:
-                filtered_targets.append(price)
-            else:
-                if bias == "long":
-                    # For long: each target should be higher than last accepted target
-                    if price > filtered_targets[-1]:
-                        filtered_targets.append(price)
-                else:  # short
-                    # For short: each target should be lower than last accepted target
-                    if price < filtered_targets[-1]:
-                        filtered_targets.append(price)
+        # Step 2: Build progressive ladder
+        # LONG signals: build ascending ladder oldest→newest (returns ascending values)
+        # SHORT signals: build descending ladder newest→oldest (returns descending values)
+        ladder = []
 
-        # Step 3: Reverse to return newest→oldest (reverse chronological order)
-        filtered_targets = list(reversed(filtered_targets))
+        if bias == "long":
+            # For long: scan newest→oldest, accept progressively higher prices
+            # Result: ascending values in newest→oldest chronological order (target_1 < target_2 < target_3...)
+            for price in reversed(qualifying_prices):  # Scan newest→oldest
+                if not ladder:
+                    ladder.append(price)
+                else:
+                    if price > ladder[-1]:
+                        ladder.append(price)
 
-        if not filtered_targets:
-            return []
+            if not ladder:
+                return []
+
+            # Keep ascending order for long signals (newest→oldest with ascending values)
+            filtered_targets = ladder
+
+        else:  # short
+            # For short: scan newest→oldest, accept progressively lower prices
+            # Result: descending values (target_1 > target_2 > target_3...)
+            for price in reversed(qualifying_prices):  # Scan newest→oldest
+                if not ladder:
+                    ladder.append(price)
+                else:
+                    if price < ladder[-1]:
+                        ladder.append(price)
+
+            if not ladder:
+                return []
+
+            # Keep descending order for short signals
+            filtered_targets = ladder
 
         # Targets are in reverse chronological order (newest to oldest)
         # This is the correct order for display and merging

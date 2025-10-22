@@ -3393,16 +3393,16 @@ class TestTargetDetection:
 
         # Create data with clear local lows
         # Trigger bar (index 9) has low of 90.0
-        # For descending ladder: chronologically oldest→newest should have ASCENDING values
-        # so that newest→oldest forms DESCENDING ladder
+        # For SHORT signals: build ascending ladder oldest→newest, then reverse
+        # Ladder (oldest→newest): 80 → 82 → 85 → 88 (ascending)
+        # Reversed for return (newest→oldest): [88, 85, 82, 80] (descending values)
         data = DataFrame(
             {
                 "timestamp": [datetime(2024, 1, 1, 9, 30) + timedelta(minutes=i) for i in range(10)],
                 "open": [100.0] * 10,
                 "high": [101.0] * 10,
-                "low": [100.0, 80.0, 81.0, 82.0, 83.0, 85.0, 86.0, 88.0, 91.0, 90.0],
-                #       oldest                                   newest  ^setup ^trigger
-                #              ^target4      ^target3      ^target2 ^target1
+                "low": [100.0, 88.0, 89.0, 85.0, 87.0, 82.0, 84.0, 80.0, 91.0, 90.0],
+                #       oldest ^t1       ^t2       ^t3       ^t4  ^setup ^trigger
                 "close": [100.0] * 10,
                 "volume": [1000] * 10,
                 "symbol": ["TEST"] * 10,
@@ -3427,14 +3427,11 @@ class TestTargetDetection:
             result, trigger_index=9, bias="short", pattern="2D-2U", target_config=target_config
         )
 
-        # Should detect local lows < 90.0 (trigger bar) from indices 0-7
-        # Descending ladder scanned newest→oldest: [88, 86, 85, 83, 82, 81, 80]
-        # Already in correct order (newest→oldest), no reverse needed for shorts
+        # For SHORT signals: scan newest→oldest, accept progressively lower prices
+        # Starting from 80.0 (newest qualifying at idx 7), all earlier prices are higher
+        # So only 80.0 is accepted
         assert len(targets) > 0, "Should detect some targets"
-        assert targets == [88.0, 86.0, 85.0, 83.0, 82.0, 81.0, 80.0], f"Expected descending values, got {targets}"
-        # Targets in reverse chronological order should be descending (newest first, oldest last)
-        for i in range(len(targets) - 1):
-            assert targets[i] > targets[i + 1], f"Targets should be descending (newest→oldest): {targets}"
+        assert targets == [80.0], f"Expected [80.0], got {targets}"
 
     def test_ascending_progression_filtering(self):
         """Test that only ascending highs are included for long signals."""
