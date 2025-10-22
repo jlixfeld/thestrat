@@ -3328,24 +3328,45 @@ class TestTargetDetection:
     """Direct unit tests for multi-target detection logic."""
 
     def test_local_extreme_detection_highs(self):
-        """Test detection of local highs for long signals.
+        """Test detection of local highs for long signals with consecutive progression.
 
-        For 2D-2U pattern:
-        - Trigger bar: index 9 (high=120.0)
-        - Setup bar: index 8 (excluded from search)
-        - Targets from: indices 0-7 (bars before setup bar)
-        - Targets must be > trigger bar high (120.0) per documentation line 145
+        Pattern: 2D-2U long reversal
+
+        OHLC Candlestick Diagram (highs only shown for clarity):
+
+        Date      Jan-1  Jan-2  Jan-3  Jan-4  Jan-5  Jan-6  Jan-7  Jan-8 | Jan-9  | Jan-10
+                                                                           | (SETUP)| (TRIG)
+        High      100.0  115.0  113.0  122.0  118.0  125.0  123.0  128.0 | 119.0  | 120.0
+                   skip   skip   skip   qual   skip   qual   qual   ↑T1  |  (2D)  |  (2U)
+                                       (skip) (skip) (skip)               |        |
+
+        Context bars: Jan 1-8 (before setup bar Jan 9)
+        Setup bar: Jan 9, high=119.0 (2D bar)
+        Trigger bar: Jan 10, high=120.0 (2U bar - completes reversal)
+        Entry: 119.0 (setup bar high)
+
+        Target ladder construction (scan newest→oldest, accept progressively HIGHER):
+          Jan 8: 128.0 ✓ accept (> 119.0, first target)
+          Jan 7: 123.0 ✗ skip (< 128.0, interrupts ascending progression)
+          Jan 6: 125.0 ✗ skip (< 128.0, interrupts ascending progression)
+          Jan 4: 122.0 ✗ skip (< 128.0, interrupts ascending progression)
+          Jan 1-3, 5: not qualifying (< 119.0)
+
+        Expected targets (newest→oldest): [128.0]
+        Note: Only one target because no other qualifying highs continue the ascending progression.
         """
 
-        # Create data with clear local highs
+        # Create data showing consecutive progression requirement
+        # Setup bar (index 8) has high of 119.0
         # Trigger bar (index 9) has high of 120.0
-        # Earlier bars (indices 0-7) have ascending highs that exceed trigger bar
+        # Only index 7 (128.0) qualifies and continues ascending progression
         data = DataFrame(
             {
                 "timestamp": [datetime(2024, 1, 1, 9, 30) + timedelta(minutes=i) for i in range(10)],
                 "open": [100.0] * 10,
                 "high": [100.0, 115.0, 113.0, 122.0, 118.0, 125.0, 123.0, 128.0, 119.0, 120.0],
-                #               target1       target2       target3       target4 ^setup  ^trigger
+                #        idx0   idx1   idx2   qual   idx4   qual   qual   T1    setup  trigger
+                #                            (skip)        (skip) (skip)
                 "low": [99.0] * 10,
                 "close": [100.0] * 10,
                 "volume": [1000] * 10,
@@ -3372,14 +3393,11 @@ class TestTargetDetection:
             result, trigger_index=9, bias="long", pattern="2D-2U", target_config=target_config
         )
 
-        # Should detect local highs > 120.0 (trigger bar) from indices 0-7
-        # Targets in reverse chronological order (newest first): [128.0, 125.0, 122.0]
+        # Should detect local highs > 119.0 (setup bar) from indices 0-7
+        # Only 128.0 qualifies as it's the only price that continues ascending progression
+        # Targets in newest→oldest order: [128.0]
         assert len(targets) > 0, "Should detect some targets"
-        assert targets == [128.0, 125.0, 122.0], f"Expected [128.0, 125.0, 122.0], got {targets}"
-        # Targets should be in DESCENDING order when viewed chronologically (newest first)
-        # But they form an ASCENDING ladder when viewed oldest→newest
-        for i in range(len(targets) - 1):
-            assert targets[i] > targets[i + 1], f"Targets in reverse chron order should be descending: {targets}"
+        assert targets == [128.0], f"Expected [128.0], got {targets}"
 
     def test_local_extreme_detection_lows(self):
         """Test detection of local lows for short signals.
@@ -3635,18 +3653,44 @@ class TestTargetDetection:
     def test_no_ascending_targets_empty_list(self):
         """Test targets with chronologically ascending prices for long signal.
 
-        For long signals, chronologically ascending prices form an ascending ladder.
+        Pattern: 2D-2U long reversal with chronologically ascending highs
+
+        OHLC Candlestick Diagram (highs only shown for clarity):
+
+        Date      Jan-1  Jan-2  Jan-3  Jan-4  Jan-5  Jan-6  Jan-7  Jan-8 | Jan-9  | Jan-10
+                                                                           | (SETUP)| (TRIG)
+        High      100.0   99.0  100.0  101.0  102.0  103.0  104.0  106.0 |  98.0  |  97.0
+                   qual   qual   qual   qual   qual   qual   qual   ↑T1  |  (2D)  |  (2U)
+                  (skip) (skip) (skip) (skip) (skip) (skip) (skip)       |        |
+
+        Context bars: Jan 1-8 (before setup bar Jan 9)
+        Setup bar: Jan 9, high=98.0 (2D bar)
+        Trigger bar: Jan 10, high=97.0 (2U bar - completes reversal)
+        Entry: 98.0 (setup bar high)
+
+        Target ladder construction (scan newest→oldest, accept progressively HIGHER):
+          Jan 8: 106.0 ✓ accept (> 98.0, first target)
+          Jan 7: 104.0 ✗ skip (< 106.0, interrupts ascending progression)
+          Jan 6: 103.0 ✗ skip (< 106.0, interrupts ascending progression)
+          Jan 5: 102.0 ✗ skip (< 106.0, interrupts ascending progression)
+          Jan 4: 101.0 ✗ skip (< 106.0, interrupts ascending progression)
+          Jan 3: 100.0 ✗ skip (< 106.0, interrupts ascending progression)
+          Jan 2:  99.0 ✗ skip (< 106.0, interrupts ascending progression)
+          Jan 1: 100.0 ✗ skip (< 106.0, interrupts ascending progression)
+
+        Expected targets (newest→oldest): [106.0]
+        Note: Only one target because chronologically ascending prices don't continue the progression.
         """
 
         # Create data with chronologically ascending highs (oldest→newest increasing)
-        # For ascending ladder: chronologically should have DESCENDING values
-        # so that oldest→newest forms ASCENDING ladder
+        # All qualify but only the most recent (106.0) continues ascending progression
         data = DataFrame(
             {
                 "timestamp": [datetime(2024, 1, 1, 9, 30) + timedelta(minutes=i) for i in range(10)],
                 "open": [99.0, 98.0, 99.0, 100.0, 101.0, 102.0, 103.0, 105.0, 97.0, 96.0],
                 "high": [100.0, 99.0, 100.0, 101.0, 102.0, 103.0, 104.0, 106.0, 98.0, 97.0],
-                #       oldest  ^tgt4     ^tgt3 ^tgt2 ^tgt1 newest  ^setup ^trigger
+                #        qual   qual   qual   qual   qual   qual   qual    T1   setup trigger
+                #       (skip) (skip) (skip) (skip) (skip) (skip) (skip)
                 "low": [98.0, 97.0, 98.0, 99.0, 100.0, 101.0, 102.0, 104.0, 96.0, 95.0],
                 "close": [99.0, 98.0, 99.0, 100.0, 101.0, 102.0, 103.0, 105.0, 97.0, 96.0],
                 "volume": [1000] * 10,
@@ -3673,12 +3717,12 @@ class TestTargetDetection:
         )
 
         # Trigger bar: index 9, high=97.0
-        # Setup bar: index 8 (excluded), high=98.0
+        # Setup bar: index 8, high=98.0
         # Historical: indices 0-7, highs=[100, 99, 100, 101, 102, 103, 104, 106]
-        # Ascending ladder oldest→newest: 100→101→102→103→104→106 (99 skipped, second 100 skipped)
-        # Reversed for return (newest first): [106, 104, 103, 102, 101, 100]
-        assert len(targets) == 6, f"Should find 6 targets in ascending ladder, got {len(targets)}"
-        assert targets == [106.0, 104.0, 103.0, 102.0, 101.0, 100.0]
+        # All qualify (> 98.0) but only 106.0 continues ascending progression
+        # Scan newest→oldest: 106.0 accepted, all earlier prices skipped (< 106.0)
+        assert len(targets) == 1, f"Should find 1 target, got {len(targets)}"
+        assert targets == [106.0], f"Expected [106.0], got {targets}"
 
     def test_insufficient_history_empty_list(self):
         """Test that empty list is returned with insufficient historical data."""
@@ -3745,22 +3789,50 @@ class TestTargetDetection:
         assert targets == [], "Should return empty list when target_config is None"
 
     def test_real_world_msft_short_targets(self):
-        """Test target detection using real MSFT data - validates price AND date."""
+        """Test SHORT reversal (2U-2D) target ladder with real MSFT data.
+
+        Pattern: 2U-2D short reversal
+
+        OHLC Candlestick Diagram (lows only shown for clarity):
+
+        Date      Sep-2  Sep-3  Sep-4  Sep-5  Sep-8  Sep-9  Sep-10 Sep-11 Sep-12 Sep-15 | Sep-16 | Sep-17
+                                      (BOUND)                                            | (SETUP)| (TRIG)
+        Low       496.81 502.32 503.15 492.37 495.03 497.70 496.72 497.88 503.85 507.00 | 508.60 | 505.93
+                   skip   skip   skip    ↑T6    ↑T5   skip    ↑T4    ↑T3    ↑T2    ↑T1  |  (2U)  |  (2D)
+                  (before bound)
+
+        Context bars: Sep 2-15 (before setup bar Sep 16)
+        Setup bar: Sep 16, low=508.60 (2U bar)
+        Trigger bar: Sep 17, low=505.93 (2D bar - completes reversal)
+        Entry: 508.60 (setup bar low)
+
+        Target ladder construction (scan newest→oldest, accept progressively LOWER):
+          Sep 15: 507.00 ✓ accept (< 508.60, first target)
+          Sep 12: 503.85 ✓ accept (< 507.00, consecutive descending)
+          Sep 11: 497.88 ✓ accept (< 503.85, consecutive descending)
+          Sep 10: 496.72 ✓ accept (< 497.88, consecutive descending)
+          Sep 9:  497.70 ✗ skip (> 496.72, interrupts descending progression)
+          Sep 8:  495.03 ✓ accept (< 496.72, consecutive descending continues)
+          Sep 5:  492.37 ✓ accept (< 495.03, reaches lower_low bound)
+          Sep 2-4: ignored (before bound)
+
+        Expected targets (newest→oldest): [507.0, 503.85, 497.88, 496.72, 495.03, 492.37]
+        """
 
         # Real MSFT 1d data showing progression of lows with dates
         test_data = [
-            ("2025-09-02", 496.81),  # Index 0
-            ("2025-09-03", 502.32),  # Index 1
-            ("2025-09-04", 503.15),  # Index 2
-            ("2025-09-05", 492.37),  # Index 3 - Lower_low structural bound
-            ("2025-09-08", 495.03),  # Index 4
-            ("2025-09-09", 497.70),  # Index 5
-            ("2025-09-10", 496.72),  # Index 6
-            ("2025-09-11", 497.88),  # Index 7
-            ("2025-09-12", 503.85),  # Index 8
-            ("2025-09-15", 507.00),  # Index 9
-            ("2025-09-16", 508.60),  # Index 10 - Most recent (skipped by algorithm)
-            ("2025-09-17", 505.93),  # Index 11 - SIGNAL BAR
+            ("2025-09-02", 496.81),  # Index 0 - ignored (before bound)
+            ("2025-09-03", 502.32),  # Index 1 - ignored (before bound)
+            ("2025-09-04", 503.15),  # Index 2 - ignored (before bound)
+            ("2025-09-05", 492.37),  # Index 3 - Lower_low bound, T6
+            ("2025-09-08", 495.03),  # Index 4 - T5
+            ("2025-09-09", 497.70),  # Index 5 - skipped (interrupts progression)
+            ("2025-09-10", 496.72),  # Index 6 - T4
+            ("2025-09-11", 497.88),  # Index 7 - T3
+            ("2025-09-12", 503.85),  # Index 8 - T2
+            ("2025-09-15", 507.00),  # Index 9 - T1 (newest target)
+            ("2025-09-16", 508.60),  # Index 10 - SETUP BAR (2U)
+            ("2025-09-17", 505.93),  # Index 11 - TRIGGER BAR (2D)
         ]
 
         timestamps = [datetime.strptime(date, "%Y-%m-%d").replace(hour=4) for date, _ in test_data]
@@ -3836,18 +3908,14 @@ class TestTargetDetection:
             result, trigger_index=11, bias="short", pattern="2D-2U", target_config=target_config
         )
 
-        # Build expected targets with (date, price) tuples for validation
-        # NEW LOGIC: Search from indices 0-9 (before setup bar at index 10)
-        # Trigger bar: index 11, low=505.93
-        # Descending ladder < 505.93, in reverse chronological order (newest→oldest)
-        # Scan newest→oldest: 503.85 → 497.88 → 496.72 → 495.03 → 492.37
+        # Verify expected targets (newest→oldest with descending values)
         expected = [
-            ("2025-09-12", 503.85),  # Index 8 (newest in ladder)
-            ("2025-09-11", 497.88),  # Index 7
-            ("2025-09-10", 496.72),  # Index 6
-            ("2025-09-08", 495.03),  # Index 4
-            ("2025-09-05", 492.37),  # Index 3 - structural bound (oldest in ladder)
-            # Note: 507.00 (index 9) is > 505.93 (trigger), so excluded
+            ("2025-09-15", 507.00),  # Index 9 - T1 (newest, < 508.60 setup price)
+            ("2025-09-12", 503.85),  # Index 8 - T2
+            ("2025-09-11", 497.88),  # Index 7 - T3
+            ("2025-09-10", 496.72),  # Index 6 - T4
+            ("2025-09-08", 495.03),  # Index 4 - T5
+            ("2025-09-05", 492.37),  # Index 3 - T6 (bound)
         ]
 
         expected_prices = [price for _, price in expected]
@@ -3864,23 +3932,51 @@ class TestTargetDetection:
             assert date == exp_date, f"Target {i}: price {exp_price} should be from {exp_date}, got {date}"
 
     def test_real_world_long_signal_ascending_targets(self):
-        """Test ascending ladder for long signals - validates price AND date."""
+        """Test LONG reversal (2D-2U) target ladder with consecutive ascending prices.
+
+        Pattern: 2D-2U long reversal
+
+        OHLC Candlestick Diagram (highs only shown for clarity):
+
+        Date      Oct-1  Oct-2  Oct-3  Oct-4  Oct-7  Oct-8  Oct-9  Oct-10 Oct-11 Oct-14 | Oct-15 | Oct-16
+                                      (BOUND)                                            | (SETUP)| (TRIG)
+        High      480.50 485.20 490.75 495.40 492.80 489.30 491.15 488.60 486.25 483.90 | 481.20 | 484.50
+                   skip   skip   skip    ↑T6    ↑T5   skip    ↑T4   skip    ↑T3    ↑T2  |  skip  |  ↑T1
+                                                                                         | (2D)   | (2U)
+
+        Context bars: Oct 1-14 (before setup bar Oct 15)
+        Setup bar: Oct 15, high=481.20 (2D bar)
+        Trigger bar: Oct 16, high=484.50 (2U bar - completes reversal)
+        Entry: 481.20 (setup bar high)
+
+        Target ladder construction (scan newest→oldest, accept progressively HIGHER):
+          Oct 14: 483.90 ✓ accept (> 481.20, first target)
+          Oct 11: 486.25 ✓ accept (> 483.90, consecutive ascending)
+          Oct 10: 488.60 ✓ accept (> 486.25, consecutive ascending)
+          Oct 9:  491.15 ✓ accept (> 488.60, consecutive ascending)
+          Oct 8:  489.30 ✗ skip (< 491.15, interrupts ascending progression)
+          Oct 7:  492.80 ✓ accept (> 491.15, consecutive ascending continues)
+          Oct 4:  495.40 ✓ accept (> 492.80, reaches higher_high bound)
+          Oct 1-3: skipped (< 495.40, don't continue ascending progression)
+
+        Expected targets (newest→oldest with ascending values): [483.9, 486.25, 488.6, 491.15, 492.8, 495.4]
+        """
 
         # Synthetic data showing ascending highs for long signal scenario
         # Simulates 2D-2U long reversal pattern
         test_data = [
-            ("2025-10-01", 480.50),  # Index 0
-            ("2025-10-02", 485.20),  # Index 1
-            ("2025-10-03", 490.75),  # Index 2
-            ("2025-10-04", 495.40),  # Index 3 - Higher_high structural bound
-            ("2025-10-07", 492.80),  # Index 4
-            ("2025-10-08", 489.30),  # Index 5
-            ("2025-10-09", 491.15),  # Index 6
-            ("2025-10-10", 488.60),  # Index 7
-            ("2025-10-11", 486.25),  # Index 8
-            ("2025-10-14", 483.90),  # Index 9
-            ("2025-10-15", 481.20),  # Index 10 - Most recent (skipped by algorithm)
-            ("2025-10-16", 484.50),  # Index 11 - SIGNAL BAR (2D-2U long reversal)
+            ("2025-10-01", 480.50),  # Index 0 - skipped (< 495.40)
+            ("2025-10-02", 485.20),  # Index 1 - skipped (< 495.40)
+            ("2025-10-03", 490.75),  # Index 2 - skipped (< 495.40)
+            ("2025-10-04", 495.40),  # Index 3 - T6 (higher_high bound)
+            ("2025-10-07", 492.80),  # Index 4 - T5
+            ("2025-10-08", 489.30),  # Index 5 - skipped (interrupts progression)
+            ("2025-10-09", 491.15),  # Index 6 - T4
+            ("2025-10-10", 488.60),  # Index 7 - T3
+            ("2025-10-11", 486.25),  # Index 8 - T2
+            ("2025-10-14", 483.90),  # Index 9 - T1 (newest target)
+            ("2025-10-15", 481.20),  # Index 10 - SETUP BAR (2D)
+            ("2025-10-16", 484.50),  # Index 11 - TRIGGER BAR (2U)
         ]
 
         timestamps = [datetime.strptime(date, "%Y-%m-%d").replace(hour=4) for date, _ in test_data]
@@ -3945,14 +4041,17 @@ class TestTargetDetection:
 
         # Build expected targets with (date, price) tuples for validation
         # NEW LOGIC: Search from indices 0-9 (before setup bar at index 10)
+        # Setup bar: index 10, high=481.20
         # Trigger bar: index 11, high=484.50
-        # Targets must be > 484.50 (trigger bar high)
-        # Ascending ladder oldest→newest: 485.20 → 490.75 → 495.40
-        # Reversed (newest first): [495.40, 490.75, 485.20]
+        # Targets must be > 481.20 (setup bar high)
+        # Scan newest→oldest, accept progressively HIGHER (creates ascending values)
         expected = [
-            ("2025-10-04", 495.40),  # Index 3 - structural bound (newest in ladder)
-            ("2025-10-03", 490.75),  # Index 2
-            ("2025-10-02", 485.20),  # Index 1 (oldest in ladder)
+            ("2025-10-14", 483.90),  # Index 9 - T1 (first target, newest)
+            ("2025-10-11", 486.25),  # Index 8 - T2
+            ("2025-10-10", 488.60),  # Index 7 - T3
+            ("2025-10-09", 491.15),  # Index 6 - T4
+            ("2025-10-07", 492.80),  # Index 4 - T5
+            ("2025-10-04", 495.40),  # Index 3 - T6 (higher_high bound)
         ]
 
         expected_prices = [price for _, price in expected]
