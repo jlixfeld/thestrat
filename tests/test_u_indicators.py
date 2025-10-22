@@ -3332,25 +3332,65 @@ class TestTargetDetection:
 
         Pattern: 2D-2U long reversal
 
-        OHLC Candlestick Diagram (highs only shown for clarity):
+        ASCII Candlestick Chart:
 
-        Date      Jan-1  Jan-2  Jan-3  Jan-4  Jan-5  Jan-6  Jan-7  Jan-8 | Jan-9  | Jan-10
-                                                                           | (SETUP)| (TRIG)
-        High      100.0  115.0  113.0  122.0  118.0  125.0  123.0  128.0 | 119.0  | 120.0
-                   skip   skip   skip   qual   skip   qual   qual   ↑T1  |  (2D)  |  (2U)
-                                       (skip) (skip) (skip)               |        |
+        128 ┤                                       ┌───┬───┐
+        127 ┤                                       │   │   │
+        126 ┤                                       │   │   │
+        125 ┤                           ┌───┬───┐   │   │   │
+        124 ┤                           │   │   │   │   │   │
+        123 ┤                       ┌───┤   │   │   │   │   │
+        122 ┤               ┌───┬───┤   │   │   │   │   │   │
+        121 ┤               │   │   │   │   │   │   │   │   │
+        120 ┤               │   │   │   │   │   │   │   │   │                   ┌───┬───┐
+        119 ┤               │   │   │   │   │   │   │   │   │           ┌───┬───┤   │   │
+        118 ┤               │   │   │   ├───┤   │   │   │   │           │   │   │   │   │
+        117 ┤               │   │   │   │   │   │   │   │   │           │   │   │   │   │
+        116 ┤               │   │   │   │   │   │   │   │   │           │   │   │   │   │
+        115 ┤       ┌───┬───┤   │   │   │   │   │   │   │   │           │   │   │   │   │
+        114 ┤       │   │   │   │   │   │   │   │   │   │   │           │   │   │   │   │
+        113 ┤   ┌───┤   │   │   │   │   │   │   │   │   │   │           │   │   │   │   │
+        112 ┤   │   │   │   │   │   │   │   │   │   │   │   │           │   │   │   │   │
+        111 ┤   │   │   │   │   │   │   │   │   │   │   │   │           │   │   │   │   │
+        110 ┤   │   │   │   │   │   │   │   │   │   │   │   │           │   │   │   │   │
+        109 ┤   │   │   │   │   │   │   │   │   │   │   │   │           │   │   │   │   │
+        108 ┤   │   │   │   │   │   │   │   │   │   │   │   │           │   │   │   │   │
+        107 ┤   │   │   │   │   │   │   │   │   │   │   │   │           │   │   │   │   │
+        106 ┤   │   │   │   │   │   │   │   │   │   │   │   │           │   │   │   │   │
+        105 ┤   │   │   │   │   │   │   │   │   │   │   │   │           │   │   │   │   │
+        104 ┤   │   │   │   │   │   │   │   │   │   │   │   │           │   │   │   │   │
+        103 ┤   │   │   │   │   │   │   │   │   │   │   │   │           │   │   │   │   │
+        102 ┤   │   │   │   │   │   │   │   │   │   │   │   │           │   │   │   │   │
+        101 ┤   │   │   │   │   │   │   │   │   │   │   │   │           │   │   │   │   │
+        100 ┤ ┌─┴───┤   │   │   │   │   │   │   │   │   │   │           │   │   │   │   │
+         99 ┤ ├─────┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───────────┴───┴───┴───┴───┘
+            └─┴───────────────────────────────────────────────────────────────────────────
+              Jan1  Jan2  Jan3  Jan4  Jan5  Jan6  Jan7  Jan8  Jan9  Jan10
+              skip  skip  skip  qual  skip  qual  qual   T1   [2D]  [2U]
+                                (sk)        (sk)  (sk)
 
-        Context bars: Jan 1-8 (before setup bar Jan 9)
-        Setup bar: Jan 9, high=119.0 (2D bar)
-        Trigger bar: Jan 10, high=120.0 (2U bar - completes reversal)
-        Entry: 119.0 (setup bar high)
+        Legend: [2D] = 2-Down setup, [2U] = 2-Up trigger
+                T1 = Only target (no others continue ascending progression)
+                qual = Qualifies (> 119.0) but skipped
+                (sk) = Skipped: interrupts ascending progression
+
+        OHLC Data (all bars have O=100, L=99, C=100):
+          Jan 1:  H:100.0 (skip: ≤ 119.0)
+          Jan 2:  H:115.0 (skip: ≤ 119.0)
+          Jan 3:  H:113.0 (skip: ≤ 119.0)
+          Jan 4:  H:122.0 (qual but < 128.0, interrupts)
+          Jan 5:  H:118.0 (skip: ≤ 119.0)
+          Jan 6:  H:125.0 (qual but < 128.0, interrupts)
+          Jan 7:  H:123.0 (qual but < 128.0, interrupts)
+          Jan 8:  H:128.0 ← T1 (only target)
+          Jan 9:  H:119.0 ← SETUP (2D, entry=119.0)
+          Jan 10: H:120.0 ← TRIGGER (2U)
 
         Target ladder construction (scan newest→oldest, accept progressively HIGHER):
           Jan 8: 128.0 ✓ accept (> 119.0, first target)
           Jan 7: 123.0 ✗ skip (< 128.0, interrupts ascending progression)
           Jan 6: 125.0 ✗ skip (< 128.0, interrupts ascending progression)
           Jan 4: 122.0 ✗ skip (< 128.0, interrupts ascending progression)
-          Jan 1-3, 5: not qualifying (< 119.0)
 
         Expected targets (newest→oldest): [128.0]
         Note: Only one target because no other qualifying highs continue the ascending progression.
@@ -3655,18 +3695,41 @@ class TestTargetDetection:
 
         Pattern: 2D-2U long reversal with chronologically ascending highs
 
-        OHLC Candlestick Diagram (highs only shown for clarity):
+        ASCII Candlestick Chart:
 
-        Date      Jan-1  Jan-2  Jan-3  Jan-4  Jan-5  Jan-6  Jan-7  Jan-8 | Jan-9  | Jan-10
-                                                                           | (SETUP)| (TRIG)
-        High      100.0   99.0  100.0  101.0  102.0  103.0  104.0  106.0 |  98.0  |  97.0
-                   qual   qual   qual   qual   qual   qual   qual   ↑T1  |  (2D)  |  (2U)
-                  (skip) (skip) (skip) (skip) (skip) (skip) (skip)       |        |
+        106 ┤                                       ┌───┬───┐
+        105 ┤                                       ├───┘   │
+        104 ┤                               ┌───┬───┤       │
+        103 ┤                       ┌───┬───┤   │   │       │
+        102 ┤               ┌───┬───┤   │   │   │   │       │
+        101 ┤       ┌───┬───┤   │   │   │   │   │   │       │
+        100 ┤ ┌───┬─┴───┤   │   │   │   │   │   │   │       │
+         99 ┤ │   ├─────┴───┤   │   │   │   │   │   │       │
+         98 ┤ │   │         ├───┤   │   │   │   │   │       │       ┌───┬───┐
+         97 ┤ │   │         │   ├───┤   │   │   │   │       │       │   ├───┤
+         96 ┤ │   │         │   │   ├───┤   │   │   │       ├───┬───┤   │   │
+         95 ┤ ├───┘         │   │   │   ├───┤   │   │       │   │   ├───┘   │
+            └─┴───────────────────────────────┴───┴───┴───────┴───┴───┴───────┘
+              Jan1  Jan2  Jan3  Jan4  Jan5  Jan6  Jan7  Jan8  Jan9  Jan10
+              qual  qual  qual  qual  qual  qual  qual   T1   [2D]  [2U]
+              (sk)  (sk)  (sk)  (sk)  (sk)  (sk)  (sk)        SETUP TRIG
 
-        Context bars: Jan 1-8 (before setup bar Jan 9)
-        Setup bar: Jan 9, high=98.0 (2D bar)
-        Trigger bar: Jan 10, high=97.0 (2U bar - completes reversal)
-        Entry: 98.0 (setup bar high)
+        Legend: [2D] = 2-Down setup, [2U] = 2-Up trigger
+                T1 = Only target (chronologically ascending prices interrupt progression)
+                qual = Qualifies (> 98.0) but skipped
+                (sk) = Skipped: < 106.0, interrupts ascending progression
+
+        OHLC Data:
+          Jan 1:  O:99.0  H:100.0 L:98.0  C:99.0  (qual but < 106.0, skip)
+          Jan 2:  O:98.0  H:99.0  L:97.0  C:98.0  (qual but < 106.0, skip)
+          Jan 3:  O:99.0  H:100.0 L:98.0  C:99.0  (qual but < 106.0, skip)
+          Jan 4:  O:100.0 H:101.0 L:99.0  C:100.0 (qual but < 106.0, skip)
+          Jan 5:  O:101.0 H:102.0 L:100.0 C:101.0 (qual but < 106.0, skip)
+          Jan 6:  O:102.0 H:103.0 L:101.0 C:102.0 (qual but < 106.0, skip)
+          Jan 7:  O:103.0 H:104.0 L:102.0 C:103.0 (qual but < 106.0, skip)
+          Jan 8:  O:105.0 H:106.0 L:104.0 C:105.0 ← T1 (only target)
+          Jan 9:  O:97.0  H:98.0  L:96.0  C:97.0  ← SETUP (2D, entry=98.0)
+          Jan 10: O:96.0  H:97.0  L:95.0  C:96.0  ← TRIGGER (2U)
 
         Target ladder construction (scan newest→oldest, accept progressively HIGHER):
           Jan 8: 106.0 ✓ accept (> 98.0, first target)
@@ -3793,18 +3856,56 @@ class TestTargetDetection:
 
         Pattern: 2U-2D short reversal
 
-        OHLC Candlestick Diagram (lows only shown for clarity):
+        ASCII Candlestick Chart:
 
-        Date      Sep-2  Sep-3  Sep-4  Sep-5  Sep-8  Sep-9  Sep-10 Sep-11 Sep-12 Sep-15 | Sep-16 | Sep-17
-                                      (BOUND)                                            | (SETUP)| (TRIG)
-        Low       496.81 502.32 503.15 492.37 495.03 497.70 496.72 497.88 503.85 507.00 | 508.60 | 505.93
-                   skip   skip   skip    ↑T6    ↑T5   skip    ↑T4    ↑T3    ↑T2    ↑T1  |  (2U)  |  (2D)
-                  (before bound)
+        517 ┤           ┬                                   ┬
+        516 ┤           │                                   │
+        515 ┤           │                               ┬───┴─┬
+        514 ┤           │                               │     │
+        513 ┤           │                           ┌───┤     │
+        512 ┤           │                           │   ├─────┤
+        511 ┤       ┌───┴─┐                         ├───┘     │
+        510 ┤       │     │                         │         ├───┐
+        509 ┤       │     │                     ┌───┤         │   │
+        508 ┤   ┌───┤     ├───┐             ┌───┘   │         │   │
+        507 ┤   │   │     │   │             │       │         │   │
+        506 ┤ ┌─┴───┤     │   │             │       │         │   ├───┐
+        505 ┤ │     ├─────┤   │             │       │         │   │   │
+        504 ┤ │     │     ├───┘             │       │         │   │   │
+        503 ┤ │     │     │       ┌───┐ ┌───┴───┐   │         │   │   │
+        502 ┤ │     ├─────┘       │   │ │       │   │         │   │   │
+        501 ┤ │     │             ├───┤ ├───────┤   │         │   │   │
+        500 ┤ ├─────┘             │   │ │       ├───┤         │   │   │
+        499 ┤ │                   │   │ │       │   │         │   │   │
+        498 ┤ │               ┌───┴───┤ ├───────┘   │         │   │   │
+        497 ┤ │               │       │ │           ├─────┐   │   │   │
+        496 ┤ │               │       ├─┘           │     │   │   │   │
+        495 ┤ │               │       │             │     │   │   │   │
+        494 ┤ │               │       │             │     │   │   │   │
+        493 ┤ │               │       │             │     │   │   │   │
+        492 ┤ │               ├───────┘             │     │   │   │   │
+            └─┴───────────────┴─────────────────────┴─────┴───┴───┴───┴───
+              Sep2  Sep3  Sep4  Sep5  Sep8  Sep9  Sep10 Sep11 Sep12 Sep15 Sep16 Sep17
+                                [LL]                                        [2U]  [2D]
+              skip  skip  skip   T6    T5   skip   T4    T3    T2    T1   SETUP TRIG
 
-        Context bars: Sep 2-15 (before setup bar Sep 16)
-        Setup bar: Sep 16, low=508.60 (2U bar)
-        Trigger bar: Sep 17, low=505.93 (2D bar - completes reversal)
-        Entry: 508.60 (setup bar low)
+        Legend: [LL] = Lower Low bound, [2U] = 2-Up setup, [2D] = 2-Down trigger
+                T1-T6 = Target ladder (newest to oldest)
+                skip = Not part of consecutive descending progression
+
+        OHLC Data:
+          Sep 2:  O:500.28 H:506.00 L:496.81 C:505.12 (before bound)
+          Sep 3:  O:503.79 H:507.79 L:502.32 C:505.35 (before bound)
+          Sep 4:  O:504.30 H:508.15 L:503.15 C:507.97 (before bound)
+          Sep 5:  O:508.81 H:511.97 L:492.37 C:495.00 ← T6 (Lower Low bound)
+          Sep 8:  O:498.11 H:501.20 L:495.03 C:498.20 ← T5
+          Sep 9:  O:501.73 H:502.25 L:497.70 C:498.41 (skip: > 496.72)
+          Sep 10: O:502.97 H:503.23 L:496.72 C:500.37 ← T4
+          Sep 11: O:502.16 H:503.17 L:497.88 C:501.01 ← T3
+          Sep 12: O:506.51 H:512.55 L:503.85 C:509.90 ← T2
+          Sep 15: O:508.79 H:515.45 L:507.00 C:515.36 ← T1
+          Sep 16: O:516.88 H:517.23 L:508.60 C:509.04 ← SETUP (2U, entry=508.60)
+          Sep 17: O:510.62 H:511.29 L:505.93 C:510.02 ← TRIGGER (2D)
 
         Target ladder construction (scan newest→oldest, accept progressively LOWER):
           Sep 15: 507.00 ✓ accept (< 508.60, first target)
@@ -3814,7 +3915,6 @@ class TestTargetDetection:
           Sep 9:  497.70 ✗ skip (> 496.72, interrupts descending progression)
           Sep 8:  495.03 ✓ accept (< 496.72, consecutive descending continues)
           Sep 5:  492.37 ✓ accept (< 495.03, reaches lower_low bound)
-          Sep 2-4: ignored (before bound)
 
         Expected targets (newest→oldest): [507.0, 503.85, 497.88, 496.72, 495.03, 492.37]
         """
@@ -3936,18 +4036,49 @@ class TestTargetDetection:
 
         Pattern: 2D-2U long reversal
 
-        OHLC Candlestick Diagram (highs only shown for clarity):
+        ASCII Candlestick Chart:
 
-        Date      Oct-1  Oct-2  Oct-3  Oct-4  Oct-7  Oct-8  Oct-9  Oct-10 Oct-11 Oct-14 | Oct-15 | Oct-16
-                                      (BOUND)                                            | (SETUP)| (TRIG)
-        High      480.50 485.20 490.75 495.40 492.80 489.30 491.15 488.60 486.25 483.90 | 481.20 | 484.50
-                   skip   skip   skip    ↑T6    ↑T5   skip    ↑T4   skip    ↑T3    ↑T2  |  skip  |  ↑T1
-                                                                                         | (2D)   | (2U)
+        495 ┤               ┌───┬───┐
+        494 ┤               ├───┘   │
+        493 ┤               │       ├───┐
+        492 ┤               │       │   │       ┌───┐
+        491 ┤               │       │   ├───────┤   ├───┐
+        490 ┤           ┬───┤       │   │       │   │   ├───┐
+        489 ┤           │   │       ├───┘       │   │   │   │       ┌───┐
+        488 ┤           │   │       │           ├───┘   │   │       │   │
+        487 ┤           │   │       │           │       │   ├───────┤   │
+        486 ┤       ┌───┴───┤       │           │       │   │       ├───┤
+        485 ┤   ┌───┤       │       │           │       ├───┘       │   │
+        484 ┤   │   ├───────┘       │           │       │           │   ├───┬───┐
+        483 ┤   │   │               │           │       │           ├───┘   │   │
+        482 ┤   │   │               │           │       │           │       │   │
+        481 ┤   │   │               │           │       │           │       ├───┤
+        480 ┤ ┌─┴───┤               │           │       │           │       │   │
+        479 ┤ │     ├───┐           │           │       │           │       │   │
+        478 ┤ │     │   │           │           │       │           ├───────┘   │
+        477 ┤ ├─────┘   │           │           │       │           │           │
+            └─┴───────────┴───────────┴───────────┴───────┴───────────┴───────────┴───
+              Oct1  Oct2  Oct3  Oct4  Oct7  Oct8  Oct9  Oct10 Oct11 Oct14 Oct15 Oct16
+              skip  skip  skip  [HH]  skip  skip  skip  skip  skip  skip  [2D]  [2U]
+                                 T6    T5          T4          T3    T2   SETUP TRIG
 
-        Context bars: Oct 1-14 (before setup bar Oct 15)
-        Setup bar: Oct 15, high=481.20 (2D bar)
-        Trigger bar: Oct 16, high=484.50 (2U bar - completes reversal)
-        Entry: 481.20 (setup bar high)
+        Legend: [HH] = Higher High bound, [2D] = 2-Down setup, [2U] = 2-Up trigger
+                T1-T6 = Target ladder (newest to oldest, ascending values)
+                skip = Not part of consecutive ascending progression
+
+        OHLC Data:
+          Oct 1:  O:479.00 H:480.50 L:477.50 C:479.80 (skip: < 495.40)
+          Oct 2:  O:484.50 H:485.20 L:483.00 C:485.00 (skip: < 495.40)
+          Oct 3:  O:489.20 H:490.75 L:488.50 C:490.30 (skip: < 495.40)
+          Oct 4:  O:494.00 H:495.40 L:493.20 C:494.80 ← T6 (Higher High bound)
+          Oct 7:  O:491.50 H:492.80 L:488.60 C:489.20 ← T5
+          Oct 8:  O:488.00 H:489.30 L:485.20 C:486.50 (skip: < 491.15)
+          Oct 9:  O:489.80 H:491.15 L:487.90 C:490.50 ← T4
+          Oct 10: O:487.30 H:488.60 L:484.40 C:485.80 ← T3
+          Oct 11: O:485.00 H:486.25 L:482.15 C:483.40 ← T2
+          Oct 14: O:482.50 H:483.90 L:479.80 C:481.00 ← T1
+          Oct 15: O:480.00 H:481.20 L:477.10 C:478.50 ← SETUP (2D, entry=481.20)
+          Oct 16: O:483.20 H:484.50 L:481.30 C:484.20 ← TRIGGER (2U)
 
         Target ladder construction (scan newest→oldest, accept progressively HIGHER):
           Oct 14: 483.90 ✓ accept (> 481.20, first target)
@@ -3957,7 +4088,6 @@ class TestTargetDetection:
           Oct 8:  489.30 ✗ skip (< 491.15, interrupts ascending progression)
           Oct 7:  492.80 ✓ accept (> 491.15, consecutive ascending continues)
           Oct 4:  495.40 ✓ accept (> 492.80, reaches higher_high bound)
-          Oct 1-3: skipped (< 495.40, don't continue ascending progression)
 
         Expected targets (newest→oldest with ascending values): [483.9, 486.25, 488.6, 491.15, 492.8, 495.4]
         """
