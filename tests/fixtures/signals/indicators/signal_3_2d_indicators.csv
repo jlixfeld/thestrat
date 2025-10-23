@@ -1,0 +1,9 @@
+timestamp,symbol,open,high,low,close,volume,higher_high,lower_high,higher_low,lower_low,percent_close_from_high,percent_close_from_low,ath,atl,new_ath,new_atl,continuity,scenario,hammer,shooter,gapper,kicker,f23x,f23,f23_trigger,pmg,motherbar_problems,in_force,signal,type,bias,target_prices,target_count,entry_price,stop_price,signal_at_higher_high,signal_at_lower_high,signal_at_higher_low,signal_at_lower_low
+2024-01-01T09:30:00.000000,TEST,95.0,100.0,90.0,98.0,1000.0,,,,,20.0,80.0,100.0,90.0,true,true,1,,false,false,,,,false,,0,false,false,,,,,,,,,,,
+2024-01-01T09:31:00.000000,TEST,100.0,105.0,98.0,104.0,1000.0,,,,,14.28571,85.71429,105.0,90.0,true,false,1,2U,false,false,,,,false,,1,false,true,,,,,,,,,,,
+2024-01-01T09:32:00.000000,TEST,105.0,110.0,104.0,109.0,1000.0,,,,,16.66667,83.33333,110.0,90.0,true,false,1,2U,false,false,,,,false,,2,false,true,2U-2U,continuation,long,,,105.0,98.0,false,false,false,false
+2024-01-01T09:33:00.000000,TEST,109.0,113.0,108.0,112.0,1000.0,,,,,20.0,80.0,113.0,90.0,true,false,1,2U,false,false,,,,false,,3,false,true,2U-2U,continuation,long,,,110.0,104.0,false,false,false,false
+2024-01-01T09:34:00.000000,TEST,112.0,116.0,111.0,115.0,1000.0,,,,,20.0,80.0,116.0,90.0,true,false,1,2U,false,false,,,,false,,4,false,true,2U-2U,continuation,long,,,113.0,108.0,false,false,false,false
+2024-01-01T09:35:00.000000,TEST,108.0,119.0,107.0,118.0,1000.0,,,,,8.33333,91.66667,119.0,90.0,true,false,1,3,false,false,0,,,false,,5,false,true,,,,,,,,,,,
+2024-01-01T09:36:00.000000,TEST,118.0,119.0,104.0,104.5,1000.0,,,,,96.66667,3.33333,119.0,90.0,true,false,0,2D,false,false,,,,false,,-1,false,true,3-2D,reversal,short,"104.0, 98.0, 90.0",3,107.0,119.0,false,false,false,false
+2024-01-01T09:37:00.000000,TEST,118.0,119.0,102.0,102.5,1000.0,,,,,97.05882,2.94118,119.0,90.0,true,false,0,2D,false,false,,,,false,,-2,false,true,2D-2D,continuation,short,"98.0, 90.0",2,104.0,119.0,false,false,false,false

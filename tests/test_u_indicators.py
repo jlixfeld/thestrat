@@ -2,6 +2,49 @@
 Unit tests for TheStrat Indicators component.
 
 Tests comprehensive Strat technical indicators with vectorized calculations.
+
+## CSV-Based Signal Testing Approach
+
+This module uses deterministic CSV test data for signal pattern validation, providing:
+
+**Benefits:**
+- **Guaranteed Pattern Detection**: CSV files contain verified signal patterns
+- **Deterministic Testing**: Identical inputs produce identical results across runs
+- **Visual Reference**: PNG charts available for debugging and documentation
+- **Regression Protection**: Expected outputs locked in CSV format
+
+**Test Organization:**
+- `TestIndicatorsInit`: Constructor and configuration validation
+- `TestIndicatorsValidation`: Input validation and error handling
+- `TestSwingPoints`: Peak and valley detection with window parameters
+- `TestMarketStructure`: HH/LH/HL/LL classification logic
+- `TestStratPatterns`: Scenario, continuity, in_force detection
+- `TestAdvancedPatterns`: Gap detection (kicker, F23, PMG patterns)
+- **`TestSignalMetadataIntegration`**: CSV-based signal pattern tests (16 patterns)
+- `TestTargetDetection`: Target ladder calculation and filtering
+
+## CSV Test Data
+
+Signal pattern tests load pre-generated data from `generate_all_signals.py`:
+- **Market CSVs**: Raw OHLC input data (signal_*_market.csv)
+- **Indicators CSVs**: Expected processing output (signal_*_indicators.csv)
+- **Charts**: Visual pattern reference (signal_*.png)
+
+**Usage Example:**
+```python
+from tests.utils.csv_signal_loader import load_signal_test_data
+from tests.utils.signal_validator import assert_signal_detected, get_signal_rows
+
+# Load test data
+market_df, expected_df = load_signal_test_data("2D-2U")
+
+# Process and validate
+indicators = Indicators(config)
+result = indicators.process(market_df)
+assert_signal_detected(result, "2D-2U")
+```
+
+See `SIGNAL_TEST_DATA.md` and `TEST_MIGRATION_AUDIT.md` for complete documentation.
 """
 
 from datetime import datetime, timedelta
@@ -3015,1906 +3058,588 @@ class TestSignalMetadataIntegration:
         )
 
     def test_signal_1_2d_2u(self):
-        """Test 1-2D-2U signal pattern validation."""
-        data = self._create_test_data_for_pattern("1-2D-2U")
+        """Test 1-2D-2U signal pattern validation with deterministic CSV data."""
+        from tests.utils.csv_signal_loader import load_signal_test_data
+        from tests.utils.signal_validator import assert_signal_detected, get_signal_rows
 
+        # Load pre-computed test data (guaranteed to contain 1-2D-2U pattern)
+        market_df, expected_df = load_signal_test_data("1-2D-2U")
+
+        # Configure indicators with target detection
         config = IndicatorsConfig(
             timeframe_configs=[
-                TimeframeItemConfig(timeframes=["all"], swing_points=SwingPointsConfig(window=1, threshold=0.0))
+                TimeframeItemConfig(
+                    timeframes=["all"],
+                    swing_points=SwingPointsConfig(window=1, threshold=0.0),
+                    target_config=TargetConfig(
+                        upper_bound="higher_high",
+                        lower_bound="lower_low",
+                        merge_threshold_pct=0.0,
+                        max_targets=None,
+                    ),
+                )
             ]
         )
 
+        # Process market data through indicators
         indicators = Indicators(config)
-        result = indicators.process(data)
-        signal_rows = result.filter(col("signal").is_not_null())
+        result = indicators.process(market_df)
 
-        signal_objects = [Indicators.get_signal_object(signal_rows.slice(i, 1)) for i in range(len(signal_rows))]
+        # Validate signal was detected (guaranteed with CSV data)
+        assert_signal_detected(result, "1-2D-2U")
 
-        # Find the specific pattern (may not always be generated)
-        target_signals = [s for s in signal_objects if s.pattern == "1-2D-2U"]
-        if target_signals:
-            self._validate_signal_object(target_signals[0], result, "1-2D-2U", "reversal", "long")
-        else:
-            print(f"⚠️ 1-2D-2U pattern not detected in test data (detected: {[s.pattern for s in signal_objects]})")
+        # Get signal row and create signal object
+        signal_row = get_signal_rows(result, "1-2D-2U").slice(0, 1)
+        signal_obj = Indicators.get_signal_object(signal_row)
+
+        # Validate signal properties using existing helper
+        self._validate_signal_object(signal_obj, result, "1-2D-2U", "reversal", "long")
 
     def test_signal_3_1_2u(self):
-        """Test 3-1-2U signal pattern validation."""
-        data = self._create_test_data_for_pattern("3-1-2U")
+        """Test 3-1-2U signal pattern validation with deterministic CSV data."""
+        from tests.utils.csv_signal_loader import load_signal_test_data
+        from tests.utils.signal_validator import assert_signal_detected, get_signal_rows
+
+        # Load pre-computed test data (guaranteed to contain 3-1-2U pattern)
+        market_df, expected_df = load_signal_test_data("3-1-2U")
+
+        # Configure indicators with target detection
         config = IndicatorsConfig(
             timeframe_configs=[
-                TimeframeItemConfig(timeframes=["all"], swing_points=SwingPointsConfig(window=1, threshold=0.0))
+                TimeframeItemConfig(
+                    timeframes=["all"],
+                    swing_points=SwingPointsConfig(window=1, threshold=0.0),
+                    target_config=TargetConfig(
+                        upper_bound="higher_high",
+                        lower_bound="lower_low",
+                        merge_threshold_pct=0.0,
+                        max_targets=None,
+                    ),
+                )
             ]
         )
-        indicators = Indicators(config)
-        result = indicators.process(data)
-        signal_rows = result.filter(col("signal").is_not_null())
 
-        signal_objects = [Indicators.get_signal_object(signal_rows.slice(i, 1)) for i in range(len(signal_rows))]
-        target_signals = [s for s in signal_objects if s.pattern == "3-1-2U"]
-        if target_signals:
-            self._validate_signal_object(target_signals[0], result, "3-1-2U", "reversal", "long")
-        else:
-            print(f"⚠️ 3-1-2U pattern not detected in test data (detected: {[s.pattern for s in signal_objects]})")
+        # Process market data through indicators
+        indicators = Indicators(config)
+        result = indicators.process(market_df)
+
+        # Validate signal was detected (guaranteed with CSV data)
+        assert_signal_detected(result, "3-1-2U")
+
+        # Get signal row and create signal object
+        signal_row = get_signal_rows(result, "3-1-2U").slice(0, 1)
+        signal_obj = Indicators.get_signal_object(signal_row)
+
+        # Validate signal properties using existing helper
+        self._validate_signal_object(signal_obj, result, "3-1-2U", "reversal", "long")
 
     def test_signal_3_2d_2u(self):
-        """Test 3-2D-2U signal pattern validation."""
-        data = self._create_test_data_for_pattern("3-2D-2U")
+        """Test 3-2D-2U signal pattern validation with deterministic CSV data."""
+        from tests.utils.csv_signal_loader import load_signal_test_data
+        from tests.utils.signal_validator import assert_signal_detected, get_signal_rows
+
+        # Load pre-computed test data (guaranteed to contain 3-2D-2U pattern)
+        market_df, expected_df = load_signal_test_data("3-2D-2U")
+
+        # Configure indicators with target detection
         config = IndicatorsConfig(
             timeframe_configs=[
-                TimeframeItemConfig(timeframes=["all"], swing_points=SwingPointsConfig(window=1, threshold=0.0))
+                TimeframeItemConfig(
+                    timeframes=["all"],
+                    swing_points=SwingPointsConfig(window=1, threshold=0.0),
+                    target_config=TargetConfig(
+                        upper_bound="higher_high",
+                        lower_bound="lower_low",
+                        merge_threshold_pct=0.0,
+                        max_targets=None,
+                    ),
+                )
             ]
         )
-        indicators = Indicators(config)
-        result = indicators.process(data)
-        signal_rows = result.filter(col("signal").is_not_null())
 
-        signal_objects = [Indicators.get_signal_object(signal_rows.slice(i, 1)) for i in range(len(signal_rows))]
-        target_signals = [s for s in signal_objects if s.pattern == "3-2D-2U"]
-        if target_signals:
-            self._validate_signal_object(target_signals[0], result, "3-2D-2U", "reversal", "long")
-        else:
-            print(f"⚠️ 3-2D-2U pattern not detected in test data (detected: {[s.pattern for s in signal_objects]})")
+        # Process market data through indicators
+        indicators = Indicators(config)
+        result = indicators.process(market_df)
+
+        # Validate signal was detected (guaranteed with CSV data)
+        assert_signal_detected(result, "3-2D-2U")
+
+        # Get signal row and create signal object
+        signal_row = get_signal_rows(result, "3-2D-2U").slice(0, 1)
+        signal_obj = Indicators.get_signal_object(signal_row)
+
+        # Validate signal properties using existing helper
+        self._validate_signal_object(signal_obj, result, "3-2D-2U", "reversal", "long")
 
     def test_signal_2d_1_2u(self):
-        """Test 2D-1-2U signal pattern validation."""
-        data = self._create_test_data_for_pattern("2D-1-2U")
+        """Test 2D-1-2U signal pattern validation with deterministic CSV data."""
+        from tests.utils.csv_signal_loader import load_signal_test_data
+        from tests.utils.signal_validator import assert_signal_detected, get_signal_rows
+
+        # Load pre-computed test data (guaranteed to contain 2D-1-2U pattern)
+        market_df, expected_df = load_signal_test_data("2D-1-2U")
+
+        # Configure indicators with target detection
         config = IndicatorsConfig(
             timeframe_configs=[
-                TimeframeItemConfig(timeframes=["all"], swing_points=SwingPointsConfig(window=1, threshold=0.0))
+                TimeframeItemConfig(
+                    timeframes=["all"],
+                    swing_points=SwingPointsConfig(window=1, threshold=0.0),
+                    target_config=TargetConfig(
+                        upper_bound="higher_high",
+                        lower_bound="lower_low",
+                        merge_threshold_pct=0.0,
+                        max_targets=None,
+                    ),
+                )
             ]
         )
-        indicators = Indicators(config)
-        result = indicators.process(data)
-        signal_rows = result.filter(col("signal").is_not_null())
 
-        signal_objects = [Indicators.get_signal_object(signal_rows.slice(i, 1)) for i in range(len(signal_rows))]
-        target_signals = [s for s in signal_objects if s.pattern == "2D-1-2U"]
-        if target_signals:
-            self._validate_signal_object(target_signals[0], result, "2D-1-2U", "reversal", "long")
-        else:
-            print(f"⚠️ 2D-1-2U pattern not detected in test data (detected: {[s.pattern for s in signal_objects]})")
+        # Process market data through indicators
+        indicators = Indicators(config)
+        result = indicators.process(market_df)
+
+        # Validate signal was detected (guaranteed with CSV data)
+        assert_signal_detected(result, "2D-1-2U")
+
+        # Get signal row and create signal object
+        signal_row = get_signal_rows(result, "2D-1-2U").slice(0, 1)
+        signal_obj = Indicators.get_signal_object(signal_row)
+
+        # Validate signal properties using existing helper
+        self._validate_signal_object(signal_obj, result, "2D-1-2U", "reversal", "long")
 
     def test_signal_2d_2u(self):
-        """Test 2D-2U signal pattern validation."""
-        data = self._create_test_data_for_pattern("2D-2U")
+        """Test 2D-2U signal pattern validation with deterministic CSV data."""
+        from tests.utils.csv_signal_loader import load_signal_test_data
+        from tests.utils.signal_validator import assert_signal_detected, get_signal_rows
+
+        # Load pre-computed test data (guaranteed to contain 2D-2U pattern)
+        market_df, expected_df = load_signal_test_data("2D-2U")
+
+        # Configure indicators with target detection
         config = IndicatorsConfig(
             timeframe_configs=[
-                TimeframeItemConfig(timeframes=["all"], swing_points=SwingPointsConfig(window=1, threshold=0.0))
+                TimeframeItemConfig(
+                    timeframes=["all"],
+                    swing_points=SwingPointsConfig(window=1, threshold=0.0),
+                    target_config=TargetConfig(
+                        upper_bound="higher_high",
+                        lower_bound="lower_low",
+                        merge_threshold_pct=0.0,
+                        max_targets=None,
+                    ),
+                )
             ]
         )
-        indicators = Indicators(config)
-        result = indicators.process(data)
-        signal_rows = result.filter(col("signal").is_not_null())
 
-        signal_objects = [Indicators.get_signal_object(signal_rows.slice(i, 1)) for i in range(len(signal_rows))]
-        target_signals = [s for s in signal_objects if s.pattern == "2D-2U"]
-        if target_signals:
-            self._validate_signal_object(target_signals[0], result, "2D-2U", "reversal", "long")
-        else:
-            print(f"⚠️ 2D-2U pattern not detected in test data (detected: {[s.pattern for s in signal_objects]})")
+        # Process market data through indicators
+        indicators = Indicators(config)
+        result = indicators.process(market_df)
+
+        # Validate signal was detected (guaranteed with CSV data)
+        assert_signal_detected(result, "2D-2U")
+
+        # Get signal row and create signal object
+        signal_row = get_signal_rows(result, "2D-2U").slice(0, 1)
+        signal_obj = Indicators.get_signal_object(signal_row)
+
+        # Validate signal properties using existing helper
+        self._validate_signal_object(signal_obj, result, "2D-2U", "reversal", "long")
 
     def test_signal_3_2u(self):
-        """Test 3-2U signal pattern validation."""
-        data = self._create_test_data_for_pattern("3-2U")
+        """Test 3-2U signal pattern validation with deterministic CSV data."""
+        from tests.utils.csv_signal_loader import load_signal_test_data
+        from tests.utils.signal_validator import assert_signal_detected, get_signal_rows
+
+        # Load pre-computed test data (guaranteed to contain 3-2U pattern)
+        market_df, expected_df = load_signal_test_data("3-2U")
+
+        # Configure indicators with target detection
         config = IndicatorsConfig(
             timeframe_configs=[
-                TimeframeItemConfig(timeframes=["all"], swing_points=SwingPointsConfig(window=1, threshold=0.0))
+                TimeframeItemConfig(
+                    timeframes=["all"],
+                    swing_points=SwingPointsConfig(window=1, threshold=0.0),
+                    target_config=TargetConfig(
+                        upper_bound="higher_high",
+                        lower_bound="lower_low",
+                        merge_threshold_pct=0.0,
+                        max_targets=None,
+                    ),
+                )
             ]
         )
-        indicators = Indicators(config)
-        result = indicators.process(data)
-        signal_rows = result.filter(col("signal").is_not_null())
 
-        signal_objects = [Indicators.get_signal_object(signal_rows.slice(i, 1)) for i in range(len(signal_rows))]
-        target_signals = [s for s in signal_objects if s.pattern == "3-2U"]
-        if target_signals:
-            self._validate_signal_object(target_signals[0], result, "3-2U", "reversal", "long")
-        else:
-            print(f"⚠️ 3-2U pattern not detected in test data (detected: {[s.pattern for s in signal_objects]})")
+        # Process market data through indicators
+        indicators = Indicators(config)
+        result = indicators.process(market_df)
+
+        # Validate signal was detected (guaranteed with CSV data)
+        assert_signal_detected(result, "3-2U")
+
+        # Get signal row and create signal object
+        signal_row = get_signal_rows(result, "3-2U").slice(0, 1)
+        signal_obj = Indicators.get_signal_object(signal_row)
+
+        # Validate signal properties using existing helper
+        self._validate_signal_object(signal_obj, result, "3-2U", "reversal", "long")
 
     def test_signal_1_2u_2d(self):
-        """Test 1-2U-2D signal pattern validation."""
-        data = self._create_test_data_for_pattern("1-2U-2D")
+        """Test 1-2U-2D signal pattern validation with deterministic CSV data."""
+        from tests.utils.csv_signal_loader import load_signal_test_data
+        from tests.utils.signal_validator import assert_signal_detected, get_signal_rows
+
+        # Load pre-computed test data (guaranteed to contain 1-2U-2D pattern)
+        market_df, expected_df = load_signal_test_data("1-2U-2D")
+
+        # Configure indicators with target detection
         config = IndicatorsConfig(
             timeframe_configs=[
-                TimeframeItemConfig(timeframes=["all"], swing_points=SwingPointsConfig(window=1, threshold=0.0))
+                TimeframeItemConfig(
+                    timeframes=["all"],
+                    swing_points=SwingPointsConfig(window=1, threshold=0.0),
+                    target_config=TargetConfig(
+                        upper_bound="higher_high",
+                        lower_bound="lower_low",
+                        merge_threshold_pct=0.0,
+                        max_targets=None,
+                    ),
+                )
             ]
         )
-        indicators = Indicators(config)
-        result = indicators.process(data)
-        signal_rows = result.filter(col("signal").is_not_null())
 
-        signal_objects = [Indicators.get_signal_object(signal_rows.slice(i, 1)) for i in range(len(signal_rows))]
-        target_signals = [s for s in signal_objects if s.pattern == "1-2U-2D"]
-        if target_signals:
-            self._validate_signal_object(target_signals[0], result, "1-2U-2D", "reversal", "short")
-        else:
-            print(f"⚠️ 1-2U-2D pattern not detected in test data (detected: {[s.pattern for s in signal_objects]})")
+        # Process market data through indicators
+        indicators = Indicators(config)
+        result = indicators.process(market_df)
+
+        # Validate signal was detected (guaranteed with CSV data)
+        assert_signal_detected(result, "1-2U-2D")
+
+        # Get signal row and create signal object
+        signal_row = get_signal_rows(result, "1-2U-2D").slice(0, 1)
+        signal_obj = Indicators.get_signal_object(signal_row)
+
+        # Validate signal properties using existing helper
+        self._validate_signal_object(signal_obj, result, "1-2U-2D", "reversal", "short")
 
     def test_signal_3_1_2d(self):
-        """Test 3-1-2D signal pattern validation."""
-        data = self._create_test_data_for_pattern("3-1-2D")
+        """Test 3-1-2D signal pattern validation with deterministic CSV data."""
+        from tests.utils.csv_signal_loader import load_signal_test_data
+        from tests.utils.signal_validator import assert_signal_detected, get_signal_rows
+
+        # Load pre-computed test data (guaranteed to contain 3-1-2D pattern)
+        market_df, expected_df = load_signal_test_data("3-1-2D")
+
+        # Configure indicators with target detection
         config = IndicatorsConfig(
             timeframe_configs=[
-                TimeframeItemConfig(timeframes=["all"], swing_points=SwingPointsConfig(window=1, threshold=0.0))
+                TimeframeItemConfig(
+                    timeframes=["all"],
+                    swing_points=SwingPointsConfig(window=1, threshold=0.0),
+                    target_config=TargetConfig(
+                        upper_bound="higher_high",
+                        lower_bound="lower_low",
+                        merge_threshold_pct=0.0,
+                        max_targets=None,
+                    ),
+                )
             ]
         )
-        indicators = Indicators(config)
-        result = indicators.process(data)
-        signal_rows = result.filter(col("signal").is_not_null())
 
-        signal_objects = [Indicators.get_signal_object(signal_rows.slice(i, 1)) for i in range(len(signal_rows))]
-        target_signals = [s for s in signal_objects if s.pattern == "3-1-2D"]
-        if target_signals:
-            self._validate_signal_object(target_signals[0], result, "3-1-2D", "reversal", "short")
-        else:
-            print(f"⚠️ 3-1-2D pattern not detected in test data (detected: {[s.pattern for s in signal_objects]})")
+        # Process market data through indicators
+        indicators = Indicators(config)
+        result = indicators.process(market_df)
+
+        # Validate signal was detected (guaranteed with CSV data)
+        assert_signal_detected(result, "3-1-2D")
+
+        # Get signal row and create signal object
+        signal_row = get_signal_rows(result, "3-1-2D").slice(0, 1)
+        signal_obj = Indicators.get_signal_object(signal_row)
+
+        # Validate signal properties using existing helper
+        self._validate_signal_object(signal_obj, result, "3-1-2D", "reversal", "short")
 
     def test_signal_3_2u_2d(self):
-        """Test 3-2U-2D signal pattern validation."""
-        data = self._create_test_data_for_pattern("3-2U-2D")
+        """Test 3-2U-2D signal pattern validation with deterministic CSV data."""
+        from tests.utils.csv_signal_loader import load_signal_test_data
+        from tests.utils.signal_validator import assert_signal_detected, get_signal_rows
+
+        # Load pre-computed test data (guaranteed to contain 3-2U-2D pattern)
+        market_df, expected_df = load_signal_test_data("3-2U-2D")
+
+        # Configure indicators with target detection
         config = IndicatorsConfig(
             timeframe_configs=[
-                TimeframeItemConfig(timeframes=["all"], swing_points=SwingPointsConfig(window=1, threshold=0.0))
+                TimeframeItemConfig(
+                    timeframes=["all"],
+                    swing_points=SwingPointsConfig(window=1, threshold=0.0),
+                    target_config=TargetConfig(
+                        upper_bound="higher_high",
+                        lower_bound="lower_low",
+                        merge_threshold_pct=0.0,
+                        max_targets=None,
+                    ),
+                )
             ]
         )
-        indicators = Indicators(config)
-        result = indicators.process(data)
-        signal_rows = result.filter(col("signal").is_not_null())
 
-        signal_objects = [Indicators.get_signal_object(signal_rows.slice(i, 1)) for i in range(len(signal_rows))]
-        target_signals = [s for s in signal_objects if s.pattern == "3-2U-2D"]
-        if target_signals:
-            self._validate_signal_object(target_signals[0], result, "3-2U-2D", "reversal", "short")
-        else:
-            print(f"⚠️ 3-2U-2D pattern not detected in test data (detected: {[s.pattern for s in signal_objects]})")
+        # Process market data through indicators
+        indicators = Indicators(config)
+        result = indicators.process(market_df)
+
+        # Validate signal was detected (guaranteed with CSV data)
+        assert_signal_detected(result, "3-2U-2D")
+
+        # Get signal row and create signal object
+        signal_row = get_signal_rows(result, "3-2U-2D").slice(0, 1)
+        signal_obj = Indicators.get_signal_object(signal_row)
+
+        # Validate signal properties using existing helper
+        self._validate_signal_object(signal_obj, result, "3-2U-2D", "reversal", "short")
 
     def test_signal_2u_1_2d(self):
-        """Test 2U-1-2D signal pattern validation."""
-        data = self._create_test_data_for_pattern("2U-1-2D")
+        """Test 2U-1-2D signal pattern validation with deterministic CSV data."""
+        from tests.utils.csv_signal_loader import load_signal_test_data
+        from tests.utils.signal_validator import assert_signal_detected, get_signal_rows
+
+        # Load pre-computed test data (guaranteed to contain 2U-1-2D pattern)
+        market_df, expected_df = load_signal_test_data("2U-1-2D")
+
+        # Configure indicators with target detection
         config = IndicatorsConfig(
             timeframe_configs=[
-                TimeframeItemConfig(timeframes=["all"], swing_points=SwingPointsConfig(window=1, threshold=0.0))
+                TimeframeItemConfig(
+                    timeframes=["all"],
+                    swing_points=SwingPointsConfig(window=1, threshold=0.0),
+                    target_config=TargetConfig(
+                        upper_bound="higher_high",
+                        lower_bound="lower_low",
+                        merge_threshold_pct=0.0,
+                        max_targets=None,
+                    ),
+                )
             ]
         )
-        indicators = Indicators(config)
-        result = indicators.process(data)
-        signal_rows = result.filter(col("signal").is_not_null())
 
-        signal_objects = [Indicators.get_signal_object(signal_rows.slice(i, 1)) for i in range(len(signal_rows))]
-        target_signals = [s for s in signal_objects if s.pattern == "2U-1-2D"]
-        if target_signals:
-            self._validate_signal_object(target_signals[0], result, "2U-1-2D", "reversal", "short")
-        else:
-            print(f"⚠️ 2U-1-2D pattern not detected in test data (detected: {[s.pattern for s in signal_objects]})")
+        # Process market data through indicators
+        indicators = Indicators(config)
+        result = indicators.process(market_df)
+
+        # Validate signal was detected (guaranteed with CSV data)
+        assert_signal_detected(result, "2U-1-2D")
+
+        # Get signal row and create signal object
+        signal_row = get_signal_rows(result, "2U-1-2D").slice(0, 1)
+        signal_obj = Indicators.get_signal_object(signal_row)
+
+        # Validate signal properties using existing helper
+        self._validate_signal_object(signal_obj, result, "2U-1-2D", "reversal", "short")
 
     def test_signal_2u_2d(self):
-        """Test 2U-2D signal pattern validation."""
-        data = self._create_test_data_for_pattern("2U-2D")
+        """Test 2U-2D signal pattern validation with deterministic CSV data."""
+        from tests.utils.csv_signal_loader import load_signal_test_data
+        from tests.utils.signal_validator import assert_signal_detected, get_signal_rows
+
+        # Load pre-computed test data (guaranteed to contain 2U-2D pattern)
+        market_df, expected_df = load_signal_test_data("2U-2D")
+
+        # Configure indicators with target detection
         config = IndicatorsConfig(
             timeframe_configs=[
-                TimeframeItemConfig(timeframes=["all"], swing_points=SwingPointsConfig(window=1, threshold=0.0))
+                TimeframeItemConfig(
+                    timeframes=["all"],
+                    swing_points=SwingPointsConfig(window=1, threshold=0.0),
+                    target_config=TargetConfig(
+                        upper_bound="higher_high",
+                        lower_bound="lower_low",
+                        merge_threshold_pct=0.0,
+                        max_targets=None,
+                    ),
+                )
             ]
         )
-        indicators = Indicators(config)
-        result = indicators.process(data)
-        signal_rows = result.filter(col("signal").is_not_null())
 
-        signal_objects = [Indicators.get_signal_object(signal_rows.slice(i, 1)) for i in range(len(signal_rows))]
-        target_signals = [s for s in signal_objects if s.pattern == "2U-2D"]
-        if target_signals:
-            self._validate_signal_object(target_signals[0], result, "2U-2D", "reversal", "short")
-        else:
-            print(f"⚠️ 2U-2D pattern not detected in test data (detected: {[s.pattern for s in signal_objects]})")
+        # Process market data through indicators
+        indicators = Indicators(config)
+        result = indicators.process(market_df)
+
+        # Validate signal was detected (guaranteed with CSV data)
+        assert_signal_detected(result, "2U-2D")
+
+        # Get signal row and create signal object
+        signal_row = get_signal_rows(result, "2U-2D").slice(0, 1)
+        signal_obj = Indicators.get_signal_object(signal_row)
+
+        # Validate signal properties using existing helper
+        self._validate_signal_object(signal_obj, result, "2U-2D", "reversal", "short")
 
     def test_signal_3_2d(self):
-        """Test 3-2D signal pattern validation."""
-        data = self._create_test_data_for_pattern("3-2D")
+        """Test 3-2D signal pattern validation with deterministic CSV data."""
+        from tests.utils.csv_signal_loader import load_signal_test_data
+        from tests.utils.signal_validator import assert_signal_detected, get_signal_rows
+
+        # Load pre-computed test data (guaranteed to contain 3-2D pattern)
+        market_df, expected_df = load_signal_test_data("3-2D")
+
+        # Configure indicators with target detection
         config = IndicatorsConfig(
             timeframe_configs=[
-                TimeframeItemConfig(timeframes=["all"], swing_points=SwingPointsConfig(window=1, threshold=0.0))
+                TimeframeItemConfig(
+                    timeframes=["all"],
+                    swing_points=SwingPointsConfig(window=1, threshold=0.0),
+                    target_config=TargetConfig(
+                        upper_bound="higher_high",
+                        lower_bound="lower_low",
+                        merge_threshold_pct=0.0,
+                        max_targets=None,
+                    ),
+                )
             ]
         )
-        indicators = Indicators(config)
-        result = indicators.process(data)
-        signal_rows = result.filter(col("signal").is_not_null())
 
-        signal_objects = [Indicators.get_signal_object(signal_rows.slice(i, 1)) for i in range(len(signal_rows))]
-        target_signals = [s for s in signal_objects if s.pattern == "3-2D"]
-        if target_signals:
-            self._validate_signal_object(target_signals[0], result, "3-2D", "reversal", "short")
-        else:
-            print(f"⚠️ 3-2D pattern not detected in test data (detected: {[s.pattern for s in signal_objects]})")
+        # Process market data through indicators
+        indicators = Indicators(config)
+        result = indicators.process(market_df)
+
+        # Validate signal was detected (guaranteed with CSV data)
+        assert_signal_detected(result, "3-2D")
+
+        # Get signal row and create signal object
+        signal_row = get_signal_rows(result, "3-2D").slice(0, 1)
+        signal_obj = Indicators.get_signal_object(signal_row)
+
+        # Validate signal properties using existing helper
+        self._validate_signal_object(signal_obj, result, "3-2D", "reversal", "short")
 
     def test_signal_2u_2u(self):
-        """Test 2U-2U signal pattern validation."""
-        data = self._create_test_data_for_pattern("2U-2U")
+        """Test 2U-2U signal pattern validation with deterministic CSV data."""
+        from tests.utils.csv_signal_loader import load_signal_test_data
+        from tests.utils.signal_validator import assert_signal_detected, get_signal_rows
+
+        # Load pre-computed test data (guaranteed to contain 2U-2U pattern)
+        market_df, expected_df = load_signal_test_data("2U-2U")
+
+        # Configure indicators with target detection
         config = IndicatorsConfig(
             timeframe_configs=[
-                TimeframeItemConfig(timeframes=["all"], swing_points=SwingPointsConfig(window=1, threshold=0.0))
+                TimeframeItemConfig(
+                    timeframes=["all"],
+                    swing_points=SwingPointsConfig(window=1, threshold=0.0),
+                )
             ]
         )
-        indicators = Indicators(config)
-        result = indicators.process(data)
-        signal_rows = result.filter(col("signal").is_not_null())
 
-        signal_objects = [Indicators.get_signal_object(signal_rows.slice(i, 1)) for i in range(len(signal_rows))]
-        target_signals = [s for s in signal_objects if s.pattern == "2U-2U"]
-        if target_signals:
-            self._validate_signal_object(target_signals[0], result, "2U-2U", "continuation", "long")
-        else:
-            print(f"⚠️ 2U-2U pattern not detected in test data (detected: {[s.pattern for s in signal_objects]})")
+        # Process market data through indicators
+        indicators = Indicators(config)
+        result = indicators.process(market_df)
+
+        # Validate signal was detected (guaranteed with CSV data)
+        assert_signal_detected(result, "2U-2U")
+
+        # Get signal row and create signal object
+        signal_row = get_signal_rows(result, "2U-2U").slice(0, 1)
+        signal_obj = Indicators.get_signal_object(signal_row)
+
+        # Validate signal properties using existing helper
+        self._validate_signal_object(signal_obj, result, "2U-2U", "continuation", "long")
 
     def test_signal_2u_1_2u(self):
-        """Test 2U-1-2U signal pattern validation."""
-        data = self._create_test_data_for_pattern("2U-1-2U")
+        """Test 2U-1-2U signal pattern validation with deterministic CSV data."""
+        from tests.utils.csv_signal_loader import load_signal_test_data
+        from tests.utils.signal_validator import assert_signal_detected, get_signal_rows
+
+        # Load pre-computed test data (guaranteed to contain 2U-1-2U pattern)
+        market_df, expected_df = load_signal_test_data("2U-1-2U")
+
+        # Configure indicators with target detection
         config = IndicatorsConfig(
             timeframe_configs=[
-                TimeframeItemConfig(timeframes=["all"], swing_points=SwingPointsConfig(window=1, threshold=0.0))
+                TimeframeItemConfig(
+                    timeframes=["all"],
+                    swing_points=SwingPointsConfig(window=1, threshold=0.0),
+                )
             ]
         )
-        indicators = Indicators(config)
-        result = indicators.process(data)
-        signal_rows = result.filter(col("signal").is_not_null())
 
-        signal_objects = [Indicators.get_signal_object(signal_rows.slice(i, 1)) for i in range(len(signal_rows))]
-        target_signals = [s for s in signal_objects if s.pattern == "2U-1-2U"]
-        if target_signals:
-            self._validate_signal_object(target_signals[0], result, "2U-1-2U", "continuation", "long")
-        else:
-            print(f"⚠️ 2U-1-2U pattern not detected in test data (detected: {[s.pattern for s in signal_objects]})")
+        # Process market data through indicators
+        indicators = Indicators(config)
+        result = indicators.process(market_df)
+
+        # Validate signal was detected (guaranteed with CSV data)
+        assert_signal_detected(result, "2U-1-2U")
+
+        # Get signal row and create signal object
+        signal_row = get_signal_rows(result, "2U-1-2U").slice(0, 1)
+        signal_obj = Indicators.get_signal_object(signal_row)
+
+        # Validate signal properties using existing helper
+        self._validate_signal_object(signal_obj, result, "2U-1-2U", "continuation", "long")
 
     def test_signal_2d_2d(self):
-        """Test 2D-2D signal pattern validation."""
-        data = self._create_test_data_for_pattern("2D-2D")
+        """Test 2D-2D signal pattern validation with deterministic CSV data."""
+        from tests.utils.csv_signal_loader import load_signal_test_data
+        from tests.utils.signal_validator import assert_signal_detected, get_signal_rows
+
+        # Load pre-computed test data (guaranteed to contain 2D-2D pattern)
+        market_df, expected_df = load_signal_test_data("2D-2D")
+
+        # Configure indicators with target detection
         config = IndicatorsConfig(
             timeframe_configs=[
-                TimeframeItemConfig(timeframes=["all"], swing_points=SwingPointsConfig(window=1, threshold=0.0))
+                TimeframeItemConfig(
+                    timeframes=["all"],
+                    swing_points=SwingPointsConfig(window=1, threshold=0.0),
+                )
             ]
         )
-        indicators = Indicators(config)
-        result = indicators.process(data)
-        signal_rows = result.filter(col("signal").is_not_null())
 
-        signal_objects = [Indicators.get_signal_object(signal_rows.slice(i, 1)) for i in range(len(signal_rows))]
-        target_signals = [s for s in signal_objects if s.pattern == "2D-2D"]
-        if target_signals:
-            self._validate_signal_object(target_signals[0], result, "2D-2D", "continuation", "short")
-        else:
-            print(f"⚠️ 2D-2D pattern not detected in test data (detected: {[s.pattern for s in signal_objects]})")
+        # Process market data through indicators
+        indicators = Indicators(config)
+        result = indicators.process(market_df)
+
+        # Validate signal was detected (guaranteed with CSV data)
+        assert_signal_detected(result, "2D-2D")
+
+        # Get signal row and create signal object
+        signal_row = get_signal_rows(result, "2D-2D").slice(0, 1)
+        signal_obj = Indicators.get_signal_object(signal_row)
+
+        # Validate signal properties using existing helper
+        self._validate_signal_object(signal_obj, result, "2D-2D", "continuation", "short")
 
     def test_signal_2d_1_2d(self):
-        """Test 2D-1-2D signal pattern validation."""
-        data = self._create_test_data_for_pattern("2D-1-2D")
-        config = IndicatorsConfig(
-            timeframe_configs=[
-                TimeframeItemConfig(timeframes=["all"], swing_points=SwingPointsConfig(window=1, threshold=0.0))
-            ]
-        )
-        indicators = Indicators(config)
-        result = indicators.process(data)
-        signal_rows = result.filter(col("signal").is_not_null())
+        """Test 2D-1-2D signal pattern validation with deterministic CSV data."""
+        from tests.utils.csv_signal_loader import load_signal_test_data
+        from tests.utils.signal_validator import assert_signal_detected, get_signal_rows
 
-        signal_objects = [Indicators.get_signal_object(signal_rows.slice(i, 1)) for i in range(len(signal_rows))]
-        target_signals = [s for s in signal_objects if s.pattern == "2D-1-2D"]
-        if target_signals:
-            self._validate_signal_object(target_signals[0], result, "2D-1-2D", "continuation", "short")
-        else:
-            print(f"⚠️ 2D-1-2D pattern not detected in test data (detected: {[s.pattern for s in signal_objects]})")
+        # Load pre-computed test data (guaranteed to contain 2D-1-2D pattern)
+        market_df, expected_df = load_signal_test_data("2D-1-2D")
 
-
-@pytest.mark.unit
-class TestTargetDetection:
-    """Direct unit tests for multi-target detection logic."""
-
-    def test_local_extreme_detection_highs(self):
-        """Test detection of local highs for long signals with consecutive progression.
-
-        Pattern: 2D-2U long reversal
-
-        ASCII Candlestick Chart:
-
-        128 ┤                                     │
-        127 ┤                                     ║
-        126 ┤                                     ║
-        125 ┤                         │           ║
-        124 ┤                         ║           ║
-        123 ┤                     │   ║           ║
-        122 ┤             │       ║   ║           ║
-        121 ┤             ║       ║   ║           ║
-        120 ┤             ║       ║   ║           ║                 │
-        119 ┤             ║       ║   ║           ║         │       ║
-        118 ┤             ║       ╚═══╝           ║         ║       ║
-        117 ┤             ║                       ║         ║       ║
-        116 ┤             ║                       ║         ║       ║
-        115 ┤     │       ║                       ║         ║       ║
-        114 ┤     ║       ║                       ║         ║       ║
-        113 ┤ │   ║       ║                       ║         ║       ║
-        112 ┤ ║   ║       ║                       ║         ║       ║
-        111 ┤ ║   ║       ║                       ║         ║       ║
-        110 ┤ ║   ║       ║                       ║         ║       ║
-        109 ┤ ║   ║       ║                       ║         ║       ║
-        108 ┤ ║   ║       ║                       ║         ║       ║
-        107 ┤ ║   ║       ║                       ║         ║       ║
-        106 ┤ ║   ║       ║                       ║         ║       ║
-        105 ┤ ║   ║       ║                       ║         ║       ║
-        104 ┤ ║   ║       ║                       ║         ║       ║
-        103 ┤ ║   ║       ║                       ║         ║       ║
-        102 ┤ ║   ║       ║                       ║         ║       ║
-        101 ┤ ║   ║       ║                       ║         ║       ║
-        100 ┤ ╚═══╝       ║                       ║         ║       ║
-         99 ┤             ╚═══════════════════════╩═════════╩═══════╩═══
-            └─────────────────────────────────────────────────────────────
-                Jan1 Jan2 Jan3 Jan4 Jan5 Jan6 Jan7 Jan8  Jan9  Jan10
-                skip skip skip qual skip qual qual  T1   [2D]  [2U]
-                              (sk)      (sk) (sk)
-
-        Legend: [2D] = 2-Down setup, [2U] = 2-Up trigger
-                T1 = Only target (no others continue ascending progression)
-                qual = Qualifies (> 119.0) but skipped
-                (sk) = Skipped: interrupts ascending progression
-
-        OHLC Data (all bars have O=100, L=99, C=100):
-          Jan 1:  H:100.0 (skip: ≤ 119.0)
-          Jan 2:  H:115.0 (skip: ≤ 119.0)
-          Jan 3:  H:113.0 (skip: ≤ 119.0)
-          Jan 4:  H:122.0 (qual but < 128.0, interrupts)
-          Jan 5:  H:118.0 (skip: ≤ 119.0)
-          Jan 6:  H:125.0 (qual but < 128.0, interrupts)
-          Jan 7:  H:123.0 (qual but < 128.0, interrupts)
-          Jan 8:  H:128.0 ← T1 (only target)
-          Jan 9:  H:119.0 ← SETUP (2D, entry=119.0)
-          Jan 10: H:120.0 ← TRIGGER (2U)
-
-        Target ladder construction (scan newest→oldest, accept progressively HIGHER):
-          Jan 8: 128.0 ✓ accept (> 119.0, first target)
-          Jan 7: 123.0 ✗ skip (< 128.0, interrupts ascending progression)
-          Jan 6: 125.0 ✗ skip (< 128.0, interrupts ascending progression)
-          Jan 4: 122.0 ✗ skip (< 128.0, interrupts ascending progression)
-
-        Expected targets (newest→oldest): [128.0]
-        Note: Only one target because no other qualifying highs continue the ascending progression.
-        """
-
-        # Create data showing consecutive progression requirement
-        # Setup bar (index 8) has high of 119.0
-        # Trigger bar (index 9) has high of 120.0
-        # Only index 7 (128.0) qualifies and continues ascending progression
-        data = DataFrame(
-            {
-                "timestamp": [datetime(2024, 1, 1, 9, 30) + timedelta(minutes=i) for i in range(10)],
-                "open": [100.0] * 10,
-                "high": [100.0, 115.0, 113.0, 122.0, 118.0, 125.0, 123.0, 128.0, 119.0, 120.0],
-                #        idx0   idx1   idx2   qual   idx4   qual   qual   T1    setup  trigger
-                #                            (skip)        (skip) (skip)
-                "low": [99.0] * 10,
-                "close": [100.0] * 10,
-                "volume": [1000] * 10,
-                "symbol": ["TEST"] * 10,
-                "timeframe": ["5min"] * 10,
-            }
-        )
-
+        # Configure indicators with target detection
         config = IndicatorsConfig(
             timeframe_configs=[
                 TimeframeItemConfig(
-                    timeframes=["5min"],
-                    target_config=TargetConfig(upper_bound="higher_high", merge_threshold_pct=0.0),
-                )
-            ]
-        )
-
-        indicators = Indicators(config)
-        result = indicators.process(data)
-
-        # Trigger target detection at last bar (index 9) as if there's a signal
-        target_config = config.timeframe_configs[0].target_config
-        targets = indicators._detect_targets_for_signal(
-            result, trigger_index=9, bias="long", pattern="2D-2U", target_config=target_config
-        )
-
-        # Should detect local highs > 119.0 (setup bar) from indices 0-7
-        # Only 128.0 qualifies as it's the only price that continues ascending progression
-        # Targets in newest→oldest order: [128.0]
-        assert len(targets) > 0, "Should detect some targets"
-        assert targets == [128.0], f"Expected [128.0], got {targets}"
-
-    def test_local_extreme_detection_lows(self):
-        """Test detection of local lows for short signals.
-
-        For 2D-2U pattern (short bias):
-        - Trigger bar: index 9 (low=90.0)
-        - Setup bar: index 8 (excluded from search)
-        - Targets from: indices 0-7 (before setup bar)
-        - Targets must be < trigger bar low (90.0)
-        """
-
-        # Create data with clear local lows
-        # Trigger bar (index 9) has low of 90.0
-        # For SHORT signals: build ascending ladder oldest→newest, then reverse
-        # Ladder (oldest→newest): 80 → 82 → 85 → 88 (ascending)
-        # Reversed for return (newest→oldest): [88, 85, 82, 80] (descending values)
-        data = DataFrame(
-            {
-                "timestamp": [datetime(2024, 1, 1, 9, 30) + timedelta(minutes=i) for i in range(10)],
-                "open": [100.0] * 10,
-                "high": [101.0] * 10,
-                "low": [100.0, 88.0, 89.0, 85.0, 87.0, 82.0, 84.0, 80.0, 91.0, 90.0],
-                #       oldest ^t1       ^t2       ^t3       ^t4  ^setup ^trigger
-                "close": [100.0] * 10,
-                "volume": [1000] * 10,
-                "symbol": ["TEST"] * 10,
-                "timeframe": ["5min"] * 10,
-            }
-        )
-
-        config = IndicatorsConfig(
-            timeframe_configs=[
-                TimeframeItemConfig(
-                    timeframes=["5min"],
-                    target_config=TargetConfig(lower_bound="lower_low", merge_threshold_pct=0.0),
-                )
-            ]
-        )
-
-        indicators = Indicators(config)
-        result = indicators.process(data)
-
-        target_config = config.timeframe_configs[0].target_config
-        targets = indicators._detect_targets_for_signal(
-            result, trigger_index=9, bias="short", pattern="2D-2U", target_config=target_config
-        )
-
-        # For SHORT signals: scan newest→oldest, accept progressively lower prices
-        # Starting from 80.0 (newest qualifying at idx 7), all earlier prices are higher
-        # So only 80.0 is accepted
-        assert len(targets) > 0, "Should detect some targets"
-        assert targets == [80.0], f"Expected [80.0], got {targets}"
-
-    def test_ascending_progression_filtering(self):
-        """Test that only ascending highs are included for long signals."""
-
-        # Create data where not all highs are progressively higher
-        data = DataFrame(
-            {
-                "timestamp": [datetime(2024, 1, 1, 9, 30) + timedelta(minutes=i) for i in range(10)],
-                "open": [100.0] * 10,
-                "high": [100.0, 105.0, 103.0, 107.0, 104.0, 109.0, 106.0, 111.0, 108.0, 115.0],
-                "low": [99.0] * 10,
-                "close": [100.0] * 10,
-                "volume": [1000] * 10,
-                "symbol": ["TEST"] * 10,
-                "timeframe": ["5min"] * 10,
-            }
-        )
-
-        config = IndicatorsConfig(
-            timeframe_configs=[
-                TimeframeItemConfig(
-                    timeframes=["5min"],
-                    target_config=TargetConfig(upper_bound="higher_high", merge_threshold_pct=0.0),
-                )
-            ]
-        )
-
-        indicators = Indicators(config)
-        result = indicators.process(data)
-
-        target_config = config.timeframe_configs[0].target_config
-        targets = indicators._detect_targets_for_signal(
-            result, trigger_index=9, bias="long", pattern="2D-2U", target_config=target_config
-        )
-
-        # Should only get ascending highs (filtering out lower highs)
-        for i in range(len(targets) - 1):
-            assert targets[i] < targets[i + 1], f"Should only include ascending highs: {targets}"
-
-    def test_merge_logic_two_percent_threshold(self):
-        """Test merge logic with 2% threshold."""
-
-        # Create data with targets within 2% of each other
-        data = DataFrame(
-            {
-                "timestamp": [datetime(2024, 1, 1, 9, 30) + timedelta(minutes=i) for i in range(10)],
-                "open": [100.0] * 10,
-                "high": [100.0, 105.0, 103.0, 106.5, 104.0, 109.0, 106.0, 110.0, 108.0, 115.0],
-                # 105 and 106.5 are ~1.4% apart, should merge
-                # 109 and 110 are ~0.9% apart, should merge
-                "low": [99.0] * 10,
-                "close": [100.0] * 10,
-                "volume": [1000] * 10,
-                "symbol": ["TEST"] * 10,
-                "timeframe": ["5min"] * 10,
-            }
-        )
-
-        config = IndicatorsConfig(
-            timeframe_configs=[
-                TimeframeItemConfig(
-                    timeframes=["5min"],
-                    target_config=TargetConfig(upper_bound="higher_high", merge_threshold_pct=0.02),
-                )
-            ]
-        )
-
-        indicators = Indicators(config)
-        result = indicators.process(data)
-
-        target_config = config.timeframe_configs[0].target_config
-        targets = indicators._detect_targets_for_signal(
-            result, trigger_index=9, bias="long", pattern="2D-2U", target_config=target_config
-        )
-
-        # With 2% merge, close targets should be merged
-        # For long signals, merge picks higher value
-        if len(targets) > 1:
-            for i in range(len(targets) - 1):
-                pct_diff = abs(targets[i + 1] - targets[i]) / targets[i]
-                assert pct_diff > 0.02 or targets[i] == targets[i + 1], (
-                    f"Adjacent targets should be >2% apart or merged: {targets}"
-                )
-
-    def test_merge_logic_picks_higher_for_long(self):
-        """Test that merge logic picks higher target for long signals."""
-
-        # Create data with two very close targets
-        data = DataFrame(
-            {
-                "timestamp": [datetime(2024, 1, 1, 9, 30) + timedelta(minutes=i) for i in range(6)],
-                "open": [100.0] * 6,
-                "high": [100.0, 105.0, 103.0, 105.5, 104.0, 110.0],  # 105 and 105.5 should merge to 105.5
-                "low": [99.0] * 6,
-                "close": [100.0] * 6,
-                "volume": [1000] * 6,
-                "symbol": ["TEST"] * 6,
-                "timeframe": ["5min"] * 6,
-            }
-        )
-
-        config = IndicatorsConfig(
-            timeframe_configs=[
-                TimeframeItemConfig(
-                    timeframes=["5min"],
-                    target_config=TargetConfig(upper_bound="higher_high", merge_threshold_pct=0.01),  # 1% threshold
-                )
-            ]
-        )
-
-        indicators = Indicators(config)
-        result = indicators.process(data)
-
-        target_config = config.timeframe_configs[0].target_config
-        targets = indicators._detect_targets_for_signal(
-            result, trigger_index=5, bias="long", pattern="2D-2U", target_config=target_config
-        )
-
-        # Should include the higher value (105.5) when merging, not 105
-        if any(104.5 < t < 106 for t in targets):
-            # If we got a target in the 105 range, it should be 105.5 (the higher one)
-            merged_target = next(t for t in targets if 104.5 < t < 106)
-            assert merged_target == 105.5, f"Should merge to higher value (105.5), got {merged_target}"
-
-    def test_merge_logic_picks_lower_for_short(self):
-        """Test that merge logic picks lower target for short signals."""
-
-        # Create data with two very close targets
-        data = DataFrame(
-            {
-                "timestamp": [datetime(2024, 1, 1, 9, 30) + timedelta(minutes=i) for i in range(6)],
-                "open": [100.0] * 6,
-                "high": [101.0] * 6,
-                "low": [100.0, 95.0, 97.0, 94.5, 96.0, 90.0],  # 95 and 94.5 should merge to 94.5
-                "close": [100.0] * 6,
-                "volume": [1000] * 6,
-                "symbol": ["TEST"] * 6,
-                "timeframe": ["5min"] * 6,
-            }
-        )
-
-        config = IndicatorsConfig(
-            timeframe_configs=[
-                TimeframeItemConfig(
-                    timeframes=["5min"],
-                    target_config=TargetConfig(lower_bound="lower_low", merge_threshold_pct=0.01),
-                )
-            ]
-        )
-
-        indicators = Indicators(config)
-        result = indicators.process(data)
-
-        target_config = config.timeframe_configs[0].target_config
-        targets = indicators._detect_targets_for_signal(
-            result, trigger_index=5, bias="short", pattern="2D-2U", target_config=target_config
-        )
-
-        # Should include the lower value (94.5) when merging, not 95
-        if any(94 < t < 96 for t in targets):
-            merged_target = next(t for t in targets if 94 < t < 96)
-            assert merged_target == 94.5, f"Should merge to lower value (94.5), got {merged_target}"
-
-    def test_max_targets_limiting(self):
-        """Test max_targets configuration limits number of targets."""
-
-        # Create data with many local highs
-        data = DataFrame(
-            {
-                "timestamp": [datetime(2024, 1, 1, 9, 30) + timedelta(minutes=i) for i in range(20)],
-                "open": [100.0] * 20,
-                "high": [100 + i * 2 for i in range(20)],  # Progressively higher
-                "low": [99.0] * 20,
-                "close": [100.0] * 20,
-                "volume": [1000] * 20,
-                "symbol": ["TEST"] * 20,
-                "timeframe": ["5min"] * 20,
-            }
-        )
-
-        config = IndicatorsConfig(
-            timeframe_configs=[
-                TimeframeItemConfig(
-                    timeframes=["5min"],
-                    target_config=TargetConfig(upper_bound="higher_high", merge_threshold_pct=0.0, max_targets=3),
-                )
-            ]
-        )
-
-        indicators = Indicators(config)
-        result = indicators.process(data)
-
-        target_config = config.timeframe_configs[0].target_config
-        targets = indicators._detect_targets_for_signal(
-            result, trigger_index=19, bias="long", pattern="2D-2U", target_config=target_config
-        )
-
-        # Should be limited to max_targets
-        assert len(targets) <= 3, f"Should respect max_targets=3, got {len(targets)} targets"
-
-    def test_no_ascending_targets_empty_list(self):
-        """Test targets with chronologically ascending prices for long signal.
-
-        Pattern: 2D-2U long reversal with chronologically ascending highs
-
-        ASCII Candlestick Chart:
-
-        106 ┤                                     │
-        105 ┤                                   ╔═╝
-        104 ┤                             │     ║
-        103 ┤                       │   ╔═╝     ║
-        102 ┤                 │   ╔═╝   ║       ║
-        101 ┤           │   ╔═╝   ║     ║       ║
-        100 ┤     │   ╔═╝   ║     ║     ║       ║
-         99 ┤ │   ╚═══╝     ║     ║     ║       ║
-         98 ┤ ║             ╚═════╝     ║       ║         │
-         97 ┤ ╚═══╗                     ║       ║         ╚═══╗
-         96 ┤     ║                     ║       ║             ║
-         95 ┤     ╚═════════════════════╩═══════╩═════════════╝
-            └──────────────────────────────────────────────────────
-                 Jan1 Jan2 Jan3 Jan4 Jan5 Jan6 Jan7 Jan8 Jan9 Jan10
-                 qual qual qual qual qual qual qual  T1  [2D] [2U]
-                 (sk) (sk) (sk) (sk) (sk) (sk) (sk)     SETUP TRIG
-
-        Legend: [2D] = 2-Down setup, [2U] = 2-Up trigger
-                T1 = Only target (chronologically ascending prices interrupt progression)
-                qual = Qualifies (> 98.0) but skipped
-                (sk) = Skipped: < 106.0, interrupts ascending progression
-
-        OHLC Data:
-          Jan 1:  O:99.0  H:100.0 L:98.0  C:99.0  (qual but < 106.0, skip)
-          Jan 2:  O:98.0  H:99.0  L:97.0  C:98.0  (qual but < 106.0, skip)
-          Jan 3:  O:99.0  H:100.0 L:98.0  C:99.0  (qual but < 106.0, skip)
-          Jan 4:  O:100.0 H:101.0 L:99.0  C:100.0 (qual but < 106.0, skip)
-          Jan 5:  O:101.0 H:102.0 L:100.0 C:101.0 (qual but < 106.0, skip)
-          Jan 6:  O:102.0 H:103.0 L:101.0 C:102.0 (qual but < 106.0, skip)
-          Jan 7:  O:103.0 H:104.0 L:102.0 C:103.0 (qual but < 106.0, skip)
-          Jan 8:  O:105.0 H:106.0 L:104.0 C:105.0 ← T1 (only target)
-          Jan 9:  O:97.0  H:98.0  L:96.0  C:97.0  ← SETUP (2D, entry=98.0)
-          Jan 10: O:96.0  H:97.0  L:95.0  C:96.0  ← TRIGGER (2U)
-
-        Target ladder construction (scan newest→oldest, accept progressively HIGHER):
-          Jan 8: 106.0 ✓ accept (> 98.0, first target)
-          Jan 7: 104.0 ✗ skip (< 106.0, interrupts ascending progression)
-          Jan 6: 103.0 ✗ skip (< 106.0, interrupts ascending progression)
-          Jan 5: 102.0 ✗ skip (< 106.0, interrupts ascending progression)
-          Jan 4: 101.0 ✗ skip (< 106.0, interrupts ascending progression)
-          Jan 3: 100.0 ✗ skip (< 106.0, interrupts ascending progression)
-          Jan 2:  99.0 ✗ skip (< 106.0, interrupts ascending progression)
-          Jan 1: 100.0 ✗ skip (< 106.0, interrupts ascending progression)
-
-        Expected targets (newest→oldest): [106.0]
-        Note: Only one target because chronologically ascending prices don't continue the progression.
-        """
-
-        # Create data with chronologically ascending highs (oldest→newest increasing)
-        # All qualify but only the most recent (106.0) continues ascending progression
-        data = DataFrame(
-            {
-                "timestamp": [datetime(2024, 1, 1, 9, 30) + timedelta(minutes=i) for i in range(10)],
-                "open": [99.0, 98.0, 99.0, 100.0, 101.0, 102.0, 103.0, 105.0, 97.0, 96.0],
-                "high": [100.0, 99.0, 100.0, 101.0, 102.0, 103.0, 104.0, 106.0, 98.0, 97.0],
-                #        qual   qual   qual   qual   qual   qual   qual    T1   setup trigger
-                #       (skip) (skip) (skip) (skip) (skip) (skip) (skip)
-                "low": [98.0, 97.0, 98.0, 99.0, 100.0, 101.0, 102.0, 104.0, 96.0, 95.0],
-                "close": [99.0, 98.0, 99.0, 100.0, 101.0, 102.0, 103.0, 105.0, 97.0, 96.0],
-                "volume": [1000] * 10,
-                "symbol": ["TEST"] * 10,
-                "timeframe": ["5min"] * 10,
-            }
-        )
-
-        config = IndicatorsConfig(
-            timeframe_configs=[
-                TimeframeItemConfig(
-                    timeframes=["5min"],
-                    target_config=TargetConfig(upper_bound="higher_high"),
-                )
-            ]
-        )
-
-        indicators = Indicators(config)
-        result = indicators.process(data)
-
-        target_config = config.timeframe_configs[0].target_config
-        targets = indicators._detect_targets_for_signal(
-            result, trigger_index=9, bias="long", pattern="2D-2U", target_config=target_config
-        )
-
-        # Trigger bar: index 9, high=97.0
-        # Setup bar: index 8, high=98.0
-        # Historical: indices 0-7, highs=[100, 99, 100, 101, 102, 103, 104, 106]
-        # All qualify (> 98.0) but only 106.0 continues ascending progression
-        # Scan newest→oldest: 106.0 accepted, all earlier prices skipped (< 106.0)
-        assert len(targets) == 1, f"Should find 1 target, got {len(targets)}"
-        assert targets == [106.0], f"Expected [106.0], got {targets}"
-
-    def test_insufficient_history_empty_list(self):
-        """Test that empty list is returned with insufficient historical data."""
-
-        # Create minimal data (signal at index 1, almost no history)
-        data = DataFrame(
-            {
-                "timestamp": [datetime(2024, 1, 1, 9, 30) + timedelta(minutes=i) for i in range(3)],
-                "open": [100.0] * 3,
-                "high": [100.0, 105.0, 110.0],
-                "low": [99.0] * 3,
-                "close": [100.0] * 3,
-                "volume": [1000] * 3,
-                "symbol": ["TEST"] * 3,
-                "timeframe": ["5min"] * 3,
-            }
-        )
-
-        config = IndicatorsConfig(
-            timeframe_configs=[
-                TimeframeItemConfig(
-                    timeframes=["5min"],
-                    target_config=TargetConfig(upper_bound="higher_high"),
-                )
-            ]
-        )
-
-        indicators = Indicators(config)
-        result = indicators.process(data)
-
-        target_config = config.timeframe_configs[0].target_config
-        targets = indicators._detect_targets_for_signal(
-            result, trigger_index=1, bias="long", pattern="2D-2U", target_config=target_config
-        )
-
-        # Should handle gracefully with minimal history
-        assert isinstance(targets, list), "Should return list even with insufficient history"
-
-    def test_none_target_config_returns_empty(self):
-        """Test that None target_config returns empty list."""
-        data = DataFrame(
-            {
-                "timestamp": [datetime(2024, 1, 1, 9, 30) + timedelta(minutes=i) for i in range(10)],
-                "open": [100.0] * 10,
-                "high": [100 + i * 2 for i in range(10)],
-                "low": [99.0] * 10,
-                "close": [100.0] * 10,
-                "volume": [1000] * 10,
-                "symbol": ["TEST"] * 10,
-                "timeframe": ["5min"] * 10,
-            }
-        )
-
-        config = IndicatorsConfig(timeframe_configs=[TimeframeItemConfig(timeframes=["5min"])])
-
-        indicators = Indicators(config)
-        result = indicators.process(data)
-
-        # Call with None config
-        targets = indicators._detect_targets_for_signal(
-            result, trigger_index=9, bias="long", pattern="2D-2U", target_config=None
-        )
-
-        assert targets == [], "Should return empty list when target_config is None"
-
-    def test_real_world_msft_short_targets(self):
-        """Test SHORT reversal (2U-2D) target ladder with real MSFT data.
-
-        Pattern: 2U-2D short reversal
-
-        ASCII Candlestick Chart:
-
-        517 ┤                                                           │
-        516 ┤                                                           ║
-        515 ┤                                                      │  ╔═╝
-        514 ┤                                                      │  ║
-        513 ┤                                                 │    ║  ║
-        512 ┤                                                 │  ╔═╩══╣
-        511 ┤               │                                 │  ║    ║
-        510 ┤               ║                                 │  ║    ║  │
-        509 ┤               ║                            │    ║  ║    ║  ║
-        508 ┤          │  ╔═╝                            │  ╔═╝  ║    ║  ║
-        507 ┤          │  ║                              │  ║    ║    ║  ║
-        506 ┤      │ ╔═╩══╣                              │  ║    ║    ║ ╔╝
-        505 ┤      │ ║    ╚═╗                            │  ║    ║    ║ ║
-        504 ┤      │ ║      ║                            │  ║    ║    ║ ║
-        503 ┤      │ ║      ║                  │     │ ╔═╝  ║    ║    ║ ║
-        502 ┤      │ ║      ╚═╗                ║     ║ ║    ║    ║    ║ ║
-        501 ┤      │ ║        ║                ║   ╔═╩═╣    ║    ║    ║ ║
-        500 ┤      ║ ║        ║                ║   ║   ╚═╗  ║    ║    ║ ║
-        499 ┤      ║ ║        ║                ║   ║     ║  ║    ║    ║ ║
-        498 ┤      ║ ║        ║          │   ╔═╩═══╣     ║  ║    ║    ║ ║
-        497 ┤      ║ ║        ║          │   ║     ║     ╚══╣    ║    ║ ║
-        496 ┤      ║ ║        ║          │   ║     ╚═╗      │    ║    ║ ║
-        495 ┤      ║ ║        ║          │   ║       ║      │    ║    ║ ║
-        494 ┤      ║ ║        ║          │   ║       ║      │    ║    ║ ║
-        493 ┤      ║ ║        ║          │   ║       ║      │    ║    ║ ║
-        492 ┤      ║ ║        ╚══════════╝   ║       ║      │    ║    ║ ║
-            └──────┴─┴───────────────────────┴───────┴──────┴────┴────┴─┴──
-                  Sep2 Sep3   Sep4  Sep5  Sep8  Sep9 Sep10 Sep11 Sep12 Sep15 Sep16 Sep17
-                                   [LL]                                       [2U]  [2D]
-                  skip skip   skip   T6    T5   skip  T4    T3    T2    T1  SETUP TRIG
-
-        Legend: [LL] = Lower Low bound, [2U] = 2-Up setup, [2D] = 2-Down trigger
-                T1-T6 = Target ladder (newest to oldest)
-                skip = Not part of consecutive descending progression
-
-        OHLC Data:
-          Sep 2:  O:500.28 H:506.00 L:496.81 C:505.12 (before bound)
-          Sep 3:  O:503.79 H:507.79 L:502.32 C:505.35 (before bound)
-          Sep 4:  O:504.30 H:508.15 L:503.15 C:507.97 (before bound)
-          Sep 5:  O:508.81 H:511.97 L:492.37 C:495.00 ← T6 (Lower Low bound)
-          Sep 8:  O:498.11 H:501.20 L:495.03 C:498.20 ← T5
-          Sep 9:  O:501.73 H:502.25 L:497.70 C:498.41 (skip: > 496.72)
-          Sep 10: O:502.97 H:503.23 L:496.72 C:500.37 ← T4
-          Sep 11: O:502.16 H:503.17 L:497.88 C:501.01 ← T3
-          Sep 12: O:506.51 H:512.55 L:503.85 C:509.90 ← T2
-          Sep 15: O:508.79 H:515.45 L:507.00 C:515.36 ← T1
-          Sep 16: O:516.88 H:517.23 L:508.60 C:509.04 ← SETUP (2U, entry=508.60)
-          Sep 17: O:510.62 H:511.29 L:505.93 C:510.02 ← TRIGGER (2D)
-
-        Target ladder construction (scan newest→oldest, accept progressively LOWER):
-          Sep 15: 507.00 ✓ accept (< 508.60, first target)
-          Sep 12: 503.85 ✓ accept (< 507.00, consecutive descending)
-          Sep 11: 497.88 ✓ accept (< 503.85, consecutive descending)
-          Sep 10: 496.72 ✓ accept (< 497.88, consecutive descending)
-          Sep 9:  497.70 ✗ skip (> 496.72, interrupts descending progression)
-          Sep 8:  495.03 ✓ accept (< 496.72, consecutive descending continues)
-          Sep 5:  492.37 ✓ accept (< 495.03, reaches lower_low bound)
-
-        Expected targets (newest→oldest): [507.0, 503.85, 497.88, 496.72, 495.03, 492.37]
-        """
-
-        # Real MSFT 1d data showing progression of lows with dates
-        test_data = [
-            ("2025-09-02", 496.81),  # Index 0 - ignored (before bound)
-            ("2025-09-03", 502.32),  # Index 1 - ignored (before bound)
-            ("2025-09-04", 503.15),  # Index 2 - ignored (before bound)
-            ("2025-09-05", 492.37),  # Index 3 - Lower_low bound, T6
-            ("2025-09-08", 495.03),  # Index 4 - T5
-            ("2025-09-09", 497.70),  # Index 5 - skipped (interrupts progression)
-            ("2025-09-10", 496.72),  # Index 6 - T4
-            ("2025-09-11", 497.88),  # Index 7 - T3
-            ("2025-09-12", 503.85),  # Index 8 - T2
-            ("2025-09-15", 507.00),  # Index 9 - T1 (newest target)
-            ("2025-09-16", 508.60),  # Index 10 - SETUP BAR (2U)
-            ("2025-09-17", 505.93),  # Index 11 - TRIGGER BAR (2D)
-        ]
-
-        timestamps = [datetime.strptime(date, "%Y-%m-%d").replace(hour=4) for date, _ in test_data]
-        lows = [low for _, low in test_data]
-
-        data = DataFrame(
-            {
-                "timestamp": timestamps,
-                "open": [
-                    500.28,
-                    503.79,
-                    504.30,
-                    508.81,
-                    498.11,
-                    501.73,
-                    502.97,
-                    502.16,
-                    506.51,
-                    508.79,
-                    516.88,
-                    510.62,
-                ],
-                "high": [
-                    506.00,
-                    507.79,
-                    508.15,
-                    511.97,
-                    501.20,
-                    502.25,
-                    503.23,
-                    503.17,
-                    512.55,
-                    515.45,
-                    517.23,
-                    511.29,
-                ],
-                "low": lows,
-                "close": [
-                    505.12,
-                    505.35,
-                    507.97,
-                    495.00,
-                    498.20,
-                    498.41,
-                    500.37,
-                    501.01,
-                    509.90,
-                    515.36,
-                    509.04,
-                    510.02,
-                ],
-                "volume": [1000] * 12,
-                "symbol": ["MSFT"] * 12,
-                "timeframe": ["1d"] * 12,
-            }
-        )
-
-        config = IndicatorsConfig(
-            timeframe_configs=[
-                TimeframeItemConfig(
-                    timeframes=["1d"],
-                    target_config=TargetConfig(lower_bound="lower_low", merge_threshold_pct=0.0),
-                )
-            ]
-        )
-
-        indicators = Indicators(config)
-        result = indicators.process(data)
-
-        # Get targets for signal at index 11
-        target_config = config.timeframe_configs[0].target_config
-        target_prices = indicators._detect_targets_for_signal(
-            result, trigger_index=11, bias="short", pattern="2D-2U", target_config=target_config
-        )
-
-        # Verify expected targets (newest→oldest with descending values)
-        expected = [
-            ("2025-09-15", 507.00),  # Index 9 - T1 (newest, < 508.60 setup price)
-            ("2025-09-12", 503.85),  # Index 8 - T2
-            ("2025-09-11", 497.88),  # Index 7 - T3
-            ("2025-09-10", 496.72),  # Index 6 - T4
-            ("2025-09-08", 495.03),  # Index 4 - T5
-            ("2025-09-05", 492.37),  # Index 3 - T6 (bound)
-        ]
-
-        expected_prices = [price for _, price in expected]
-
-        # Verify we got the right prices
-        assert target_prices == expected_prices, f"Expected {expected_prices}, got {target_prices}"
-
-        # Verify the prices came from the correct dates by checking indices
-        for i, (exp_date, exp_price) in enumerate(expected):
-            # Find this price in original data
-            matching_rows = [(idx, date, low) for idx, (date, low) in enumerate(test_data) if low == exp_price]
-            assert len(matching_rows) == 1, f"Price {exp_price} should appear exactly once in data"
-            idx, date, low = matching_rows[0]
-            assert date == exp_date, f"Target {i}: price {exp_price} should be from {exp_date}, got {date}"
-
-    def test_real_world_long_signal_ascending_targets(self):
-        """Test LONG reversal (2D-2U) target ladder with consecutive ascending prices.
-
-        Pattern: 2D-2U long reversal
-
-        ASCII Candlestick Chart:
-
-        495 ┤                     │
-        494 ┤                   ╔═╩═╗
-        493 ┤                   ║   ╚═╗
-        492 ┤                   ║     ║       │
-        491 ┤                   ║     ╚══╗    ║  │
-        490 ┤              │    ║        ║    ║  ╚══╗
-        489 ┤              ║    ║        ╚══╗ ║     ║       │
-        488 ┤              ║    ║           ║ ╚═╗   ║       ║
-        487 ┤              ║    ║           ║   ║   ╚══╗    ║
-        486 ┤         │  ╔═╝    ║           ║   ║      ║  ╔═╝
-        485 ┤    │  ╔═╝  ║      ║           ║   ║      ╚══╣
-        484 ┤    │  ║    ╚══╗   ║           ║   ║         ║   │
-        483 ┤    │  ║       ║   ║           ║   ║         ╚══╗║  │
-        482 ┤    │  ║       ║   ║           ║   ║            ║║  ║
-        481 ┤    │  ║       ║   ║           ║   ║            ║║╔═╝
-        480 ┤  ╔═╝  ║       ║   ║           ║   ║            ║║║
-        479 ┤  ║    ║       ║   ║           ║   ║            ║║║
-        478 ┤  ║    ╚═╗     ║   ║           ║   ║            ╚╝║
-        477 ┤  ╚══╗   │     ║   ║           ║   ║              ║
-            └─────┴───┴─────┴───┴───────────┴───┴──────────────┴─┴──
-                 Oct1 Oct2 Oct3 Oct4 Oct7  Oct8 Oct9 Oct10 Oct11 Oct14 Oct15 Oct16
-                 skip skip skip [HH] skip  skip skip skip  skip  skip  [2D]  [2U]
-                                  T6   T5         T4        T3    T2   SETUP TRIG
-
-        Legend: [HH] = Higher High bound, [2D] = 2-Down setup, [2U] = 2-Up trigger
-                T1-T6 = Target ladder (newest to oldest, ascending values)
-                skip = Not part of consecutive ascending progression
-
-        OHLC Data:
-          Oct 1:  O:479.00 H:480.50 L:477.50 C:479.80 (skip: < 495.40)
-          Oct 2:  O:484.50 H:485.20 L:483.00 C:485.00 (skip: < 495.40)
-          Oct 3:  O:489.20 H:490.75 L:488.50 C:490.30 (skip: < 495.40)
-          Oct 4:  O:494.00 H:495.40 L:493.20 C:494.80 ← T6 (Higher High bound)
-          Oct 7:  O:491.50 H:492.80 L:488.60 C:489.20 ← T5
-          Oct 8:  O:488.00 H:489.30 L:485.20 C:486.50 (skip: < 491.15)
-          Oct 9:  O:489.80 H:491.15 L:487.90 C:490.50 ← T4
-          Oct 10: O:487.30 H:488.60 L:484.40 C:485.80 ← T3
-          Oct 11: O:485.00 H:486.25 L:482.15 C:483.40 ← T2
-          Oct 14: O:482.50 H:483.90 L:479.80 C:481.00 ← T1
-          Oct 15: O:480.00 H:481.20 L:477.10 C:478.50 ← SETUP (2D, entry=481.20)
-          Oct 16: O:483.20 H:484.50 L:481.30 C:484.20 ← TRIGGER (2U)
-
-        Target ladder construction (scan newest→oldest, accept progressively HIGHER):
-          Oct 14: 483.90 ✓ accept (> 481.20, first target)
-          Oct 11: 486.25 ✓ accept (> 483.90, consecutive ascending)
-          Oct 10: 488.60 ✓ accept (> 486.25, consecutive ascending)
-          Oct 9:  491.15 ✓ accept (> 488.60, consecutive ascending)
-          Oct 8:  489.30 ✗ skip (< 491.15, interrupts ascending progression)
-          Oct 7:  492.80 ✓ accept (> 491.15, consecutive ascending continues)
-          Oct 4:  495.40 ✓ accept (> 492.80, reaches higher_high bound)
-
-        Expected targets (newest→oldest with ascending values): [483.9, 486.25, 488.6, 491.15, 492.8, 495.4]
-        """
-
-        # Synthetic data showing ascending highs for long signal scenario
-        # Simulates 2D-2U long reversal pattern
-        test_data = [
-            ("2025-10-01", 480.50),  # Index 0 - skipped (< 495.40)
-            ("2025-10-02", 485.20),  # Index 1 - skipped (< 495.40)
-            ("2025-10-03", 490.75),  # Index 2 - skipped (< 495.40)
-            ("2025-10-04", 495.40),  # Index 3 - T6 (higher_high bound)
-            ("2025-10-07", 492.80),  # Index 4 - T5
-            ("2025-10-08", 489.30),  # Index 5 - skipped (interrupts progression)
-            ("2025-10-09", 491.15),  # Index 6 - T4
-            ("2025-10-10", 488.60),  # Index 7 - T3
-            ("2025-10-11", 486.25),  # Index 8 - T2
-            ("2025-10-14", 483.90),  # Index 9 - T1 (newest target)
-            ("2025-10-15", 481.20),  # Index 10 - SETUP BAR (2D)
-            ("2025-10-16", 484.50),  # Index 11 - TRIGGER BAR (2U)
-        ]
-
-        timestamps = [datetime.strptime(date, "%Y-%m-%d").replace(hour=4) for date, _ in test_data]
-        highs = [high for _, high in test_data]
-
-        data = DataFrame(
-            {
-                "timestamp": timestamps,
-                "open": [
-                    479.00,
-                    484.50,
-                    489.20,
-                    494.00,
-                    491.50,
-                    488.00,
-                    489.80,
-                    487.30,
-                    485.00,
-                    482.50,
-                    480.00,
-                    483.20,
-                ],
-                "high": highs,
-                "low": [477.50, 483.00, 488.50, 493.20, 488.60, 485.20, 487.90, 484.40, 482.15, 479.80, 477.10, 481.30],
-                "close": [
-                    479.80,
-                    485.00,
-                    490.30,
-                    494.80,
-                    489.20,
-                    486.50,
-                    490.50,
-                    485.80,
-                    483.40,
-                    481.00,
-                    478.50,
-                    484.20,
-                ],
-                "volume": [1000] * 12,
-                "symbol": ["TEST"] * 12,
-                "timeframe": ["1d"] * 12,
-            }
-        )
-
-        config = IndicatorsConfig(
-            timeframe_configs=[
-                TimeframeItemConfig(
-                    timeframes=["1d"],
-                    target_config=TargetConfig(upper_bound="higher_high", merge_threshold_pct=0.0),
-                )
-            ]
-        )
-
-        indicators = Indicators(config)
-        result = indicators.process(data)
-
-        # Get targets for long signal at index 11
-        target_config = config.timeframe_configs[0].target_config
-        target_prices = indicators._detect_targets_for_signal(
-            result, trigger_index=11, bias="long", pattern="2D-2U", target_config=target_config
-        )
-
-        # Build expected targets with (date, price) tuples for validation
-        # NEW LOGIC: Search from indices 0-9 (before setup bar at index 10)
-        # Setup bar: index 10, high=481.20
-        # Trigger bar: index 11, high=484.50
-        # Targets must be > 481.20 (setup bar high)
-        # Scan newest→oldest, accept progressively HIGHER (creates ascending values)
-        expected = [
-            ("2025-10-14", 483.90),  # Index 9 - T1 (first target, newest)
-            ("2025-10-11", 486.25),  # Index 8 - T2
-            ("2025-10-10", 488.60),  # Index 7 - T3
-            ("2025-10-09", 491.15),  # Index 6 - T4
-            ("2025-10-07", 492.80),  # Index 4 - T5
-            ("2025-10-04", 495.40),  # Index 3 - T6 (higher_high bound)
-        ]
-
-        expected_prices = [price for _, price in expected]
-
-        # Verify we got the right prices
-        assert target_prices == expected_prices, f"Expected {expected_prices}, got {target_prices}"
-
-        # Verify the prices came from the correct dates by checking indices
-        for i, (exp_date, exp_price) in enumerate(expected):
-            # Find this price in original data
-            matching_rows = [(idx, date, high) for idx, (date, high) in enumerate(test_data) if high == exp_price]
-            assert len(matching_rows) == 1, f"Price {exp_price} should appear exactly once in data"
-            idx, date, high = matching_rows[0]
-            assert date == exp_date, f"Target {i}: price {exp_price} should be from {exp_date}, got {date}"
-
-    def test_edge_case_all_historical_prices_ascending_short(self):
-        """Test short signal where all historical lows are ASCENDING chronologically."""
-
-        # Edge case: Short signal with ascending lows chronologically
-        # In REVERSE chronological order (how targets are built), this becomes descending
-        # which IS a valid ladder for shorts
-        test_data = [
-            ("2025-11-01", 480.0),  # Index 0
-            ("2025-11-02", 485.0),  # Index 1
-            ("2025-11-03", 490.0),  # Index 2
-            ("2025-11-04", 495.0),  # Index 3
-            ("2025-11-05", 500.0),  # Index 4
-            ("2025-11-06", 505.0),  # Index 5
-            ("2025-11-07", 510.0),  # Index 6
-            ("2025-11-08", 515.0),  # Index 7
-            ("2025-11-09", 520.0),  # Index 8 - skip (most recent)
-            ("2025-11-10", 525.0),  # Index 9 - SIGNAL BAR
-        ]
-
-        timestamps = [datetime.strptime(date, "%Y-%m-%d").replace(hour=4) for date, _ in test_data]
-        lows = [low for _, low in test_data]
-
-        data = DataFrame(
-            {
-                "timestamp": timestamps,
-                "open": [low + 5.0 for low in lows],
-                "high": [low + 10.0 for low in lows],
-                "low": lows,
-                "close": [low + 7.0 for low in lows],
-                "volume": [1000] * 10,
-                "symbol": ["TEST"] * 10,
-                "timeframe": ["1d"] * 10,
-            }
-        )
-
-        config = IndicatorsConfig(
-            timeframe_configs=[
-                TimeframeItemConfig(
-                    timeframes=["1d"],
-                    target_config=TargetConfig(lower_bound="lower_low", merge_threshold_pct=0.0),
-                )
-            ]
-        )
-
-        indicators = Indicators(config)
-        result = indicators.process(data)
-
-        target_config = config.timeframe_configs[0].target_config
-        target_prices = indicators._detect_targets_for_signal(
-            result, trigger_index=9, bias="short", pattern="2D-2U", target_config=target_config
-        )
-
-        # Expected: descending ladder in reverse chronological order
-        # Skip 520.0 (idx 8), start at 515.0 (idx 7), descend to 480.0 (idx 0)
-        expected = [
-            ("2025-11-08", 515.0),  # Index 7
-            ("2025-11-07", 510.0),  # Index 6
-            ("2025-11-06", 505.0),  # Index 5
-            ("2025-11-05", 500.0),  # Index 4
-            ("2025-11-04", 495.0),  # Index 3
-            ("2025-11-03", 490.0),  # Index 2
-            ("2025-11-02", 485.0),  # Index 1
-            ("2025-11-01", 480.0),  # Index 0
-        ]
-
-        expected_prices = [price for _, price in expected]
-        assert target_prices == expected_prices, f"Expected {expected_prices}, got {target_prices}"
-
-        # Verify the correct bars were selected with date validation
-        for i, (exp_date, exp_price) in enumerate(expected):
-            matching_rows = [(idx, date, low) for idx, (date, low) in enumerate(test_data) if low == exp_price]
-            assert len(matching_rows) == 1, f"Price {exp_price} should appear exactly once"
-            idx, date, low = matching_rows[0]
-            assert date == exp_date, f"Target {i}: expected {exp_date}, got {date}"
-
-    def test_edge_case_all_historical_prices_descending_long(self):
-        """Test long signal where all historical highs are DESCENDING chronologically."""
-
-        # Edge case: Long signal with descending highs chronologically
-        # In REVERSE chronological order (how targets are built), this becomes ascending
-        # which IS a valid ladder for longs
-        test_data = [
-            ("2025-11-01", 525.0),  # Index 0
-            ("2025-11-02", 520.0),  # Index 1
-            ("2025-11-03", 515.0),  # Index 2
-            ("2025-11-04", 510.0),  # Index 3
-            ("2025-11-05", 505.0),  # Index 4
-            ("2025-11-06", 500.0),  # Index 5
-            ("2025-11-07", 495.0),  # Index 6
-            ("2025-11-08", 490.0),  # Index 7
-            ("2025-11-09", 485.0),  # Index 8 - skip (most recent)
-            ("2025-11-10", 480.0),  # Index 9 - SIGNAL BAR
-        ]
-
-        timestamps = [datetime.strptime(date, "%Y-%m-%d").replace(hour=4) for date, _ in test_data]
-        highs = [high for _, high in test_data]
-
-        data = DataFrame(
-            {
-                "timestamp": timestamps,
-                "open": [high - 5.0 for high in highs],
-                "high": highs,
-                "low": [high - 10.0 for high in highs],
-                "close": [high - 3.0 for high in highs],
-                "volume": [1000] * 10,
-                "symbol": ["TEST"] * 10,
-                "timeframe": ["1d"] * 10,
-            }
-        )
-
-        config = IndicatorsConfig(
-            timeframe_configs=[
-                TimeframeItemConfig(
-                    timeframes=["1d"],
-                    target_config=TargetConfig(upper_bound="higher_high", merge_threshold_pct=0.0),
-                )
-            ]
-        )
-
-        indicators = Indicators(config)
-        result = indicators.process(data)
-
-        target_config = config.timeframe_configs[0].target_config
-        target_prices = indicators._detect_targets_for_signal(
-            result, trigger_index=9, bias="long", pattern="2D-2U", target_config=target_config
-        )
-
-        # Expected: ascending ladder in reverse chronological order
-        # Skip 485.0 (idx 8), start at 490.0 (idx 7), ascend to 525.0 (idx 0)
-        expected = [
-            ("2025-11-08", 490.0),  # Index 7
-            ("2025-11-07", 495.0),  # Index 6
-            ("2025-11-06", 500.0),  # Index 5
-            ("2025-11-05", 505.0),  # Index 4
-            ("2025-11-04", 510.0),  # Index 3
-            ("2025-11-03", 515.0),  # Index 2
-            ("2025-11-02", 520.0),  # Index 1
-            ("2025-11-01", 525.0),  # Index 0
-        ]
-
-        expected_prices = [price for _, price in expected]
-        assert target_prices == expected_prices, f"Expected {expected_prices}, got {target_prices}"
-
-        # Verify the correct bars were selected with date validation
-        for i, (exp_date, exp_price) in enumerate(expected):
-            matching_rows = [(idx, date, high) for idx, (date, high) in enumerate(test_data) if high == exp_price]
-            assert len(matching_rows) == 1, f"Price {exp_price} should appear exactly once"
-            idx, date, high = matching_rows[0]
-            assert date == exp_date, f"Target {i}: expected {exp_date}, got {date}"
-
-    def test_long_signal_with_lower_high_bound(self):
-        """Test long signal using lower_high as upper bound (targets are still highs)."""
-
-        # Long signal using lower_high instead of higher_high
-        # Targets should still be highs forming ascending ladder
-        test_data = [
-            ("2025-12-01", 475.20),  # Index 0
-            ("2025-12-02", 478.50),  # Index 1
-            ("2025-12-03", 481.30),  # Index 2
-            ("2025-12-04", 484.60),  # Index 3 - Lower_high structural bound
-            ("2025-12-07", 482.10),  # Index 4
-            ("2025-12-08", 479.80),  # Index 5
-            ("2025-12-09", 477.50),  # Index 6
-            ("2025-12-10", 476.20),  # Index 7 - Most recent (skipped)
-            ("2025-12-11", 478.90),  # Index 8 - SIGNAL BAR
-        ]
-
-        timestamps = [datetime.strptime(date, "%Y-%m-%d").replace(hour=4) for date, _ in test_data]
-        highs = [high for _, high in test_data]
-
-        data = DataFrame(
-            {
-                "timestamp": timestamps,
-                "open": [474.0, 477.5, 480.0, 483.5, 480.8, 478.5, 476.2, 475.0, 477.5],
-                "high": highs,
-                "low": [472.0, 475.5, 478.0, 481.5, 478.8, 476.5, 474.2, 473.0, 475.5],
-                "close": [475.0, 478.0, 481.0, 484.0, 481.5, 479.0, 476.8, 475.5, 478.5],
-                "volume": [1000] * 9,
-                "symbol": ["TEST"] * 9,
-                "timeframe": ["1d"] * 9,
-            }
-        )
-
-        config = IndicatorsConfig(
-            timeframe_configs=[
-                TimeframeItemConfig(
-                    timeframes=["1d"],
-                    target_config=TargetConfig(upper_bound="lower_high", merge_threshold_pct=0.0),
-                )
-            ]
-        )
-
-        indicators = Indicators(config)
-        result = indicators.process(data)
-
-        target_config = config.timeframe_configs[0].target_config
-        target_prices = indicators._detect_targets_for_signal(
-            result, trigger_index=8, bias="long", pattern="2D-2U", target_config=target_config
-        )
-
-        # Ascending ladder from highs: skip 476.20, start from 477.50
-        # 477.50 (idx 6), 479.80 > 477.50 ✓, 482.10 > 479.80 ✓, 484.60 > 482.10 ✓
-        expected = [
-            ("2025-12-09", 477.50),
-            ("2025-12-08", 479.80),
-            ("2025-12-07", 482.10),
-            ("2025-12-04", 484.60),  # lower_high bound
-        ]
-
-        expected_prices = [price for _, price in expected]
-        assert target_prices == expected_prices, f"Expected {expected_prices}, got {target_prices}"
-
-        # Verify dates
-        for i, (exp_date, exp_price) in enumerate(expected):
-            matching_rows = [(idx, date, high) for idx, (date, high) in enumerate(test_data) if high == exp_price]
-            assert len(matching_rows) == 1, f"Price {exp_price} should appear exactly once"
-            idx, date, high = matching_rows[0]
-            assert date == exp_date, f"Target {i}: expected {exp_date}, got {date}"
-
-    def test_short_signal_with_higher_low_bound(self):
-        """Test short signal using higher_low as lower bound (targets are still lows)."""
-
-        # Short signal using higher_low instead of lower_low
-        # Targets should still be lows forming descending ladder
-        test_data = [
-            ("2025-12-01", 510.30),  # Index 0
-            ("2025-12-02", 508.70),  # Index 1
-            ("2025-12-03", 506.50),  # Index 2
-            ("2025-12-04", 504.20),  # Index 3 - Higher_low structural bound
-            ("2025-12-07", 506.80),  # Index 4
-            ("2025-12-08", 509.10),  # Index 5
-            ("2025-12-09", 511.40),  # Index 6
-            ("2025-12-10", 513.60),  # Index 7 - Most recent (skipped)
-            ("2025-12-11", 512.10),  # Index 8 - SIGNAL BAR
-        ]
-
-        timestamps = [datetime.strptime(date, "%Y-%m-%d").replace(hour=4) for date, _ in test_data]
-        lows = [low for _, low in test_data]
-
-        data = DataFrame(
-            {
-                "timestamp": timestamps,
-                "open": [512.0, 510.5, 508.0, 506.0, 508.5, 510.8, 513.0, 515.2, 513.8],
-                "high": [514.0, 512.5, 510.0, 508.0, 510.5, 512.8, 515.0, 517.2, 515.8],
-                "low": lows,
-                "close": [511.5, 509.0, 507.0, 505.0, 507.5, 509.8, 512.0, 514.2, 512.8],
-                "volume": [1000] * 9,
-                "symbol": ["TEST"] * 9,
-                "timeframe": ["1d"] * 9,
-            }
-        )
-
-        config = IndicatorsConfig(
-            timeframe_configs=[
-                TimeframeItemConfig(
-                    timeframes=["1d"],
-                    target_config=TargetConfig(lower_bound="higher_low", merge_threshold_pct=0.0),
-                )
-            ]
-        )
-
-        indicators = Indicators(config)
-        result = indicators.process(data)
-
-        target_config = config.timeframe_configs[0].target_config
-        target_prices = indicators._detect_targets_for_signal(
-            result, trigger_index=8, bias="short", pattern="2D-2U", target_config=target_config
-        )
-
-        # Descending ladder from lows: skip 513.60, start from 511.40
-        # 511.40 (idx 6), 509.10 < 511.40 ✓, 506.80 < 509.10 ✓, 504.20 < 506.80 ✓
-        expected = [
-            ("2025-12-09", 511.40),
-            ("2025-12-08", 509.10),
-            ("2025-12-07", 506.80),
-            ("2025-12-04", 504.20),  # higher_low bound
-        ]
-
-        expected_prices = [price for _, price in expected]
-        assert target_prices == expected_prices, f"Expected {expected_prices}, got {target_prices}"
-
-        # Verify dates
-        for i, (exp_date, exp_price) in enumerate(expected):
-            matching_rows = [(idx, date, low) for idx, (date, low) in enumerate(test_data) if low == exp_price]
-            assert len(matching_rows) == 1, f"Price {exp_price} should appear exactly once"
-            idx, date, low = matching_rows[0]
-            assert date == exp_date, f"Target {i}: expected {exp_date}, got {date}"
-
-    def test_merge_threshold_comprehensive(self):
-        """Test merge threshold with exact price/date validation."""
-
-        # Test data with specific prices designed to test 2.5% merge threshold
-        # Prices within 2.5% should merge; those beyond should remain separate
-        test_data = [
-            ("2025-12-15", 490.00),  # Index 0
-            ("2025-12-16", 492.50),  # Index 1 - 0.51% from 490.00 (should merge)
-            ("2025-12-17", 495.00),  # Index 2 - 0.51% from 492.50 (should merge)
-            ("2025-12-18", 500.00),  # Index 3 - 1.01% from 495.00 (should merge)
-            ("2025-12-21", 505.00),  # Index 4 - 1.00% from 500.00 (should merge)
-            ("2025-12-22", 518.00),  # Index 5 - 2.57% from 505.00 (should NOT merge, new ladder rung)
-            ("2025-12-23", 520.00),  # Index 6 - 0.39% from 518.00 (should merge with 518)
-            ("2025-12-24", 530.00),  # Index 7 - 1.92% from 520.00 (should merge with 518/520 group)
-            ("2025-12-28", 540.00),  # Index 8 - Most recent (skipped)
-            ("2025-12-29", 535.00),  # Index 9 - SIGNAL BAR (short)
-        ]
-
-        timestamps = [datetime.strptime(date, "%Y-%m-%d").replace(hour=4) for date, _ in test_data]
-        lows = [low for _, low in test_data]
-
-        data = DataFrame(
-            {
-                "timestamp": timestamps,
-                "open": [low + 2 for low in lows],
-                "high": [low + 5 for low in lows],
-                "low": lows,
-                "close": [low + 3 for low in lows],
-                "volume": [1000] * 10,
-                "symbol": ["TEST"] * 10,
-                "timeframe": ["1d"] * 10,
-            }
-        )
-
-        config = IndicatorsConfig(
-            timeframe_configs=[
-                TimeframeItemConfig(
-                    timeframes=["1d"],
-                    target_config=TargetConfig(lower_bound="lower_low", merge_threshold_pct=0.025),  # 2.5%
-                )
-            ]
-        )
-
-        indicators = Indicators(config)
-        result = indicators.process(data)
-
-        target_config = config.timeframe_configs[0].target_config
-        target_prices = indicators._detect_targets_for_signal(
-            result, trigger_index=9, bias="short", pattern="2D-2U", target_config=target_config
-        )
-
-        # Expected behavior (merge compares each item to GROUP START):
-        # Skip 540.00 (most recent)
-        # Start: 530.00 (idx 7)
-        # Group 1: 530 → check 520: |530-520|/530=1.89% ✓, check 518: |530-518|/530=2.26% ✓
-        #          → merged to 518.00 (lowest for short)
-        # 518 is new ladder start
-        # Group 2: 505 → check 500: |505-500|/505=0.99% ✓, check 495: |505-495|/505=1.98% ✓
-        #          check 492.5: |505-492.5|/505=2.48% ✓, check 490: |505-490|/505=2.97% ✗ STOP
-        #          → merged to 492.50 (lowest in group [505, 500, 495, 492.5])
-        # Group 3: 490 (standalone, beyond 2.5% threshold from 505)
-        expected = [
-            ("2025-12-22", 518.00),  # Merged from 530, 520, 518
-            ("2025-12-16", 492.50),  # Merged from 505, 500, 495, 492.5
-            ("2025-12-15", 490.00),  # Standalone (beyond threshold from 505)
-        ]
-
-        expected_prices = [price for _, price in expected]
-        assert target_prices == expected_prices, f"Expected {expected_prices}, got {target_prices}"
-
-        # Verify the correct bars were selected
-        for i, (exp_date, exp_price) in enumerate(expected):
-            matching_rows = [(idx, date, low) for idx, (date, low) in enumerate(test_data) if low == exp_price]
-            assert len(matching_rows) == 1, f"Price {exp_price} should appear exactly once"
-            idx, date, low = matching_rows[0]
-            assert date == exp_date, f"Target {i}: expected {exp_date}, got {date}"
-
-    def test_msft_long_signal_with_real_higher_high_bound(self):
-        """
-        Test long signal using real MSFT data structure with higher_high bound.
-
-        **Validates Bug Fix #1 (bound extraction) and Bug Fix #2 (trigger filtering)**
-
-        Setup:
-        - MSFT 09-26 2D-2U long reversal scenario
-        - Trigger bar (09-25): high=510.01
-        - Signal bar (09-26): high=513.94
-        - Higher_high structural bound: 519.3 (detected at 09-19)
-
-        Expected:
-        - Targets > 510.01 (trigger filtering)
-        - Ascending ladder: [512.48, 514.59, 517.74, 519.3]
-        - Last target reaches higher_high bound (519.3)
-
-        Bug #1 would cause: bound_price=510.01 (wrong!) → only [512.48]
-        Bug #2 wouldn't affect this case (512.48 > 510.01 already)
-        """
-        # MSFT data around 09-26 with structure that creates swing high at 519.3
-        test_data = [
-            ("2025-09-05", 506.5, 511.97, 492.37, 509.9),
-            ("2025-09-08", 498.1, 501.2, 495.03, 498.2),
-            ("2025-09-09", 501.7, 502.25, 497.7, 498.41),
-            ("2025-09-10", 503.0, 503.23, 496.72, 500.37),
-            ("2025-09-11", 502.2, 503.17, 497.88, 501.01),
-            ("2025-09-12", 506.5, 512.55, 503.85, 509.9),
-            ("2025-09-15", 508.8, 515.45, 507.0, 515.36),
-            ("2025-09-16", 516.9, 517.23, 508.6, 509.04),
-            ("2025-09-17", 510.6, 511.29, 505.93, 510.02),
-            ("2025-09-18", 511.5, 513.07, 507.66, 508.45),
-            ("2025-09-19", 510.6, 519.3, 510.31, 517.93),  # SWING HIGH → higher_high=519.3
-            ("2025-09-22", 515.6, 517.74, 512.54, 514.45),
-            ("2025-09-23", 513.8, 514.59, 507.31, 509.23),
-            ("2025-09-24", 510.4, 512.48, 506.92, 510.15),
-            ("2025-09-25", 508.3, 510.01, 505.04, 507.03),  # Trigger bar (2D)
-            ("2025-09-26", 510.1, 513.94, 506.62, 511.46),  # Signal bar (2U)
-        ]
-
-        timestamps = [datetime.strptime(date, "%Y-%m-%d").replace(hour=4) for date, *_ in test_data]
-        opens = [o for _, o, *_ in test_data]
-        highs = [h for _, _, h, *_ in test_data]
-        lows = [low for _, _, _, low, _ in test_data]
-        closes = [c for *_, c in test_data]
-
-        data = DataFrame(
-            {
-                "timestamp": timestamps,
-                "open": opens,
-                "high": highs,
-                "low": lows,
-                "close": closes,
-                "volume": [1000000] * len(test_data),
-                "symbol": ["MSFT"] * len(test_data),
-                "timeframe": ["1d"] * len(test_data),
-            }
-        )
-
-        config = IndicatorsConfig(
-            timeframe_configs=[
-                TimeframeItemConfig(
-                    timeframes=["1d"],
-                    swing_points=SwingPointsConfig(window=2, threshold=0.0),
-                    target_config=TargetConfig(upper_bound="higher_high", merge_threshold_pct=0.0),
-                )
-            ]
-        )
-
-        indicators = Indicators(config)
-        result = indicators.process(data)
-
-        # Get targets for signal at index 15 (09-26)
-        target_config = config.timeframe_configs[0].target_config
-        target_prices = indicators._detect_targets_for_signal(
-            result, trigger_index=15, bias="long", pattern="2D-2U", target_config=target_config
-        )
-
-        # Expected targets: ascending ladder from 512.48 to 519.3
-        expected = [512.48, 514.59, 517.74, 519.3]
-
-        assert target_prices == expected, (
-            f"Expected {expected}, got {target_prices}. "
-            f"If only [512.48], Bug #1 (bound extraction) is present. "
-            f"Trigger bar high: 510.01, all targets should be > this value."
-        )
-
-        # Verify all targets above trigger (Bug #2 check)
-        trigger_high = 510.01
-        assert all(price > trigger_high for price in target_prices), (
-            f"All targets must be above trigger ({trigger_high})"
-        )
-
-        # Verify ascending ladder
-        for i in range(len(target_prices) - 1):
-            assert target_prices[i] < target_prices[i + 1], (
-                f"Ladder must be ascending: {target_prices[i]} < {target_prices[i + 1]}"
-            )
-
-        # Verify last target is the higher_high bound
-        assert target_prices[-1] == 519.3, "Last target should reach higher_high bound (519.3)"
-
-    def test_msft_short_signal_with_real_lower_low_bound(self):
-        """
-
-        Test short signal using real MSFT data structure with lower_low bound.
-
-        **Validates Bug Fix #1 (bound extraction) and Bug Fix #2 (trigger filtering)**
-
-        Setup:
-        - MSFT 09-25 2D-2D short continuation scenario
-        - Trigger bar (09-24): low=506.92
-        - Signal bar (09-25): low=505.04
-        - Lower_low structural bound: 492.37 (detected at 09-05)
-
-        Expected:
-        - Targets < 506.92 (trigger filtering - Bug #2 fix)
-        - Skip 507.31 (> 506.92, invalid target)
-        - Descending ladder: [505.93, 503.85, 497.88, 496.72, 495.03, 492.37]
-        - Last target reaches lower_low bound (492.37)
-
-        Bug #1 would cause: bound_price=506.92 (wrong!) → incorrect trimming
-        Bug #2 would cause: [507.31, 505.93, ...] with invalid 507.31 included
-        """
-        # MSFT data around 09-25 with structure that creates swing low at 492.37
-        test_data = [
-            ("2025-09-05", 506.5, 511.97, 492.37, 509.9),  # SWING LOW → lower_low=492.37
-            ("2025-09-08", 498.1, 501.2, 495.03, 498.2),
-            ("2025-09-09", 501.7, 502.25, 497.7, 498.41),
-            ("2025-09-10", 503.0, 503.23, 496.72, 500.37),
-            ("2025-09-11", 502.2, 503.17, 497.88, 501.01),
-            ("2025-09-12", 506.5, 512.55, 503.85, 509.9),
-            ("2025-09-15", 508.8, 515.45, 507.0, 515.36),
-            ("2025-09-16", 516.9, 517.23, 508.6, 509.04),
-            ("2025-09-17", 510.6, 511.29, 505.93, 510.02),
-            ("2025-09-18", 511.5, 513.07, 507.66, 508.45),
-            ("2025-09-19", 510.6, 519.3, 510.31, 517.93),
-            ("2025-09-22", 515.6, 517.74, 512.54, 514.45),
-            ("2025-09-23", 513.8, 514.59, 507.31, 509.23),
-            ("2025-09-24", 510.4, 512.48, 506.92, 510.15),  # Trigger bar (2D)
-            ("2025-09-25", 508.3, 510.01, 505.04, 507.03),  # Signal bar (2D)
-        ]
-
-        timestamps = [datetime.strptime(date, "%Y-%m-%d").replace(hour=4) for date, *_ in test_data]
-        opens = [o for _, o, *_ in test_data]
-        highs = [h for _, _, h, *_ in test_data]
-        lows = [low for _, _, _, low, _ in test_data]
-        closes = [c for *_, c in test_data]
-
-        data = DataFrame(
-            {
-                "timestamp": timestamps,
-                "open": opens,
-                "high": highs,
-                "low": lows,
-                "close": closes,
-                "volume": [1000000] * len(test_data),
-                "symbol": ["MSFT"] * len(test_data),
-                "timeframe": ["1d"] * len(test_data),
-            }
-        )
-
-        config = IndicatorsConfig(
-            timeframe_configs=[
-                TimeframeItemConfig(
-                    timeframes=["1d"],
-                    swing_points=SwingPointsConfig(window=2, threshold=0.0),
-                    target_config=TargetConfig(lower_bound="lower_low", merge_threshold_pct=0.0),
-                )
-            ]
-        )
-
-        indicators = Indicators(config)
-        result = indicators.process(data)
-
-        # Get targets for signal at index 14 (09-25)
-        target_config = config.timeframe_configs[0].target_config
-        target_prices = indicators._detect_targets_for_signal(
-            result, trigger_index=14, bias="short", pattern="2D-2U", target_config=target_config
-        )
-
-        # Expected targets: descending ladder from 505.93 to 492.37
-        # 507.31 should be EXCLUDED (> 506.92 trigger)
-        expected = [505.93, 503.85, 497.88, 496.72, 495.03, 492.37]
-
-        assert target_prices == expected, (
-            f"Expected {expected}, got {target_prices}. "
-            f"If [507.31, ...], Bug #2 (trigger filtering) is present. "
-            f"Trigger bar low: 506.92, all targets should be < this value."
-        )
-
-        # Verify all targets below trigger (Bug #2 check)
-        trigger_low = 506.92
-        assert all(price < trigger_low for price in target_prices), (
-            f"All targets must be below trigger ({trigger_low}). Found: {[p for p in target_prices if p >= trigger_low]}"
-        )
-
-        # Verify descending ladder
-        for i in range(len(target_prices) - 1):
-            assert target_prices[i] > target_prices[i + 1], (
-                f"Ladder must be descending: {target_prices[i]} > {target_prices[i + 1]}"
-            )
-
-        # Verify last target is the lower_low bound
-        assert target_prices[-1] == 492.37, "Last target should reach lower_low bound (492.37)"
-
-    def test_trigger_filtering_excludes_invalid_long_targets(self):
-        """
-
-        Test that trigger filtering excludes targets below trigger for long signals.
-
-        **Specifically validates Bug Fix #2**
-
-        Creates scenario where:
-        - Trigger bar has high=100.0
-        - Historical bars (newest to oldest): 105.0, 102.0, 98.0, 95.0
-        - Trigger filtering: Only consider highs > 100.0 → excludes 98.0, 95.0
-        - Ladder building: Start with 105.0, can't add 102.0 (< 105.0 for ascending)
-        - Result: [105.0] (only target above trigger forming valid ascending ladder)
-        """
-        test_data = [
-            ("2025-10-01", 90.0, 95.0, 89.0, 94.0),  # high=95 < trigger
-            ("2025-10-02", 94.0, 98.0, 93.0, 97.0),  # high=98 < trigger
-            ("2025-10-03", 97.0, 102.0, 96.0, 101.0),  # high=102 > trigger but < 105
-            ("2025-10-04", 101.0, 105.0, 100.0, 104.0),  # high=105 > trigger ✓
-            ("2025-10-05", 99.0, 100.0, 98.0, 99.5),  # Trigger bar (high=100)
-            ("2025-10-06", 100.5, 103.0, 100.0, 102.5),  # Signal bar
-        ]
-
-        timestamps = [datetime.strptime(date, "%Y-%m-%d").replace(hour=4) for date, *_ in test_data]
-        opens = [o for _, o, *_ in test_data]
-        highs = [h for _, _, h, *_ in test_data]
-        lows = [low for _, _, _, low, _ in test_data]
-        closes = [c for *_, c in test_data]
-
-        data = DataFrame(
-            {
-                "timestamp": timestamps,
-                "open": opens,
-                "high": highs,
-                "low": lows,
-                "close": closes,
-                "volume": [1000] * len(test_data),
-                "symbol": ["TEST"] * len(test_data),
-                "timeframe": ["1d"] * len(test_data),
-            }
-        )
-
-        config = IndicatorsConfig(
-            timeframe_configs=[
-                TimeframeItemConfig(
-                    timeframes=["1d"],
+                    timeframes=["all"],
                     swing_points=SwingPointsConfig(window=1, threshold=0.0),
-                    target_config=TargetConfig(upper_bound="higher_high", merge_threshold_pct=0.0),
                 )
             ]
         )
 
+        # Process market data through indicators
         indicators = Indicators(config)
-        result = indicators.process(data)
+        result = indicators.process(market_df)
 
-        target_config = config.timeframe_configs[0].target_config
-        target_prices = indicators._detect_targets_for_signal(
-            result, trigger_index=5, bias="long", pattern="2D-2U", target_config=target_config
-        )
+        # Validate signal was detected (guaranteed with CSV data)
+        assert_signal_detected(result, "2D-1-2D")
 
-        # Ascending ladder: Start with 105.0 (> 100.0), can't add 102.0 (< 105.0)
-        expected = [105.0]
+        # Get signal row and create signal object
+        signal_row = get_signal_rows(result, "2D-1-2D").slice(0, 1)
+        signal_obj = Indicators.get_signal_object(signal_row)
 
-        assert target_prices == expected, (
-            f"Expected {expected}, got {target_prices}. "
-            f"Trigger filtering should exclude 95.0 and 98.0 (< 100.0). "
-            f"Ladder logic excludes 102.0 (< 105.0 for ascending)."
-        )
-
-        # Verify no targets below trigger were included
-        trigger_high = 100.0
-        assert all(price > trigger_high for price in target_prices), (
-            f"All targets must be above trigger ({trigger_high})"
-        )
-
-    def test_trigger_filtering_excludes_invalid_short_targets(self):
-        """
-
-        Test that trigger filtering excludes targets above trigger for short signals.
-
-        **Specifically validates Bug Fix #2**
-
-        Creates scenario where:
-        - Trigger bar has low=100.0
-        - Historical bars (newest to oldest): 95.0, 98.0, 102.0, 105.0
-        - Trigger filtering: Only consider lows < 100.0 → excludes 102.0, 105.0
-        - Ladder building: Start with 95.0, can't add 98.0 (> 95.0 for descending)
-        - Result: [95.0] (only target below trigger forming valid descending ladder)
-        """
-        test_data = [
-            ("2025-10-01", 110.0, 111.0, 105.0, 106.0),  # low=105 > trigger
-            ("2025-10-02", 106.0, 107.0, 102.0, 103.0),  # low=102 > trigger
-            ("2025-10-03", 103.0, 104.0, 98.0, 99.0),  # low=98 < trigger but > 95
-            ("2025-10-04", 99.0, 100.0, 95.0, 96.0),  # low=95 < trigger ✓
-            ("2025-10-05", 100.5, 101.0, 100.0, 100.5),  # Trigger bar (low=100)
-            ("2025-10-06", 99.5, 100.0, 97.0, 97.5),  # Signal bar
-        ]
-
-        timestamps = [datetime.strptime(date, "%Y-%m-%d").replace(hour=4) for date, *_ in test_data]
-        opens = [o for _, o, *_ in test_data]
-        highs = [h for _, _, h, *_ in test_data]
-        lows = [low for _, _, _, low, _ in test_data]
-        closes = [c for *_, c in test_data]
-
-        data = DataFrame(
-            {
-                "timestamp": timestamps,
-                "open": opens,
-                "high": highs,
-                "low": lows,
-                "close": closes,
-                "volume": [1000] * len(test_data),
-                "symbol": ["TEST"] * len(test_data),
-                "timeframe": ["1d"] * len(test_data),
-            }
-        )
-
-        config = IndicatorsConfig(
-            timeframe_configs=[
-                TimeframeItemConfig(
-                    timeframes=["1d"],
-                    swing_points=SwingPointsConfig(window=1, threshold=0.0),
-                    target_config=TargetConfig(lower_bound="lower_low", merge_threshold_pct=0.0),
-                )
-            ]
-        )
-
-        indicators = Indicators(config)
-        result = indicators.process(data)
-
-        target_config = config.timeframe_configs[0].target_config
-        target_prices = indicators._detect_targets_for_signal(
-            result, trigger_index=5, bias="short", pattern="2D-2U", target_config=target_config
-        )
-
-        # Descending ladder: Start with 95.0 (< 100.0), can't add 98.0 (> 95.0)
-        expected = [95.0]
-
-        assert target_prices == expected, (
-            f"Expected {expected}, got {target_prices}. "
-            f"Trigger filtering should exclude 102.0 and 105.0 (> 100.0). "
-            f"Ladder logic excludes 98.0 (> 95.0 for descending)."
-        )
-
-        # Verify no targets above trigger were included
-        trigger_low = 100.0
-        assert all(price < trigger_low for price in target_prices), f"All targets must be below trigger ({trigger_low})"
+        # Validate signal properties using existing helper
+        self._validate_signal_object(signal_obj, result, "2D-1-2D", "continuation", "short")
 
     def test_signal_bar_creates_bound_extends_to_next_bound(self):
         """
