@@ -944,11 +944,6 @@ class Indicators(Component):
             return []
 
         # Import here to avoid circular dependency
-        from .schemas import TargetConfig
-
-        # Handle None config
-        if target_config is None:
-            target_config = TargetConfig()
 
         # Select appropriate bound based on signal bias
         # Long signals use upper_bound (higher_high or lower_high)
@@ -988,7 +983,8 @@ class Indicators(Component):
 
         # Get setup bar's price for filtering targets
         # Setup bar is always at trigger_index - 1 (the bar immediately before trigger)
-        # Targets must be beyond the setup bar's price (not trigger bar's price)
+        # Targets must be beyond the setup bar's price (not trigger bar's price) because
+        # setup bar defines entry price - targets must be beyond where we enter the trade
         setup_bar_index = trigger_index - 1
         setup_bar = df.row(setup_bar_index, named=True)
         setup_price = float(setup_bar[target_col])
