@@ -1487,19 +1487,19 @@ def generate_3_2d_context_reversal() -> tuple[pl.DataFrame, str, dict[str, Any]]
     # Build uptrend to create context (all lows unique within CSV for target ladder)
     bars = []
     bars.append({"open": 95.0, "high": 100.0, "low": 90.0, "close": 98.0})
-    bars.append({"open": 100.0, "high": 105.0, "low": 98.5, "close": 104.0})
-    bars.append({"open": 105.0, "high": 110.0, "low": 104.5, "close": 109.0})
+    bars.append({"open": 100.0, "high": 105.0, "low": 98.0, "close": 103.0})
+    bars.append({"open": 102.0, "high": 110.0, "low": 101.0, "close": 109.0})
     bars.append({"open": 109.0, "high": 113.0, "low": 108.0, "close": 112.0})
     bars.append({"open": 112.0, "high": 116.0, "low": 111.0, "close": 115.0})
 
     # 3-2D context reversal - outside bar breaks up and down
-    bars.append({"open": 113.0, "high": 119.0, "low": 107.0, "close": 118.0})
+    bars.append({"open": 114.0, "high": 119.0, "low": 107.0, "close": 118.0})
 
     # 2D trigger bar with opposite (red) continuity
-    bars.append({"open": 117.0, "high": 118.5, "low": 94.0, "close": 95.0})
+    bars.append({"open": 117.0, "high": 117.5, "low": 94.0, "close": 96.0})
 
     # Boundary bar
-    bars.append({"open": 96.0, "high": 97.0, "low": 92.0, "close": 93.0})
+    bars.append({"open": 95.0, "high": 97.0, "low": 92.0, "close": 93.0})
 
     data = {
         "timestamp": [base_time + timedelta(minutes=i) for i in range(len(bars))],

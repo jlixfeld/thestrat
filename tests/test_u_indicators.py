@@ -2100,93 +2100,100 @@ class TestInForceCalculations:
 
 @pytest.mark.unit
 class TestSignalCalculations:
-    """Test signal pattern detection with exact pattern sequences."""
+    """Test signal pattern detection using CSV fixtures."""
 
     def test_2d_2u_reversal_signal(self):
-        """Test 2D-2U reversal pattern detection."""
-        # Create exact 2D followed by 2U pattern
-        data = DataFrame(
-            {
-                "timestamp": [datetime.now() - timedelta(hours=i) for i in range(3, 0, -1)],
-                "open": [100.0, 98.0, 102.0],
-                "high": [110.0, 105.0, 112.0],  # Bar 1: 105 <= 110 (2D), Bar 2: 112 > 105 (2U)
-                "low": [90.0, 85.0, 90.0],  # Bar 1: 85 < 90 (2D), Bar 2: 90 >= 85 (2U)
-                "close": [105.0, 95.0, 108.0],
-            }
-        )
+        """Test 2D-2U reversal pattern detection using CSV fixture."""
+        from tests.utils.csv_signal_loader import load_signal_test_data
+        from tests.utils.signal_validator import assert_signal_detected, get_signal_rows
 
+        # Load pre-computed test data for 2D-2U pattern
+        market_df, _ = load_signal_test_data("2D-2U")
+
+        # Configure indicators to match CSV generation
         indicators = Indicators(
             IndicatorsConfig(
-                timeframe_configs=[TimeframeItemConfig(timeframes=["all"], swing_points=SwingPointsConfig(window=3))]
+                timeframe_configs=[
+                    TimeframeItemConfig(
+                        timeframes=["all"],
+                        swing_points=SwingPointsConfig(window=1, threshold=0.0),
+                    )
+                ]
             )
         )
-        config = indicators.config.timeframe_configs[0]
-        result = indicators._calculate_strat_patterns(data, config)
 
-        # Last bar should detect 2D-2U signal
-        assert result["signal"][2] == "2D-2U"
-        assert result["type"][2] == "reversal"
-        assert result["bias"][2] == "long"
+        # Process market data through indicators
+        result = indicators.process(market_df)
+
+        # Validate signal was detected
+        assert_signal_detected(result, "2D-2U")
+
+        # Get signal row and validate properties
+        signal_row = get_signal_rows(result, "2D-2U").row(0, named=True)
+        assert signal_row["type"] == "reversal"
+        assert signal_row["bias"] == "long"
 
     def test_3_2u_context_reversal(self):
-        """Test 3-2U context reversal pattern."""
-        # Create exact 3 followed by 2U pattern
-        data = DataFrame(
-            {
-                "timestamp": [datetime.now() - timedelta(hours=i) for i in range(3, 0, -1)],
-                "open": [100.0, 102.0, 104.0],
-                "high": [110.0, 120.0, 122.0],  # Bar 1: 120 > 110 (3), Bar 2: 122 > 120 (2U - higher high)
-                "low": [90.0, 80.0, 80.0],  # Bar 1: 80 < 90 (3), Bar 2: 80 >= 80 (2U - same/higher low)
-                "close": [105.0, 115.0, 121.0],
-            }
-        )
+        """Test 3-2U context reversal pattern using CSV fixture."""
+        from tests.utils.csv_signal_loader import load_signal_test_data
+        from tests.utils.signal_validator import assert_signal_detected, get_signal_rows
 
+        # Load pre-computed test data for 3-2U pattern
+        market_df, _ = load_signal_test_data("3-2U")
+
+        # Configure indicators to match CSV generation
         indicators = Indicators(
             IndicatorsConfig(
-                timeframe_configs=[TimeframeItemConfig(timeframes=["all"], swing_points=SwingPointsConfig(window=3))]
+                timeframe_configs=[
+                    TimeframeItemConfig(
+                        timeframes=["all"],
+                        swing_points=SwingPointsConfig(window=1, threshold=0.0),
+                    )
+                ]
             )
         )
-        config = indicators.config.timeframe_configs[0]
-        result = indicators._calculate_strat_patterns(data, config)
 
-        # Check scenarios first
-        assert result["scenario"][1] == "3"  # Outside bar
-        assert result["scenario"][2] == "2U"  # Higher high, same/higher low
+        # Process market data through indicators
+        result = indicators.process(market_df)
 
-        # Last bar should detect 3-2U signal
-        assert result["signal"][2] == "3-2U"
-        assert result["type"][2] == "reversal"
-        assert result["bias"][2] == "long"
+        # Validate signal was detected
+        assert_signal_detected(result, "3-2U")
+
+        # Get signal row and validate properties
+        signal_row = get_signal_rows(result, "3-2U").row(0, named=True)
+        assert signal_row["type"] == "reversal"
+        assert signal_row["bias"] == "long"
 
     def test_2u_2u_continuation_signal(self):
-        """Test 2U-2U continuation pattern."""
-        # Create exact 2U followed by 2U pattern
-        data = DataFrame(
-            {
-                "timestamp": [datetime.now() - timedelta(hours=i) for i in range(3, 0, -1)],
-                "open": [100.0, 102.0, 104.0],
-                "high": [110.0, 115.0, 120.0],  # Bar 1: 115 > 110 (2U), Bar 2: 120 > 115 (2U)
-                "low": [90.0, 90.0, 95.0],  # Bar 1: 90 >= 90 (2U), Bar 2: 95 >= 90 (2U)
-                "close": [105.0, 112.0, 118.0],
-            }
-        )
+        """Test 2U-2U continuation pattern using CSV fixture."""
+        from tests.utils.csv_signal_loader import load_signal_test_data
+        from tests.utils.signal_validator import assert_signal_detected, get_signal_rows
 
+        # Load pre-computed test data for 2U-2U pattern
+        market_df, _ = load_signal_test_data("2U-2U")
+
+        # Configure indicators to match CSV generation
         indicators = Indicators(
             IndicatorsConfig(
-                timeframe_configs=[TimeframeItemConfig(timeframes=["all"], swing_points=SwingPointsConfig(window=3))]
+                timeframe_configs=[
+                    TimeframeItemConfig(
+                        timeframes=["all"],
+                        swing_points=SwingPointsConfig(window=1, threshold=0.0),
+                    )
+                ]
             )
         )
-        config = indicators.config.timeframe_configs[0]
-        result = indicators._calculate_strat_patterns(data, config)
 
-        # Check scenarios
-        assert result["scenario"][1] == "2U"
-        assert result["scenario"][2] == "2U"
+        # Process market data through indicators
+        result = indicators.process(market_df)
 
-        # Last bar should detect 2U-2U continuation
-        assert result["signal"][2] == "2U-2U"
-        assert result["type"][2] == "continuation"
-        assert result["bias"][2] == "long"
+        # Validate signal was detected
+        assert_signal_detected(result, "2U-2U")
+
+        # Get signal row and validate properties
+        signal_row = get_signal_rows(result, "2U-2U").row(0, named=True)
+        assert signal_row["type"] == "continuation"
+        assert signal_row["bias"] == "long"
 
 
 @pytest.mark.unit
