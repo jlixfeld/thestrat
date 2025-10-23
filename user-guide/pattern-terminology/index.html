@@ -1241,11 +1241,10 @@
 <p><strong>Target Ladder</strong></p>
 <ul>
 <li>Series of target price levels extending to structural bounds</li>
-<li>Detected from historical bars before the trigger bar</li>
+<li>Detected from historical bars before the <strong>setup bar</strong> (or before inside bar for 1-2-2 rev-strats)</li>
 <li><strong>Long signals:</strong> Ascending ladder of highs (each target higher than previous) extending to <code>higher_high</code> or <code>lower_high</code> bound</li>
 <li><strong>Short signals:</strong> Descending ladder of lows (each target lower than previous) extending to <code>lower_low</code> or <code>higher_low</code> bound</li>
 <li>First target must be beyond the trigger bar's price (above trigger high for long, below trigger low for short)</li>
-<li>Targets are arranged in reverse chronological order (most recent bar first)</li>
 </ul>
 <h2 id="visual-pattern-guide">Visual Pattern Guide</h2>
 <h3 id="inside-bar-reversals">Inside Bar Reversals</h3>
@@ -1305,7 +1304,7 @@
 <li><strong>Stop:</strong> Setup bar low</li>
 <li><strong>Targets:</strong> Ascending ladder of historical highs extending to <code>higher_high</code> or <code>lower_high</code> bound</li>
 <li>First target must be above trigger bar high</li>
-<li>Each subsequent target higher than previous</li>
+<li>Each subsequent target higher than previous (ascending values: target_1 &lt; target_2 &lt; ...)</li>
 <li>Maximum targets determined by <code>max_targets</code> config</li>
 <li><strong>Relationship:</strong> <code>stop &lt; entry</code> and <code>trigger_high &lt; target_1 &lt; target_2 &lt; ... ≤ bound</code></li>
 </ul>
@@ -1315,7 +1314,7 @@
 <li><strong>Stop:</strong> Setup bar high</li>
 <li><strong>Targets:</strong> Descending ladder of historical lows extending to <code>lower_low</code> or <code>higher_low</code> bound</li>
 <li>First target must be below trigger bar low</li>
-<li>Each subsequent target lower than previous</li>
+<li>Each subsequent target lower than previous (descending values: target_1 &gt; target_2 &gt; ...)</li>
 <li>Maximum targets determined by <code>max_targets</code> config</li>
 <li><strong>Relationship:</strong> <code>stop &gt; entry</code> and <code>trigger_low &gt; target_1 &gt; target_2 &gt; ... ≥ bound</code></li>
 </ul>
@@ -1438,7 +1437,7 @@
     
     
       
-      <script id="__config" type="application/json">{"base": "../..", "features": ["navigation.tracking", "navigation.sections", "navigation.expand", "navigation.top", "navigation.tabs", "search.highlight", "search.suggest", "content.code.copy", "content.code.annotate", "content.code.select", "navigation.footer", "content.tooltips"], "search": "../../assets/javascripts/workers/search.973d3a69.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": "0.0.1a26"}</script>
+      <script id="__config" type="application/json">{"base": "../..", "features": ["navigation.tracking", "navigation.sections", "navigation.expand", "navigation.top", "navigation.tabs", "search.highlight", "search.suggest", "content.code.copy", "content.code.annotate", "content.code.select", "navigation.footer", "content.tooltips"], "search": "../../assets/javascripts/workers/search.973d3a69.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": "0.0.1a27"}</script>
     
     
       <script src="../../assets/javascripts/bundle.92b07e13.min.js"></script>
