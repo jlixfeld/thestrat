@@ -505,7 +505,8 @@ def build_uptrend_to_ll(base_price: float = 100.0, target_ll: float = 80.0) -> l
     - Bar 5: Higher High (HISTORICAL) ✓
     - Bars 6-10: 5 transition bars (stay below HH, above target LL) ✓
 
-    All prices are unique to avoid duplicate swing points.
+    All HIGH values are unique within this dataset to prevent duplicate targets
+    in the target ladder for long signals.
 
     Used for long reversal patterns. Reversal pattern should be added after this.
 
@@ -573,7 +574,8 @@ def build_downtrend_to_hh(base_price: float = 100.0, target_hh: float = 120.0) -
     - Bar 5: Lower Low (HISTORICAL) ✓
     - Bars 6-10: 5 transition bars (stay above LL, below target HH) ✓
 
-    All prices are unique to avoid duplicate swing points.
+    All LOW values are unique within this dataset to prevent duplicate targets
+    in the target ladder for short signals.
 
     Used for short reversal patterns. Reversal pattern should be added after this.
 
@@ -653,7 +655,7 @@ def generate_2d_2u_reversal() -> tuple[pl.DataFrame, str, dict[str, Any]]:
     """
     base_time = datetime(2024, 1, 1, 9, 30)
 
-    # All prices are unique to avoid duplicate swing points
+    # All HIGH values are unique within this CSV to prevent duplicate targets
     data = {
         "timestamp": [base_time + timedelta(minutes=i) for i in range(15)],
         "symbol": ["TEST"] * 15,
@@ -763,7 +765,7 @@ def generate_1_2d_2u_reversal() -> tuple[pl.DataFrame, str, dict[str, Any]]:
     # build_uptrend_to_ll includes HH + 5 transition bars (bars 0-10)
     bars = build_uptrend_to_ll(base_price=100.0, target_ll=80.0)
 
-    # Manually add pattern-specific bars with unique prices
+    # Manually add pattern-specific bars (all highs unique within CSV for target ladder)
     # Bar 11: Inside bar (within bar 10 range)
     bars.append({"open": 98.0, "high": 103.25, "low": 94.75, "close": 96.5})
 
@@ -814,7 +816,7 @@ def generate_2d_1_2u_reversal() -> tuple[pl.DataFrame, str, dict[str, Any]]:
     # build_uptrend_to_ll includes HH + 5 transition bars (bars 0-10)
     bars = build_uptrend_to_ll(base_price=100.0, target_ll=80.0)
 
-    # Manually add pattern-specific bars with unique prices
+    # Manually add pattern-specific bars (all highs unique within CSV for target ladder)
     # Bar 11: 2D setup bar (creates LL at 80.0)
     bars.append({"open": 96.0, "high": 104.0, "low": 80.0, "close": 82.0})
 
@@ -865,7 +867,7 @@ def generate_3_1_2u_reversal() -> tuple[pl.DataFrame, str, dict[str, Any]]:
     # build_uptrend_to_ll includes HH + 5 transition bars (bars 0-10)
     bars = build_uptrend_to_ll(base_price=100.0, target_ll=80.0)
 
-    # Manually add pattern-specific bars with unique prices
+    # Manually add pattern-specific bars (all highs unique within CSV for target ladder)
     # Bar 11: 3 bar - outside bar (creates LL at 79.0)
     bars.append({"open": 92.0, "high": 105.25, "low": 79.0, "close": 81.75})
 
@@ -916,7 +918,7 @@ def generate_3_2d_2u_reversal() -> tuple[pl.DataFrame, str, dict[str, Any]]:
     # build_uptrend_to_ll includes HH + 5 transition bars (bars 0-10)
     bars = build_uptrend_to_ll(base_price=100.0, target_ll=80.0)
 
-    # Manually add pattern-specific bars with unique prices
+    # Manually add pattern-specific bars (all highs unique within CSV for target ladder)
     # Bar 11: 3 bar - outside bar (creates LL at 78.0)
     bars.append({"open": 94.0, "high": 106.5, "low": 78.0, "close": 79.75})
 
@@ -972,7 +974,7 @@ def generate_2u_2d_reversal() -> tuple[pl.DataFrame, str, dict[str, Any]]:
     # build_downtrend_to_hh includes LL + 5 transition bars (bars 0-10)
     bars = build_downtrend_to_hh(base_price=100.0, target_hh=120.0)
 
-    # Manually add pattern-specific bars with unique prices
+    # Manually add pattern-specific bars (all lows unique within CSV for target ladder)
     # Bar 11: 2U setup bar (creates HH at 120.0)
     bars.append({"open": 106.5, "high": 120.0, "low": 94.0, "close": 118.0})
 
@@ -1024,7 +1026,7 @@ def generate_1_2u_2d_reversal() -> tuple[pl.DataFrame, str, dict[str, Any]]:
     # build_downtrend_to_hh includes LL + 5 transition bars (bars 0-10)
     bars = build_downtrend_to_hh(base_price=100.0, target_hh=120.0)
 
-    # Manually add pattern-specific bars with unique prices
+    # Manually add pattern-specific bars (all lows unique within CSV for target ladder)
     # Bar 11: Inside bar
     bars.append({"open": 99.5, "high": 114.5, "low": 94.5, "close": 111.5})
 
@@ -1074,7 +1076,7 @@ def generate_2u_1_2d_reversal() -> tuple[pl.DataFrame, str, dict[str, Any]]:
     # build_downtrend_to_hh includes LL + 5 transition bars (bars 0-10)
     bars = build_downtrend_to_hh(base_price=100.0, target_hh=120.0)
 
-    # Manually add pattern-specific bars with unique prices
+    # Manually add pattern-specific bars (all lows unique within CSV for target ladder)
     # Bar 11: 2U setup bar (creates HH at 122.0)
     bars.append({"open": 110.5, "high": 122.0, "low": 97.5, "close": 120.75})
 
@@ -1124,7 +1126,7 @@ def generate_3_1_2d_reversal() -> tuple[pl.DataFrame, str, dict[str, Any]]:
     # build_downtrend_to_hh includes LL + 5 transition bars (bars 0-10)
     bars = build_downtrend_to_hh(base_price=100.0, target_hh=120.0)
 
-    # Manually add pattern-specific bars with unique prices
+    # Manually add pattern-specific bars (all lows unique within CSV for target ladder)
     # Bar 11: 3 bar - outside bar (creates HH at 123.0)
     bars.append({"open": 104.0, "high": 123.0, "low": 91.75, "close": 121.75})
 
@@ -1174,7 +1176,7 @@ def generate_3_2u_2d_reversal() -> tuple[pl.DataFrame, str, dict[str, Any]]:
     # build_downtrend_to_hh includes LL + 5 transition bars (bars 0-10)
     bars = build_downtrend_to_hh(base_price=100.0, target_hh=120.0)
 
-    # Manually add pattern-specific bars with unique prices
+    # Manually add pattern-specific bars (all lows unique within CSV for target ladder)
     # Bar 11: 3 bar - outside bar (creates HH at 124.0)
     bars.append({"open": 107.25, "high": 124.0, "low": 92.25, "close": 123.25})
 

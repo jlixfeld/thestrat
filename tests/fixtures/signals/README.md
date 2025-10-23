@@ -147,7 +147,7 @@ Every run of `generate_all_signals.py` produces **byte-identical** output:
 ### 2. Guaranteed Pattern Detection
 Each CSV contains the exact pattern it's named for:
 - **5+ transition bars** between HH/LL and reversal patterns
-- **Unique prices** - no duplicate highs or lows to avoid calculation ambiguity
+- **Unique target prices** - within each CSV, no duplicate highs (for long signals) or duplicate lows (for short signals) to prevent duplicate targets in the target ladder
 - **Verified detection** - generator validates pattern is present
 
 ### 3. Visual Documentation
