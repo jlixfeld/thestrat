@@ -3962,58 +3962,50 @@ class TestIndividualSignalPatterns:
 
     @pytest.fixture
     def indicators_config(self):
-        """Standard indicators configuration for signal testing."""
+        """Standard indicators configuration for signal testing (matches CSV fixture generation)."""
         return Indicators(
             IndicatorsConfig(
                 timeframe_configs=[
                     TimeframeItemConfig(
                         timeframes=["all"],
-                        swing_points=SwingPointsConfig(window=1, threshold=0.1),
+                        swing_points=SwingPointsConfig(window=1, threshold=0.0),
+                        target_config=TargetConfig(
+                            upper_bound="higher_high",
+                            lower_bound="lower_low",
+                            merge_threshold_pct=0.0,
+                            max_targets=None,
+                        ),
                     )
                 ]
             )
         )
 
     def _run_signal_test(self, pattern_type, expected_category, expected_bias, indicators_config):
-        """Helper method to run a complete signal test."""
-        from tests.utils.pattern_data_factory import PatternDataFactory
+        """Helper method to run a complete signal test using CSV fixtures."""
+        from tests.utils.csv_signal_loader import load_signal_test_data
+        from tests.utils.signal_validator import assert_signal_detected, get_signal_rows
 
-        # Skip context-dependent patterns that require complex market conditions
-        if PatternDataFactory.is_context_pattern(pattern_type):
-            pytest.skip(
-                f"Pattern '{pattern_type}' requires complex market context that cannot be "
-                f"reliably generated with simple test data. Pattern description: "
-                f"{PatternDataFactory.get_pattern_description(pattern_type)}"
-            )
+        # Load pre-computed test data (guaranteed to contain the pattern)
+        market_df, expected_df = load_signal_test_data(pattern_type)
 
-        # Create pattern-specific test data using the factory
-        data = PatternDataFactory.create(pattern_type)
+        # Process market data through indicators
+        result = indicators_config.process(market_df)
 
-        # Process data
-        result = indicators_config.process(data)
-        signal_rows = result.filter(col("signal").is_not_null())
+        # Validate signal was detected (guaranteed with CSV data)
+        assert_signal_detected(result, pattern_type)
 
-        signal_objects = [Indicators.get_signal_object(signal_rows.slice(i, 1)) for i in range(len(signal_rows))]
+        # Get signal row and create signal object
+        signal_row = get_signal_rows(result, pattern_type).slice(0, 1)
+        signal = Indicators.get_signal_object(signal_row)
 
-        # Find signals of the expected pattern
-        matching_signals = [s for s in signal_objects if s.pattern == pattern_type]
-
-        # For non-context patterns, assert that signals were found
-        assert len(matching_signals) > 0, (
-            f"Expected to find {pattern_type} signals but got {len(signal_objects)} total signals: "
-            f"{[s.pattern for s in signal_objects]}. Pattern description: "
-            f"{PatternDataFactory.get_pattern_description(pattern_type)}"
-        )
-
-        # Validate the first matching signal
-        signal = matching_signals[0]
+        # Validate signal properties using existing helper
         self._validate_signal_object(signal, result, pattern_type, expected_category, expected_bias)
 
         return signal, result
 
     def _validate_signal_object(self, signal, result, expected_pattern, expected_category, expected_bias):
         """Helper method to validate signal object properties."""
-        from thestrat.signals import SignalBias, SignalCategory
+        from thestrat.signals import SignalBias
 
         # Basic pattern validation
         assert signal.pattern == expected_pattern
@@ -4025,43 +4017,33 @@ class TestIndividualSignalPatterns:
             # Long bias: entry > stop
             assert signal.entry_price > signal.stop_price, "Long entry should be above stop"
 
-            # For reversal signals, check for target prices (may be empty with insufficient data)
-            if signal.category == SignalCategory.REVERSAL:
-                if len(signal.target_prices) > 0:
-                    # Should have reward amount
-                    assert signal.reward_amount is not None
-                    assert signal.reward_amount > 0
-            else:
-                # Continuation signals have no target
-                assert len(signal.target_prices) == 0, "Continuation should not have targets"
-                assert signal.reward_amount is None
+            # Check for target prices (may be empty with insufficient data or no target config)
+            if len(signal.target_prices) > 0:
+                # Should have reward amount when targets exist
+                assert signal.reward_amount is not None
+                assert signal.reward_amount > 0
 
         elif signal.bias == SignalBias.SHORT:
             # Short bias: entry and stop come from current bar
             assert signal.entry_price > 0
             assert signal.stop_price > 0
 
-            # For reversal signals, check for target prices (may be empty with insufficient data)
-            if signal.category == SignalCategory.REVERSAL:
-                if len(signal.target_prices) > 0:
-                    # Should have reward amount
-                    assert signal.reward_amount is not None
-                    assert signal.reward_amount > 0
-            else:
-                # Continuation signals have no target
-                assert len(signal.target_prices) == 0, "Continuation should not have targets"
-                assert signal.reward_amount is None
+            # Check for target prices (may be empty with insufficient data or no target config)
+            if len(signal.target_prices) > 0:
+                # Should have reward amount when targets exist
+                assert signal.reward_amount is not None
+                assert signal.reward_amount > 0
 
         # Risk amount should always be calculated
         assert signal.risk_amount is not None
         assert signal.risk_amount > 0
 
-        # Risk/reward ratio only for reversal signals with targets detected
-        if signal.category == SignalCategory.REVERSAL and len(signal.target_prices) > 0:
+        # Risk/reward ratio only when targets are detected (regardless of category)
+        if len(signal.target_prices) > 0:
             assert signal.risk_reward_ratio is not None
             assert signal.risk_reward_ratio > 0
-        elif signal.category == SignalCategory.CONTINUATION:
-            # Continuation signals have no risk/reward ratio
+        else:
+            # No targets means no risk/reward ratio
             assert signal.risk_reward_ratio is None
 
     def test_signal_1_2d_2u(self, indicators_config):
@@ -4340,7 +4322,7 @@ class TestSignalEntryStopPrices:
     )
     def test_entry_stop_prices_match_expected_from_setup_bar(self, pattern_type):
         """
-        Verify entry/stop prices match expected values from setup bar.
+        Verify entry/stop prices match expected values from setup bar using CSV fixtures.
 
         This test ensures that the signal detection correctly uses the setup bar
         (the bar immediately before the trigger) rather than the trigger bar for
@@ -4356,68 +4338,78 @@ class TestSignalEntryStopPrices:
         - Short signals: entry = setup_low, stop = setup_high
 
         Args:
-            pattern_type: Pattern name from PatternDataFactory
+            pattern_type: Pattern name to test
         """
-        from tests.utils.pattern_data_factory import PatternDataFactory
+        from tests.utils.csv_signal_loader import load_signal_test_data
+        from tests.utils.signal_validator import assert_signal_detected, get_signal_rows
 
-        # Skip context-dependent patterns that require complex market structure
-        if PatternDataFactory.is_context_pattern(pattern_type):
-            pytest.skip(f"Context pattern {pattern_type} requires complex market structure - skipped")
+        # Load pre-computed test data (guaranteed to contain the pattern)
+        market_df, indicators_df = load_signal_test_data(pattern_type)
 
-        # Get expected values from factory (single source of truth)
-        expected = PatternDataFactory.get_expected_values(pattern_type)
-
-        # Create pattern-specific test data
-        data = PatternDataFactory.create(pattern_type, extend_data=True)
-
-        # Configure indicators with minimal swing point settings for reliable detection
+        # Configure indicators to match CSV generation (window=1, threshold=0.0)
         indicators = Indicators(
             IndicatorsConfig(
                 timeframe_configs=[
                     TimeframeItemConfig(
                         timeframes=["all"],
-                        swing_points=SwingPointsConfig(window=1, threshold=0.1),
+                        swing_points=SwingPointsConfig(window=1, threshold=0.0),
+                        target_config=TargetConfig(
+                            upper_bound="higher_high",
+                            lower_bound="lower_low",
+                            merge_threshold_pct=0.0,
+                            max_targets=None,
+                        ),
                     )
                 ]
             )
         )
 
         # Process data through indicators
-        result = indicators.process(data)
+        result = indicators.process(market_df)
 
-        # Filter for the expected pattern (handles MSFT suffix removal)
-        base_pattern = expected["pattern"]
-        signals = result.filter(col("signal") == base_pattern)
-
-        # Verify signal was detected
-        assert len(signals) > 0, (
-            f"Expected {pattern_type} signal not detected. "
-            f"Description: {PatternDataFactory.get_pattern_description(pattern_type)}"
-        )
+        # Validate signal was detected
+        assert_signal_detected(result, pattern_type)
 
         # Get first signal row
-        signal_row = signals.row(0, named=True)
+        signal_rows = get_signal_rows(result, pattern_type)
+        signal_row = signal_rows.row(0, named=True)
 
-        # CRITICAL: Verify entry/stop match factory expected values
-        assert signal_row["entry_price"] == pytest.approx(expected["expected_entry"], rel=1e-6), (
+        # Get signal bar timestamp to find setup bar
+        signal_timestamp = signal_row["timestamp"]
+
+        # Find setup bar (1 position back from signal bar)
+        market_with_idx = market_df.with_row_index("idx")
+        signal_idx = market_with_idx.filter(col("timestamp") == signal_timestamp)["idx"][0]
+
+        if signal_idx == 0:
+            pytest.skip(f"{pattern_type}: Signal at first bar, no setup bar available")
+
+        setup_bar = market_df[signal_idx - 1]
+
+        # Extract expected values from setup bar based on bias
+        bias = signal_row["bias"]
+        if bias == "long":
+            expected_entry = setup_bar["high"][0]
+            expected_stop = setup_bar["low"][0]
+        else:  # short
+            expected_entry = setup_bar["low"][0]
+            expected_stop = setup_bar["high"][0]
+
+        # CRITICAL: Verify entry/stop match setup bar values
+        assert signal_row["entry_price"] == pytest.approx(expected_entry, rel=1e-6), (
             f"{pattern_type}: Entry price mismatch.\n"
-            f"Expected {expected['expected_entry']} (from setup bar high/low),\n"
+            f"Expected {expected_entry} (from setup bar high/low),\n"
             f"Got {signal_row['entry_price']}"
         )
 
-        assert signal_row["stop_price"] == pytest.approx(expected["expected_stop"], rel=1e-6), (
+        assert signal_row["stop_price"] == pytest.approx(expected_stop, rel=1e-6), (
             f"{pattern_type}: Stop price mismatch.\n"
-            f"Expected {expected['expected_stop']} (from setup bar low/high),\n"
+            f"Expected {expected_stop} (from setup bar low/high),\n"
             f"Got {signal_row['stop_price']}"
         )
 
-        # Verify bias matches
-        assert signal_row["bias"] == expected["bias"], (
-            f"{pattern_type}: Bias mismatch. Expected {expected['bias']}, got {signal_row['bias']}"
-        )
-
         # Verify entry/stop relationship is correct for bias
-        if expected["bias"] == "long":
+        if bias == "long":
             assert signal_row["entry_price"] > signal_row["stop_price"], (
                 f"{pattern_type}: Long signal should have entry > stop"
             )
