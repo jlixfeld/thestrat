@@ -125,7 +125,7 @@ def create_signal_chart(df: pl.DataFrame, signal_name: str, metadata: dict[str, 
 
     # Plot each OHLC bar
     for idx, row in pdf.iterrows():
-        x_pos = idx
+        x_pos = int(idx)
 
         # Determine color based on close vs open
         if row["close"] >= row["open"]:
