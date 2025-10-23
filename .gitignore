@@ -128,7 +128,6 @@ $RECYCLE.BIN/
 .nfs*
 
 # Trading & Finance specific
-*.csv
 *.xlsx
 *.xls
 data/

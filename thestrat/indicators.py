@@ -808,7 +808,9 @@ class Indicators(Component):
 
         updates = []
         for row in signal_rows.iter_rows(named=True):
-            targets = self._detect_targets_for_signal(df_with_idx, row["__row_idx"], row["bias"], target_config)
+            targets = self._detect_targets_for_signal(
+                df_with_idx, row["__row_idx"], row["bias"], row["signal"], target_config
+            )
             updates.append(
                 {
                     "row_idx": row["__row_idx"],
@@ -918,19 +920,21 @@ class Indicators(Component):
         return signal
 
     def _detect_targets_for_signal(
-        self, df: PolarsDataFrame, trigger_index: int, bias: str, target_config
+        self, df: PolarsDataFrame, trigger_index: int, bias: str, pattern: str, target_config
     ) -> list[float]:
         """
         Detect multiple target levels for a signal using vectorized operations.
 
-        Detects all relevant local highs (long) or lows (short) between trigger bar
-        and configured bound, applies merge logic, and returns targets in
-        reverse chronological order.
+        Detects all relevant local highs (long) or lows (short) from historical bars
+        before setup bar (or before inside bar for 1-2-2 rev-strats) extending to
+        configured bound, applies merge logic, and returns targets in reverse
+        chronological order.
 
         Args:
             df: DataFrame with market structure columns
             trigger_index: Index of trigger bar (where pattern completes)
             bias: Signal bias ("long" or "short")
+            pattern: Pattern name (e.g., "2D-2U", "1-2D-2U")
             target_config: TargetConfig with detection parameters
 
         Returns:
@@ -940,11 +944,6 @@ class Indicators(Component):
             return []
 
         # Import here to avoid circular dependency
-        from .schemas import TargetConfig
-
-        # Handle None config
-        if target_config is None:
-            target_config = TargetConfig()
 
         # Select appropriate bound based on signal bias
         # Long signals use upper_bound (higher_high or lower_high)
@@ -964,8 +963,16 @@ class Indicators(Component):
         # higher_low/lower_low -> targets are lows (short signals)
         structure_col = structure_bound
 
-        # Get data up to trigger bar (not including trigger bar itself)
-        historical_df = df.slice(0, trigger_index)
+        # Determine lookback based on pattern type
+        # For 1-2-2 rev-strats: exclude trigger + setup bars, search before inside bar
+        # For all other patterns: exclude trigger bar only, search before setup bar
+        if pattern in ["1-2D-2U", "1-2U-2D"]:
+            lookback = 2  # Exclude trigger and setup, targets from before inside bar
+        else:
+            lookback = 1  # Exclude trigger only, targets from before setup bar
+
+        # Get historical data before setup bar (or before inside bar for rev-strats)
+        historical_df = df.slice(0, trigger_index - lookback)
 
         if len(historical_df) == 0:
             return []
@@ -974,50 +981,60 @@ class Indicators(Component):
         if "__row_idx" not in historical_df.columns:
             historical_df = historical_df.with_row_index("__row_idx")
 
-        # Extract all historical prices (no pre-filtering for local/progressive extremes)
-        # The descending/ascending ladder filter below will select the right targets
+        # Get setup bar's price for filtering targets
+        # Setup bar is always at trigger_index - 1 (the bar immediately before trigger)
+        # Targets must be beyond the setup bar's price (not trigger bar's price) because
+        # setup bar defines entry price - targets must be beyond where we enter the trade
+        setup_bar_index = trigger_index - 1
+        setup_bar = df.row(setup_bar_index, named=True)
+        setup_price = float(setup_bar[target_col])
+
+        # Also get trigger bar price for bound edge case checking
+        trigger_bar = df.row(trigger_index, named=True)
+        trigger_price = float(trigger_bar[target_col])
+
+        # Extract all historical prices in chronological order (oldest→newest)
         all_prices = historical_df.select(target_col).to_series().to_list()
 
         if not all_prices:
             return []
 
-        # Apply descending/ascending ladder filter with trigger bar validation
-        # The bar immediately before signal (i=0) is the trigger bar
-        # Targets must be beyond the trigger bar's price level
-        # For short: build descending ladder (each target must be < previous accepted target)
-        # For long: build ascending ladder (each target must be > previous accepted target)
+        # Step 1: Filter to prices beyond setup bar
+        # LONG: targets must be > setup bar high
+        # SHORT: targets must be < setup bar low
+        qualifying_prices = []
+        for price in all_prices:
+            if bias == "long":
+                if price > setup_price:
+                    qualifying_prices.append(price)
+            else:  # short
+                if price < setup_price:
+                    qualifying_prices.append(price)
+
+        if not qualifying_prices:
+            return []
+
+        # Step 2: Build "consecutive" ladder by scanning newest→oldest
+        # LONG: accept progressively HIGHER prices (creates ascending values newest→oldest)
+        # SHORT: accept progressively LOWER prices (creates descending values newest→oldest)
+        # "Consecutive" means no interruption in the progression - skip any bar that
+        # doesn't continue the pattern (e.g., for LONG, skip lower bars; for SHORT, skip higher bars)
         filtered_targets = []
-        trigger_price = None
-        for i, price in enumerate(reversed(all_prices)):  # Scan backwards from most recent
-            if i == 0:
-                # Save trigger bar's price for filtering (bar immediately before signal)
-                trigger_price = price
-                continue
+        for price in reversed(qualifying_prices):  # Scan newest→oldest
             if not filtered_targets:
-                # First target must be beyond trigger bar's price
-                if bias == "long":
-                    # Long: target must be above trigger bar's high
-                    if price > trigger_price:
-                        filtered_targets.append(price)
-                else:  # short
-                    # Short: target must be below trigger bar's low
-                    if price < trigger_price:
-                        filtered_targets.append(price)
+                filtered_targets.append(price)
             else:
                 if bias == "long":
-                    # For long: each target should be higher than last accepted target
+                    # For long: accept if higher than last (creates ascending values)
                     if price > filtered_targets[-1]:
                         filtered_targets.append(price)
                 else:  # short
-                    # For short: each target should be lower than last accepted target
+                    # For short: accept if lower than last (creates descending values)
                     if price < filtered_targets[-1]:
                         filtered_targets.append(price)
 
         if not filtered_targets:
             return []
-
-        # Targets are in reverse chronological order (newest to oldest)
-        # This is the correct order for display and merging
 
         # Check for structure bound in structure column
         # Find most recent bar where structure column has a value (indicating swing point)
@@ -1039,8 +1056,6 @@ class Indicators(Component):
 
                 # Edge case: Check if trigger bar's price IS the bound (Issue #3)
                 # If so, extend search to next previous bound
-                trigger_bar = df.row(trigger_index, named=True)
-                trigger_price = float(trigger_bar[target_col])
                 epsilon = 0.01  # Tolerance for float comparison
 
                 if abs(trigger_price - bound_price) < epsilon:

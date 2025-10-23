@@ -1,0 +1,10 @@
+timestamp,symbol,open,high,low,close,volume,higher_high,lower_high,higher_low,lower_low,percent_close_from_high,percent_close_from_low,ath,atl,new_ath,new_atl,continuity,scenario,hammer,shooter,gapper,kicker,f23x,f23,f23_trigger,pmg,motherbar_problems,in_force,signal,type,bias,target_prices,target_count,entry_price,stop_price,signal_at_higher_high,signal_at_lower_high,signal_at_higher_low,signal_at_lower_low
+2024-01-01T09:30:00.000000,TEST,105.0,110.0,100.0,102.0,1000.0,,,,,80.0,20.0,110.0,100.0,true,true,0,,false,false,,,,false,,0,false,false,,,,,,,,,,,
+2024-01-01T09:31:00.000000,TEST,100.0,102.0,95.0,96.0,1000.0,,,,,85.71429,14.28571,110.0,95.0,false,true,0,2D,false,false,,,,false,,-1,false,true,,,,,,,,,,,
+2024-01-01T09:32:00.000000,TEST,95.0,96.0,90.0,91.0,1000.0,,,,,83.33333,16.66667,110.0,90.0,false,true,0,2D,false,false,,,,false,,-2,false,true,2D-2D,continuation,short,,,95.0,102.0,false,false,false,false
+2024-01-01T09:33:00.000000,TEST,91.0,92.0,87.0,88.0,1000.0,,,,,80.0,20.0,110.0,87.0,false,true,0,2D,false,false,,,,false,,-3,false,true,2D-2D,continuation,short,,,90.0,96.0,false,false,false,false
+2024-01-01T09:34:00.000000,TEST,88.0,89.0,84.0,85.0,1000.0,,,,,80.0,20.0,110.0,84.0,false,true,0,2D,false,false,,,,false,,-4,false,true,2D-2D,continuation,short,,,87.0,92.0,false,false,false,false
+2024-01-01T09:35:00.000000,TEST,88.0,89.0,81.0,81.5,1000.0,,,,,93.75,6.25,110.0,81.0,false,true,0,2D,false,false,,,,false,,-5,false,true,2D-2D,continuation,short,,,84.0,89.0,false,false,false,false
+2024-01-01T09:36:00.000000,TEST,86.6,88.5,81.5,83.4,1000.0,,,,,72.85714,27.14286,110.0,81.0,false,false,0,1,false,false,,,,false,,0,true,false,,,,,,,,,,,
+2024-01-01T09:37:00.000000,TEST,87.5,88.5,78.5,79.0,1000.0,,88.5,,,95.0,5.0,110.0,78.5,false,true,0,2D,false,false,,,,false,,-1,false,true,2D-1-2D,continuation,short,81.0,1,81.5,88.5,false,true,false,false
+2024-01-01T09:38:00.000000,TEST,87.5,88.5,76.5,77.0,1000.0,,88.5,,,95.83333,4.16667,110.0,76.5,false,true,0,2D,false,false,,,,false,,-2,false,true,2D-2D,continuation,short,,,78.5,88.5,false,true,false,false

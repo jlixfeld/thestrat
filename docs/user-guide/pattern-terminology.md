@@ -65,11 +65,10 @@ All TheStrat patterns are built from combinations of these scenarios (e.g., "2D-
 **Target Ladder**
 
 - Series of target price levels extending to structural bounds
-- Detected from historical bars before the trigger bar
+- Detected from historical bars before the **setup bar** (or before inside bar for 1-2-2 rev-strats)
 - **Long signals:** Ascending ladder of highs (each target higher than previous) extending to `higher_high` or `lower_high` bound
 - **Short signals:** Descending ladder of lows (each target lower than previous) extending to `lower_low` or `higher_low` bound
 - First target must be beyond the trigger bar's price (above trigger high for long, below trigger low for short)
-- Targets are arranged in reverse chronological order (most recent bar first)
 
 ## Visual Pattern Guide
 
@@ -143,7 +142,7 @@ All TheStrat patterns are built from combinations of these scenarios (e.g., "2D-
 - **Stop:** Setup bar low
 - **Targets:** Ascending ladder of historical highs extending to `higher_high` or `lower_high` bound
   - First target must be above trigger bar high
-  - Each subsequent target higher than previous
+  - Each subsequent target higher than previous (ascending values: target_1 < target_2 < ...)
   - Maximum targets determined by `max_targets` config
 - **Relationship:** `stop < entry` and `trigger_high < target_1 < target_2 < ... ≤ bound`
 
@@ -153,7 +152,7 @@ All TheStrat patterns are built from combinations of these scenarios (e.g., "2D-
 - **Stop:** Setup bar high
 - **Targets:** Descending ladder of historical lows extending to `lower_low` or `higher_low` bound
   - First target must be below trigger bar low
-  - Each subsequent target lower than previous
+  - Each subsequent target lower than previous (descending values: target_1 > target_2 > ...)
   - Maximum targets determined by `max_targets` config
 - **Relationship:** `stop > entry` and `trigger_low > target_1 > target_2 > ... ≥ bound`
 
