@@ -1435,23 +1435,22 @@ def generate_3_2u_context_reversal() -> tuple[pl.DataFrame, str, dict[str, Any]]
     """
     base_time = datetime(2024, 1, 1, 9, 30)
 
-    # Build downtrend to create context
+    # Build downtrend to create context (all highs unique within CSV for target ladder)
     bars = []
     bars.append({"open": 105.0, "high": 110.0, "low": 100.0, "close": 102.0})
-    bars.append({"open": 100.0, "high": 102.0, "low": 95.0, "close": 96.0})
-    bars.append({"open": 95.0, "high": 96.0, "low": 90.0, "close": 91.0})
+    bars.append({"open": 100.0, "high": 102.0, "low": 95.0, "close": 97.0})
+    bars.append({"open": 96.0, "high": 98.0, "low": 90.0, "close": 91.0})
     bars.append({"open": 91.0, "high": 92.0, "low": 87.0, "close": 88.0})
     bars.append({"open": 88.0, "high": 89.0, "low": 84.0, "close": 85.0})
 
-    # 3-2U context reversal
-    prev_bar = bars[-1]
-    bars.append(create_3_bar(prev_bar["high"], prev_bar["low"], break_up=4.0, break_down=3.0, continuity="red"))
-    prev_bar = bars[-1]
-    bars.append(create_2u_bar(prev_bar["high"], prev_bar["low"], break_amount=3.0, continuity="green"))
+    # 3-2U context reversal - outside bar breaks down and up
+    bars.append({"open": 86.0, "high": 93.0, "low": 81.0, "close": 82.0})
 
-    # Boundary bars
-    prev_bar = bars[-1]
-    bars.append(create_2u_bar(prev_bar["high"], prev_bar["low"], break_amount=2.0, continuity="green"))
+    # 2U trigger bar with opposite (green) continuity
+    bars.append({"open": 83.0, "high": 106.0, "low": 82.5, "close": 104.0})
+
+    # Boundary bar
+    bars.append({"open": 105.0, "high": 108.0, "low": 103.0, "close": 107.0})
 
     data = {
         "timestamp": [base_time + timedelta(minutes=i) for i in range(len(bars))],
@@ -1485,23 +1484,22 @@ def generate_3_2d_context_reversal() -> tuple[pl.DataFrame, str, dict[str, Any]]
     """
     base_time = datetime(2024, 1, 1, 9, 30)
 
-    # Build uptrend to create context
+    # Build uptrend to create context (all lows unique within CSV for target ladder)
     bars = []
     bars.append({"open": 95.0, "high": 100.0, "low": 90.0, "close": 98.0})
-    bars.append({"open": 100.0, "high": 105.0, "low": 98.0, "close": 104.0})
-    bars.append({"open": 105.0, "high": 110.0, "low": 104.0, "close": 109.0})
+    bars.append({"open": 100.0, "high": 105.0, "low": 98.5, "close": 104.0})
+    bars.append({"open": 105.0, "high": 110.0, "low": 104.5, "close": 109.0})
     bars.append({"open": 109.0, "high": 113.0, "low": 108.0, "close": 112.0})
     bars.append({"open": 112.0, "high": 116.0, "low": 111.0, "close": 115.0})
 
-    # 3-2D context reversal
-    prev_bar = bars[-1]
-    bars.append(create_3_bar(prev_bar["high"], prev_bar["low"], break_up=3.0, break_down=4.0, continuity="green"))
-    prev_bar = bars[-1]
-    bars.append(create_2d_bar(prev_bar["high"], prev_bar["low"], break_amount=3.0, continuity="red"))
+    # 3-2D context reversal - outside bar breaks up and down
+    bars.append({"open": 113.0, "high": 119.0, "low": 107.0, "close": 118.0})
 
-    # Boundary bars
-    prev_bar = bars[-1]
-    bars.append(create_2d_bar(prev_bar["high"], prev_bar["low"], break_amount=2.0, continuity="red"))
+    # 2D trigger bar with opposite (red) continuity
+    bars.append({"open": 117.0, "high": 118.5, "low": 94.0, "close": 95.0})
+
+    # Boundary bar
+    bars.append({"open": 96.0, "high": 97.0, "low": 92.0, "close": 93.0})
 
     data = {
         "timestamp": [base_time + timedelta(minutes=i) for i in range(len(bars))],
