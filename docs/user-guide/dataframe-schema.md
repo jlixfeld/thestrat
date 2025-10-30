@@ -222,6 +222,82 @@ print(f"Nullable fields ({len(nullable_fields)}): {nullable_fields}")
 print(f"Required (non-null) fields ({len(required_fields)}): {required_fields}")
 ```
 
+### Column Listing Methods
+
+The schema provides convenient methods to programmatically retrieve different sets of columns:
+
+```python
+from thestrat.schemas import IndicatorSchema
+
+# Get all input columns (required + optional)
+input_columns = IndicatorSchema.get_all_input_columns()
+print(f"Input columns: {input_columns}")
+# ['close', 'high', 'low', 'open', 'symbol', 'timeframe', 'timestamp', 'volume']
+
+# Get only required input columns
+required_inputs = IndicatorSchema.get_required_input_columns()
+print(f"Required: {required_inputs}")
+# ['close', 'high', 'low', 'open', 'timeframe', 'timestamp']
+
+# Get only optional input columns
+optional_inputs = IndicatorSchema.get_optional_input_columns()
+print(f"Optional: {optional_inputs}")
+# ['symbol', 'volume']
+
+# Get all output columns (NEW in v0.0.1a23)
+output_columns = IndicatorSchema.get_output_columns()
+print(f"Output columns ({len(output_columns)}): {output_columns[:5]}...")
+# Output columns (33): ['ath', 'atl', 'bias', 'continuity', 'entry_price']...
+```
+
+**Use Cases:**
+
+**Database Column Selection:**
+```python
+# Select only output columns for downstream processing
+output_cols = IndicatorSchema.get_output_columns()
+analysis_df = processed_df.select(output_cols)
+
+# Or exclude output columns to get only input data
+input_cols = IndicatorSchema.get_all_input_columns()
+raw_data_df = processed_df.select(input_cols)
+```
+
+**API Response Filtering:**
+```python
+def get_indicator_outputs(df):
+    """Extract only indicator output columns for API response."""
+    output_cols = IndicatorSchema.get_output_columns()
+    # Add timestamp for context
+    return df.select(['timestamp', 'symbol'] + output_cols)
+```
+
+**Data Validation:**
+```python
+def validate_minimal_input(df):
+    """Ensure DataFrame has all required input columns."""
+    required = IndicatorSchema.get_required_input_columns()
+    missing = [col for col in required if col not in df.columns]
+
+    if missing:
+        raise ValueError(f"Missing required columns: {missing}")
+
+    return True
+```
+
+**Schema Evolution Tracking:**
+```python
+# Track schema changes over time
+def document_schema_version():
+    """Generate schema documentation for version control."""
+    return {
+        "version": "0.0.1a23",
+        "input_columns": IndicatorSchema.get_all_input_columns(),
+        "output_columns": IndicatorSchema.get_output_columns(),
+        "total_columns": len(IndicatorSchema.model_fields)
+    }
+```
+
 ## Integration Patterns
 
 ### Database Insert with Validation
