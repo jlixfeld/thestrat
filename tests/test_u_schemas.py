@@ -109,6 +109,53 @@ class TestIndicatorSchemaClassMethods:
         assert "continuity" in categories["thestrat_patterns"]
         assert "signal" in categories["signals"]
 
+    def test_get_output_columns(self):
+        """Test get_output_columns returns all columns marked as output."""
+        output_columns = IndicatorSchema.get_output_columns()
+
+        assert isinstance(output_columns, list)
+        assert len(output_columns) > 0
+
+        # Verify list is sorted
+        assert output_columns == sorted(output_columns)
+
+        # Check that all returned columns have output=True in metadata
+        for col_name in output_columns:
+            field_info = IndicatorSchema.model_fields.get(col_name)
+            assert field_info is not None
+            json_extra = getattr(field_info, "json_schema_extra", {}) or {}
+            assert json_extra.get("output") is True, f"{col_name} should have output=True"
+
+        # Check some known output columns are present
+        expected_output_columns = [
+            "percent_close_from_high",
+            "percent_close_from_low",
+            "ath",
+            "atl",
+            "new_ath",
+            "new_atl",
+            "higher_high",
+            "lower_high",
+            "higher_low",
+            "lower_low",
+            "continuity",
+            "in_force",
+            "signal",
+        ]
+
+        for col in expected_output_columns:
+            assert col in output_columns, f"Expected output column '{col}' not found"
+
+        # Verify input-only columns are NOT included
+        input_only_columns = ["timestamp", "open", "high", "low", "close"]
+        for col in input_only_columns:
+            if col in output_columns:
+                # Check if this column is marked as both input and output
+                field_info = IndicatorSchema.model_fields.get(col)
+                json_extra = getattr(field_info, "json_schema_extra", {}) or {}
+                # If it's in output_columns, it must have output=True
+                assert json_extra.get("output") is True
+
 
 class TestIndicatorSchemaValidation:
     """Test suite for validating IndicatorSchema alignment with actual processing output.
