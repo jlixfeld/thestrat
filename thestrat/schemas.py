@@ -1120,6 +1120,21 @@ class IndicatorSchema(BaseModel):
         return sorted(cls.get_required_input_columns() + cls.get_optional_input_columns())
 
     @classmethod
+    def get_output_columns(cls) -> list[str]:
+        """
+        Get list of all output columns based on schema definition.
+
+        Returns:
+            List of column names marked as output in schema metadata
+        """
+        output_columns = []
+        for field_name, field_info in cls.model_fields.items():
+            json_extra = getattr(field_info, "json_schema_extra", {}) or {}
+            if json_extra.get("output") is True:
+                output_columns.append(field_name)
+        return sorted(output_columns)
+
+    @classmethod
     def get_field_metadata(cls, field_name: str) -> dict[str, Any]:
         """
         Get json_schema_extra metadata for a field, safely handling missing data.
