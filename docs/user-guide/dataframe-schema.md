@@ -244,7 +244,7 @@ optional_inputs = IndicatorSchema.get_optional_input_columns()
 print(f"Optional: {optional_inputs}")
 # ['symbol', 'volume']
 
-# Get all output columns (NEW in v0.0.1a23)
+# Get all output columns (NEW in v0.0.1a28)
 output_columns = IndicatorSchema.get_output_columns()
 print(f"Output columns ({len(output_columns)}): {output_columns[:5]}...")
 # Output columns (33): ['ath', 'atl', 'bias', 'continuity', 'entry_price']...
@@ -291,7 +291,7 @@ def validate_minimal_input(df):
 def document_schema_version():
     """Generate schema documentation for version control."""
     return {
-        "version": "0.0.1a23",
+        "version": "0.0.1a28",
         "input_columns": IndicatorSchema.get_all_input_columns(),
         "output_columns": IndicatorSchema.get_output_columns(),
         "total_columns": len(IndicatorSchema.model_fields)
