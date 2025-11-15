@@ -13,6 +13,7 @@ from polars import (
 )
 from polars import (
     Datetime,
+    Int64,
     col,
     first,
     last,
@@ -208,27 +209,50 @@ class Aggregation(Component):
                     agg_expressions
                 )
         else:
-            # Use session-based alignment with offset
-            session_hour, session_minute = map(int, self.session_start.split(":"))
-            offset_minutes = session_hour * 60 + session_minute
-            offset = f"{offset_minutes}m"
-
-            if "symbol" in df.columns:
-                result = df.group_by_dynamic(
-                    "timestamp",
-                    every=polars_format,
-                    period=polars_format,
-                    offset=offset,
-                    group_by="symbol",
-                    closed="left",
-                ).agg(agg_expressions)
+            # Use session-based alignment
+            # For calendar-based periods (month, quarter, year), use start_by="datapoint"
+            # to avoid offset issues with Polars. For other periods, use offset.
+            if self._is_calendar_based_period(timeframe):
+                # Use start_by="datapoint" to align to first timestamp (already at session start)
+                if "symbol" in df.columns:
+                    result = df.group_by_dynamic(
+                        "timestamp",
+                        every=polars_format,
+                        period=polars_format,
+                        start_by="datapoint",
+                        group_by="symbol",
+                        closed="left",
+                    ).agg(agg_expressions)
+                else:
+                    result = df.group_by_dynamic(
+                        "timestamp", every=polars_format, period=polars_format, start_by="datapoint", closed="left"
+                    ).agg(agg_expressions)
             else:
-                result = df.group_by_dynamic(
-                    "timestamp", every=polars_format, period=polars_format, offset=offset, closed="left"
-                ).agg(agg_expressions)
+                # Use offset for non-calendar periods
+                session_hour, session_minute = map(int, self.session_start.split(":"))
+                offset_minutes = session_hour * 60 + session_minute
+                offset = f"{offset_minutes}m"
 
-        # Add timeframe column and sort
+                if "symbol" in df.columns:
+                    result = df.group_by_dynamic(
+                        "timestamp",
+                        every=polars_format,
+                        period=polars_format,
+                        offset=offset,
+                        group_by="symbol",
+                        closed="left",
+                    ).agg(agg_expressions)
+                else:
+                    result = df.group_by_dynamic(
+                        "timestamp", every=polars_format, period=polars_format, offset=offset, closed="left"
+                    ).agg(agg_expressions)
+
+        # Add timeframe column
         result = result.with_columns([lit(timeframe).alias("timeframe")])
+
+        # Cast volume to integer to prevent floating-point precision issues
+        if "volume" in result.columns:
+            result = result.with_columns([col("volume").cast(Int64).alias("volume")])
 
         # Sort by symbol (if present) and timestamp
         sort_cols = []
@@ -276,6 +300,22 @@ class Aggregation(Component):
             return False
 
         return True
+
+    def _is_calendar_based_period(self, timeframe: str) -> bool:
+        """Check if timeframe is a calendar-based period (month, quarter, year)."""
+        import re
+
+        # Check for standard calendar period strings
+        calendar_periods = {"1m", "1q", "1y"}
+        if timeframe in calendar_periods:
+            return True
+
+        # Check for polars-style monthly/yearly timeframes
+        match = re.match(r"^(\d+)([mM][oO]|[qQ]|[yY])$", timeframe, re.IGNORECASE)
+        if match:
+            return True
+
+        return False
 
     def _should_use_hour_boundary(self, timeframe: str) -> bool:
         """Determine if timeframe should use hour boundary alignment."""
