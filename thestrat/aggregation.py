@@ -213,25 +213,57 @@ class Aggregation(Component):
                     agg_expressions
                 )
         else:
-            # Use session-based alignment with offset for all periods
-            # This preserves calendar boundaries while maintaining session start times
+            # Use session-based alignment
+            # For monthly periods, use shifted-index pattern to handle DST correctly
+            # For other periods, use offset parameter (which works correctly for non-monthly)
             session_hour, session_minute = map(int, self.session_start.split(":"))
             offset_minutes = session_hour * 60 + session_minute
-            offset = f"{offset_minutes}m"
 
-            if "symbol" in df.columns:
-                result = df.group_by_dynamic(
-                    "timestamp",
-                    every=polars_format,
-                    period=polars_format,
-                    offset=offset,
-                    group_by="symbol",
-                    closed="left",
-                ).agg(agg_expressions)
+            # Check if this is a monthly timeframe (offset parameter is not DST-aware for months)
+            is_monthly = polars_format.lower().endswith("mo")
+
+            if is_monthly:
+                # Shifted-index pattern for monthly: shift timestamps, group, then shift back
+                # This is DST-aware because dt.offset_by operates per-row in the target timezone
+                df = df.with_columns([col("timestamp").dt.offset_by(f"-{offset_minutes}m").alias("_ts_shifted")])
+
+                if "symbol" in df.columns:
+                    result = df.group_by_dynamic(
+                        "_ts_shifted",
+                        every=polars_format,
+                        period=polars_format,
+                        group_by="symbol",
+                        closed="left",
+                    ).agg(agg_expressions)
+                else:
+                    result = df.group_by_dynamic(
+                        "_ts_shifted",
+                        every=polars_format,
+                        period=polars_format,
+                        closed="left",
+                    ).agg(agg_expressions)
+
+                # Shift timestamps back to original timeline and rename
+                result = result.with_columns(
+                    [col("_ts_shifted").dt.offset_by(f"{offset_minutes}m").alias("timestamp")]
+                ).drop("_ts_shifted")
             else:
-                result = df.group_by_dynamic(
-                    "timestamp", every=polars_format, period=polars_format, offset=offset, closed="left"
-                ).agg(agg_expressions)
+                # Use offset parameter for non-monthly periods (works correctly)
+                offset = f"{offset_minutes}m"
+
+                if "symbol" in df.columns:
+                    result = df.group_by_dynamic(
+                        "timestamp",
+                        every=polars_format,
+                        period=polars_format,
+                        offset=offset,
+                        group_by="symbol",
+                        closed="left",
+                    ).agg(agg_expressions)
+                else:
+                    result = df.group_by_dynamic(
+                        "timestamp", every=polars_format, period=polars_format, offset=offset, closed="left"
+                    ).agg(agg_expressions)
 
         # Add timeframe column
         result = result.with_columns([lit(timeframe).alias("timeframe")])
