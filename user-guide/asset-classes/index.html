@@ -1681,7 +1681,7 @@
 </span></code></pre></div>
 <h2 id="calendar-period-aggregation">Calendar Period Aggregation</h2>
 <h3 id="timestamp-alignment-for-calendar-periods">Timestamp Alignment for Calendar Periods</h3>
-<p>When aggregating to calendar-based periods (monthly, quarterly, yearly), TheStrat uses <code>start_by="datapoint"</code> instead of minute-based offset calculation. This ensures timestamps align correctly to each asset class's session start time.</p>
+<p>When aggregating to calendar-based periods (monthly, quarterly, yearly), TheStrat aligns windows to actual calendar boundaries (1st of month, start of quarter, Jan 1) while applying the session start offset. This ensures calendar periods are comparable across datasets regardless of their start date.</p>
 <p><strong>Equities Example:</strong>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">thestrat</span><span class="w"> </span><span class="kn">import</span> <span class="n">Factory</span>
 </span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">thestrat.schemas</span><span class="w"> </span><span class="kn">import</span> <span class="n">FactoryConfig</span><span class="p">,</span> <span class="n">AggregationConfig</span>
@@ -1698,8 +1698,8 @@
 </span><span id="__span-10-13"><a id="__codelineno-10-13" name="__codelineno-10-13" href="#__codelineno-10-13"></a><span class="n">pipeline</span> <span class="o">=</span> <span class="n">Factory</span><span class="o">.</span><span class="n">create_all</span><span class="p">(</span><span class="n">config</span><span class="p">)</span>
 </span><span id="__span-10-14"><a id="__codelineno-10-14" name="__codelineno-10-14" href="#__codelineno-10-14"></a><span class="n">result</span> <span class="o">=</span> <span class="n">pipeline</span><span class="p">[</span><span class="s2">&quot;aggregation&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">process</span><span class="p">(</span><span class="n">daily_data</span><span class="p">)</span>
 </span><span id="__span-10-15"><a id="__codelineno-10-15" name="__codelineno-10-15" href="#__codelineno-10-15"></a>
-</span><span id="__span-10-16"><a id="__codelineno-10-16" name="__codelineno-10-16" href="#__codelineno-10-16"></a><span class="c1"># Monthly bars timestamp at 09:30 ET (not 08:30)</span>
-</span><span id="__span-10-17"><a id="__codelineno-10-17" name="__codelineno-10-17" href="#__codelineno-10-17"></a><span class="nb">print</span><span class="p">(</span><span class="n">result</span><span class="p">[</span><span class="s2">&quot;timestamp&quot;</span><span class="p">][</span><span class="mi">0</span><span class="p">])</span>  <span class="c1"># 2023-01-02 09:30:00-05:00</span>
+</span><span id="__span-10-16"><a id="__codelineno-10-16" name="__codelineno-10-16" href="#__codelineno-10-16"></a><span class="c1"># Monthly bars align to 1st of month at 09:30 ET</span>
+</span><span id="__span-10-17"><a id="__codelineno-10-17" name="__codelineno-10-17" href="#__codelineno-10-17"></a><span class="nb">print</span><span class="p">(</span><span class="n">result</span><span class="p">[</span><span class="s2">&quot;timestamp&quot;</span><span class="p">][</span><span class="mi">0</span><span class="p">])</span>  <span class="c1"># 2023-01-01 09:30:00-05:00</span>
 </span></code></pre></div></p>
 <p><strong>Asset Class Behavior:</strong></p>
 <table>
@@ -1714,29 +1714,33 @@
 <tr>
 <td><strong>Equities</strong></td>
 <td>09:30 ET</td>
-<td>09:30 ET (session start)</td>
+<td>1st of month/quarter/year at 09:30 ET</td>
 </tr>
 <tr>
 <td><strong>Crypto</strong></td>
 <td>00:00 UTC</td>
-<td>00:00 UTC (midnight UTC)</td>
+<td>1st of month/quarter/year at 00:00 UTC</td>
 </tr>
 <tr>
 <td><strong>Forex</strong></td>
 <td>00:00 UTC</td>
-<td>00:00 UTC (midnight UTC)</td>
+<td>1st of month/quarter/year at 00:00 UTC</td>
 </tr>
 </tbody>
 </table>
 <p><strong>Why This Matters:</strong></p>
-<p>This alignment ensures calendar period bars start at the correct session time for each asset class. For example:
-- Monthly equity bars at <code>09:30 ET</code> (correct - session start)
-- Monthly crypto bars at <code>00:00 UTC</code> (correct - midnight UTC)</p>
+<p>Calendar periods anchor to actual calendar boundaries, ensuring:
+- <strong>Monthly bars</strong> always start on the 1st of the month
+- <strong>Quarterly bars</strong> always start on Jan 1, Apr 1, Jul 1, or Oct 1
+- <strong>Yearly bars</strong> always start on Jan 1
+- <strong>Consistency</strong> across datasets with different start dates</p>
+<p>The session start offset is applied to these calendar boundaries, so:
+- Monthly equity bars: <strong>1st of month at 09:30 ET</strong>
+- Monthly crypto bars: <strong>1st of month at 00:00 UTC</strong></p>
 <p><strong>Supported Calendar Periods:</strong>
-- <code>"1m"</code> - Monthly
-- <code>"1q"</code> - Quarterly
-- <code>"1y"</code> - Yearly</p>
-<p><strong>Non-Calendar Periods</strong> (hourly, daily, weekly) continue to use offset-based alignment as before, ensuring backward compatibility.</p>
+- <code>"1m"</code> - Monthly (anchors to 1st of month)
+- <code>"1q"</code> - Quarterly (anchors to Jan/Apr/Jul/Oct 1)
+- <code>"1y"</code> - Yearly (anchors to Jan 1)</p>
 <h2 id="best-practices-by-asset-class">Best Practices by Asset Class</h2>
 <h3 id="crypto">Crypto</h3>
 <ul>
@@ -1854,7 +1858,7 @@
     
     
       
-      <script id="__config" type="application/json">{"base": "../..", "features": ["navigation.tracking", "navigation.sections", "navigation.expand", "navigation.top", "navigation.tabs", "search.highlight", "search.suggest", "content.code.copy", "content.code.annotate", "content.code.select", "navigation.footer", "content.tooltips"], "search": "../../assets/javascripts/workers/search.973d3a69.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": "0.0.1a29"}</script>
+      <script id="__config" type="application/json">{"base": "../..", "features": ["navigation.tracking", "navigation.sections", "navigation.expand", "navigation.top", "navigation.tabs", "search.highlight", "search.suggest", "content.code.copy", "content.code.annotate", "content.code.select", "navigation.footer", "content.tooltips"], "search": "../../assets/javascripts/workers/search.973d3a69.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": "0.0.1a31"}</script>
     
     
       <script src="../../assets/javascripts/bundle.92b07e13.min.js"></script>
