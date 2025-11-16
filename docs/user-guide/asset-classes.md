@@ -374,7 +374,7 @@ portfolio_analysis = analyze_multi_asset_portfolio(portfolio)
 
 ### Timestamp Alignment for Calendar Periods
 
-When aggregating to calendar-based periods (monthly, quarterly, yearly), TheStrat uses `start_by="datapoint"` instead of minute-based offset calculation. This ensures timestamps align correctly to each asset class's session start time.
+When aggregating to calendar-based periods (monthly, quarterly, yearly), TheStrat aligns windows to actual calendar boundaries (1st of month, start of quarter, Jan 1) while applying the session start offset. This ensures calendar periods are comparable across datasets regardless of their start date.
 
 **Equities Example:**
 ```python
@@ -393,30 +393,34 @@ config = FactoryConfig(
 pipeline = Factory.create_all(config)
 result = pipeline["aggregation"].process(daily_data)
 
-# Monthly bars timestamp at 09:30 ET (not 08:30)
-print(result["timestamp"][0])  # 2023-01-02 09:30:00-05:00
+# Monthly bars align to 1st of month at 09:30 ET
+print(result["timestamp"][0])  # 2023-01-01 09:30:00-05:00
 ```
 
 **Asset Class Behavior:**
 
 | Asset Class | Session Start | Monthly/Quarterly/Yearly Timestamp |
 |-------------|---------------|----------------------------------|
-| **Equities** | 09:30 ET | 09:30 ET (session start) |
-| **Crypto** | 00:00 UTC | 00:00 UTC (midnight UTC) |
-| **Forex** | 00:00 UTC | 00:00 UTC (midnight UTC) |
+| **Equities** | 09:30 ET | 1st of month/quarter/year at 09:30 ET |
+| **Crypto** | 00:00 UTC | 1st of month/quarter/year at 00:00 UTC |
+| **Forex** | 00:00 UTC | 1st of month/quarter/year at 00:00 UTC |
 
 **Why This Matters:**
 
-This alignment ensures calendar period bars start at the correct session time for each asset class. For example:
-- Monthly equity bars at `09:30 ET` (correct - session start)
-- Monthly crypto bars at `00:00 UTC` (correct - midnight UTC)
+Calendar periods anchor to actual calendar boundaries, ensuring:
+- **Monthly bars** always start on the 1st of the month
+- **Quarterly bars** always start on Jan 1, Apr 1, Jul 1, or Oct 1
+- **Yearly bars** always start on Jan 1
+- **Consistency** across datasets with different start dates
+
+The session start offset is applied to these calendar boundaries, so:
+- Monthly equity bars: **1st of month at 09:30 ET**
+- Monthly crypto bars: **1st of month at 00:00 UTC**
 
 **Supported Calendar Periods:**
-- `"1m"` - Monthly
-- `"1q"` - Quarterly
-- `"1y"` - Yearly
-
-**Non-Calendar Periods** (hourly, daily, weekly) continue to use offset-based alignment as before, ensuring backward compatibility.
+- `"1m"` - Monthly (anchors to 1st of month)
+- `"1q"` - Quarterly (anchors to Jan/Apr/Jul/Oct 1)
+- `"1y"` - Yearly (anchors to Jan 1)
 
 ## Best Practices by Asset Class
 
