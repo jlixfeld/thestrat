@@ -183,6 +183,66 @@ aggregated = components["aggregation"].process(raw_data)
 analyzed = components["indicators"].process(aggregated)
 ```
 
+### Timezone Handling
+
+**Input Data Requirements:**
+- Timestamps should be **timezone-aware** for accurate conversion
+- Naive timestamps are **assumed to already be in the target timezone** (warning logged)
+
+**Database Data (stored in UTC):**
+
+When retrieving OHLCV data from a database stored in UTC, convert timestamps to the target timezone **before** feeding to Factory:
+
+```python
+import polars as pl
+
+# Read from database (timestamps in UTC)
+df = pl.read_database("SELECT * FROM ohlcv", connection)
+
+# Convert UTC → target timezone (e.g., US/Eastern for equities)
+df = df.with_columns([
+    pl.col("timestamp")
+        .dt.replace_time_zone("UTC")           # Mark as UTC
+        .dt.convert_time_zone("US/Eastern")    # Convert to Eastern
+])
+
+# Now feed to Factory
+from thestrat import Factory
+from thestrat.schemas import FactoryConfig, AggregationConfig
+
+config = FactoryConfig(
+    aggregation=AggregationConfig(
+        target_timeframes=["5min", "1h"],
+        asset_class="equities",  # Uses US/Eastern timezone
+        timezone="US/Eastern"
+    )
+)
+
+pipeline = Factory.create_all(config)
+aggregated = pipeline["aggregation"].process(df)
+```
+
+**Timezone Conversion Behavior:**
+
+| Input Timestamp State | Aggregation Behavior | Logged Message |
+|----------------------|---------------------|----------------|
+| Naive | Assumes already in target timezone, adds awareness | ⚠️ WARNING with conversion example |
+| Aware (different) | Converts to target timezone | ℹ️ INFO about conversion |
+| Aware (same as target) | No conversion needed | No log |
+
+**DST Transitions:**
+
+- Handled automatically using `pytz` timezone database
+- Spring forward (2AM → 3AM skip): Handled by Polars natively
+- Fall back (ambiguous hour): Polars uses default disambiguation rules
+- Example: UTC 14:30 → US/Eastern 09:30 (EST) or 10:30 (EDT) depending on date
+
+**Asset Class Timezone Rules:**
+
+- **Crypto & FX**: Always force UTC timezone (ignores user-specified timezone)
+- **Equities**: Default `US/Eastern`, but respects user-specified timezone
+- **Futures & Commodities**: Timezone configurable based on exchange
+
 ### Schema Consistency
 The output always contains exactly 38 columns defined in `IndicatorSchema`. Signal and pattern columns are always present (with None values when no patterns detected) to ensure database integration consistency.
 

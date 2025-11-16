@@ -106,7 +106,7 @@ for signal in signal_objects:
 **Key Parameters:**
 - `upper_bound`: Boundary for long signal targets (`higher_high`, `lower_high`)
 - `lower_bound`: Boundary for short signal targets (`lower_low`, `higher_low`)
-- `merge_threshold_pct`: Merge nearby targets (0.02 = 2%)
+- `merge_threshold_pct`: Merge middle targets within threshold (0.02 = 2%). First and last targets are never merged.
 - `max_targets`: Maximum targets per signal (None = unlimited)
 
 ### Multi-Timeframe Analysis

@@ -392,8 +392,8 @@ class TestTimezoneHandling:
         # Should have timezone-aware timestamps
         assert result.schema["timestamp"] == Datetime("us", "US/Eastern")
 
-    def test_normalize_timezone_already_aware_unchanged(self):
-        """Test that timezone-aware timestamps pass through unchanged."""
+    def test_normalize_timezone_already_aware_same_timezone(self):
+        """Test that timezone-aware timestamps in target timezone pass through unchanged."""
         from .utils.thestrat_data_utils import create_timestamp_series
 
         timestamps = create_timestamp_series("2023-01-01 09:30:00", 2, 60, timezone="UTC")
@@ -411,10 +411,172 @@ class TestTimezoneHandling:
         agg = Aggregation(create_crypto_aggregation_config())  # UTC timezone
         result = agg.normalize_timezone(aware_data)
 
-        # Should preserve timezone-aware format
+        # Should preserve timezone-aware format (same timezone, no conversion)
         timestamp_dtype = result.schema["timestamp"]
         assert isinstance(timestamp_dtype, Datetime)
         assert timestamp_dtype.time_zone == "UTC"
+
+        # Timestamps should be unchanged
+        assert result["timestamp"].to_list() == aware_data["timestamp"].to_list()
+
+    def test_normalize_timezone_aware_utc_to_eastern_est(self):
+        """Test conversion of UTC timezone-aware timestamps to US/Eastern during EST (no DST)."""
+        from .utils.thestrat_data_utils import create_timestamp_series
+
+        # January 1, 2023 is EST (not DST) - UTC offset is -5 hours
+        # 14:30 UTC = 09:30 EST
+        timestamps_utc = create_timestamp_series("2023-01-01 14:30:00", 3, 60, timezone="UTC")
+        aware_data = DataFrame(
+            {
+                "timestamp": timestamps_utc,
+                "open": [100.0, 101.0, 102.0],
+                "high": [100.5, 101.5, 102.5],
+                "low": [99.5, 100.5, 101.5],
+                "close": [100.2, 101.2, 102.2],
+                "volume": [1000, 1100, 1200],
+            }
+        )
+
+        agg = Aggregation(AggregationConfig(target_timeframes=["1h"], asset_class="equities", timezone="US/Eastern"))
+        result = agg.normalize_timezone(aware_data)
+
+        # Should convert to US/Eastern
+        assert result.schema["timestamp"] == Datetime("us", "US/Eastern")
+
+        # Check first timestamp: 14:30 UTC → 09:30 EST
+        result_timestamps = result["timestamp"].to_list()
+        assert result_timestamps[0].hour == 9
+        assert result_timestamps[0].minute == 30
+
+    def test_normalize_timezone_aware_utc_to_eastern_edt(self):
+        """Test conversion of UTC timezone-aware timestamps to US/Eastern during EDT (DST active)."""
+        from .utils.thestrat_data_utils import create_timestamp_series
+
+        # July 1, 2023 is EDT (DST active) - UTC offset is -4 hours
+        # 14:30 UTC = 10:30 EDT
+        timestamps_utc = create_timestamp_series("2023-07-01 14:30:00", 3, 60, timezone="UTC")
+        aware_data = DataFrame(
+            {
+                "timestamp": timestamps_utc,
+                "open": [100.0, 101.0, 102.0],
+                "high": [100.5, 101.5, 102.5],
+                "low": [99.5, 100.5, 101.5],
+                "close": [100.2, 101.2, 102.2],
+                "volume": [1000, 1100, 1200],
+            }
+        )
+
+        agg = Aggregation(AggregationConfig(target_timeframes=["1h"], asset_class="equities", timezone="US/Eastern"))
+        result = agg.normalize_timezone(aware_data)
+
+        # Should convert to US/Eastern
+        assert result.schema["timestamp"] == Datetime("us", "US/Eastern")
+
+        # Check first timestamp: 14:30 UTC → 10:30 EDT
+        result_timestamps = result["timestamp"].to_list()
+        assert result_timestamps[0].hour == 10
+        assert result_timestamps[0].minute == 30
+
+    def test_validate_input_timezones_naive_warning(self, caplog):
+        """Test that naive timestamps trigger warning with conversion example."""
+        import logging
+
+        naive_data = DataFrame(
+            {
+                "timestamp": [datetime(2023, 1, 1, 9, 30), datetime(2023, 1, 1, 10, 30)],
+                "open": [100.0, 101.0],
+                "high": [100.5, 101.5],
+                "low": [99.5, 100.5],
+                "close": [100.2, 101.2],
+                "volume": [1000, 1100],
+            }
+        )
+
+        agg = Aggregation(AggregationConfig(target_timeframes=["1h"], asset_class="equities", timezone="US/Eastern"))
+
+        with caplog.at_level(logging.WARNING):
+            agg.validate_input_timezones(naive_data)
+
+        # Should log warning about naive timestamps
+        assert any("Naive timestamps detected" in record.message for record in caplog.records)
+        assert any("US/Eastern" in record.message for record in caplog.records)
+        assert any("convert before feeding" in record.message for record in caplog.records)
+
+    def test_validate_input_timezones_aware_different_info(self, caplog):
+        """Test that different timezone-aware timestamps trigger info log."""
+        import logging
+
+        from .utils.thestrat_data_utils import create_timestamp_series
+
+        timestamps_utc = create_timestamp_series("2023-01-01 14:30:00", 2, 60, timezone="UTC")
+        aware_data = DataFrame(
+            {
+                "timestamp": timestamps_utc,
+                "open": [100.0, 101.0],
+                "high": [100.5, 101.5],
+                "low": [99.5, 100.5],
+                "close": [100.2, 101.2],
+                "volume": [1000, 1100],
+            }
+        )
+
+        agg = Aggregation(AggregationConfig(target_timeframes=["1h"], asset_class="equities", timezone="US/Eastern"))
+
+        with caplog.at_level(logging.INFO):
+            agg.validate_input_timezones(aware_data)
+
+        # Should log info about timezone conversion
+        assert any("Converting timestamps from UTC to US/Eastern" in record.message for record in caplog.records)
+
+    def test_validate_input_timezones_aware_same_no_log(self, caplog):
+        """Test that matching timezone-aware timestamps don't trigger logging."""
+        import logging
+
+        from .utils.thestrat_data_utils import create_timestamp_series
+
+        timestamps_utc = create_timestamp_series("2023-01-01 09:30:00", 2, 60, timezone="UTC")
+        aware_data = DataFrame(
+            {
+                "timestamp": timestamps_utc,
+                "open": [100.0, 101.0],
+                "high": [100.5, 101.5],
+                "low": [99.5, 100.5],
+                "close": [100.2, 101.2],
+                "volume": [1000, 1100],
+            }
+        )
+
+        agg = Aggregation(create_crypto_aggregation_config())  # UTC timezone
+
+        with caplog.at_level(logging.INFO):
+            agg.validate_input_timezones(aware_data)
+
+        # Should NOT log anything (timezone already matches)
+        timezone_logs = [record for record in caplog.records if "timezone" in record.message.lower()]
+        assert len(timezone_logs) == 0
+
+    def test_backward_compatibility_naive_timestamps(self):
+        """Test that existing code with naive timestamps continues to work."""
+        # This test ensures backward compatibility - naive timestamps should still work
+        # They will just trigger a warning now
+        naive_data = DataFrame(
+            {
+                "timestamp": [datetime(2023, 1, 1, 9, 30), datetime(2023, 1, 1, 10, 30)],
+                "open": [100.0, 101.0],
+                "high": [100.5, 101.5],
+                "low": [99.5, 100.5],
+                "close": [100.2, 101.2],
+                "volume": [1000, 1100],
+            }
+        )
+
+        agg = Aggregation(AggregationConfig(target_timeframes=["1h"], asset_class="equities", timezone="US/Eastern"))
+        result = agg.normalize_timezone(naive_data)
+
+        # Should still work - converts naive to aware by assuming target timezone
+        assert result.schema["timestamp"] == Datetime("us", "US/Eastern")
+        assert result["timestamp"].to_list()[0].hour == 9
+        assert result["timestamp"].to_list()[0].minute == 30
 
 
 @pytest.mark.unit

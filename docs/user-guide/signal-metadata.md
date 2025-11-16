@@ -224,6 +224,58 @@ if signal.target_prices[0].hit:
     signal.trail_stop(signal.entry_price, "breakeven_after_target_1")
 ```
 
+### Target Merge Threshold
+
+The `merge_threshold_pct` parameter in `TargetConfig` controls how closely-spaced target levels are consolidated. This feature helps reduce target clutter while preserving TheStrat's core principles.
+
+**Key Behavior:**
+- **First target (T1)** is never merged - always represents nearest resistance/support
+- **Last target (TN)** is never merged - always represents the structure bound
+- **Middle targets** can be merged if within the threshold percentage
+- Merge only applies when **3+ targets** exist (need middle targets to merge)
+
+**Example Configuration:**
+```python
+from thestrat.schemas import TargetConfig
+
+target_config = TargetConfig(
+    upper_bound="higher_high",
+    lower_bound="lower_low",
+    merge_threshold_pct=0.01,  # Merge middle targets within 1%
+    max_targets=None
+)
+```
+
+**Real-World Example (MSFT):**
+
+Setup: Long signal at $336.11, potential targets at $340.12, $342.08, $351.47
+
+```python
+# Without merging (merge_threshold_pct=0.0)
+targets = [340.12, 342.08, 351.47]  # All 3 targets preserved
+
+# With 1% merging (merge_threshold_pct=0.01)
+# $340.12 and $342.08 are ~0.57% apart (within 1% threshold)
+targets = [340.12, 342.08, 351.47]  # Still 3 targets
+# First (340.12) and last (351.47) never merge
+# Middle target (342.08) preserved since it's distinct from both
+
+# With 5% merging (merge_threshold_pct=0.05)
+# $340.12 to $342.08 = 0.57% (would merge if middle)
+# But first/last never merge, so middle targets between them might consolidate
+targets = [340.12, 351.47]  # First and last preserved
+```
+
+**Why This Matters:**
+
+In TheStrat, T1 represents the **immediate** resistance/support being broken, and TN represents the **structure bound**. These are fundamental to the pattern and should never be merged regardless of proximity. Only intermediate targets can be consolidated for cleaner risk management.
+
+**Best Practices:**
+- Use `0.01` (1%) for tight clustering control
+- Use `0.02` (2%) for moderate consolidation
+- Use `0.05` (5%) for aggressive reduction
+- Set `0.0` to disable merging entirely
+
 ## Database Integration
 
 ### DataFrame Schema

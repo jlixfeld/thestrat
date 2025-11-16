@@ -12,7 +12,6 @@ from polars import (
     DataFrame as PolarsDataFrame,
 )
 from polars import (
-    Datetime,
     Int64,
     col,
     first,
@@ -94,6 +93,11 @@ class Aggregation(Component):
             raise ValueError("Input data validation failed")
 
         df = self._convert_to_polars(data)
+
+        # Validate and log timezone information
+        self.validate_input_timezones(df)
+
+        # Convert timestamps to target timezone
         df = self.normalize_timezone(df)
 
         # Process the timeframe data (timeframe column is mandatory)
@@ -262,14 +266,74 @@ class Aggregation(Component):
 
         return result.sort(sort_cols)
 
+    def validate_input_timezones(self, data: PolarsDataFrame) -> None:
+        """
+        Validate and log timezone information for input data.
+
+        Performs O(1) timezone detection using Polars dtype metadata and logs
+        helpful warnings/guidance for users about timezone handling.
+
+        Args:
+            data: Input DataFrame with timestamp column
+
+        Note:
+            This method uses Polars schema metadata (O(1)) rather than scanning
+            rows, as Polars enforces homogeneous column types - all timestamps
+            in a column share the same timezone (or all are naive).
+        """
+        ts_dtype = data.schema["timestamp"]
+
+        # Extract timezone from dtype metadata (None if naive)
+        current_tz = ts_dtype.time_zone if hasattr(ts_dtype, "time_zone") else None
+
+        if current_tz is None:
+            # Naive timestamps - warn user and provide conversion example
+            first_row_preview = data[0] if len(data) > 0 else "No data"
+            logging.warning(
+                f"Naive timestamps detected - assuming data is already in {self.timezone}\n"
+                f"First row: {first_row_preview}\n"
+                f"If your data is UTC from database, convert before feeding to Factory:\n"
+                f"  df = df.with_columns(\n"
+                f"      pl.col('timestamp')\n"
+                f"        .dt.replace_time_zone('UTC')\n"
+                f"        .dt.convert_time_zone('{self.timezone}')\n"
+                f"  )"
+            )
+        elif current_tz != self.timezone:
+            # Timezone-aware but different from target - will be converted
+            first_row_preview = data[0] if len(data) > 0 else "No data"
+            logging.info(f"Converting timestamps from {current_tz} to {self.timezone}\nFirst row: {first_row_preview}")
+        # else: Already in target timezone, no logging needed
+
     def normalize_timezone(self, data: PolarsDataFrame) -> PolarsDataFrame:
-        """Convert naive timestamps to timezone-aware using timezone resolution priority."""
+        """
+        Convert timestamps to target timezone.
+
+        Handles both naive and timezone-aware timestamps:
+        - Naive: Assumes already in target timezone, adds timezone awareness
+        - Aware (different): Converts from current timezone to target timezone
+        - Aware (same): No conversion needed
+
+        Args:
+            data: Input DataFrame with timestamp column
+
+        Returns:
+            DataFrame with timezone-aware timestamps in target timezone
+        """
         df = data.clone()
 
-        # Check if timestamp is already timezone-aware
-        if df.schema["timestamp"] == Datetime("us", None):  # Naive timestamp
-            # Convert to timezone-aware
-            df = df.with_columns([col("timestamp").dt.replace_time_zone(self.timezone).alias("timestamp")])
+        ts_dtype = df.schema["timestamp"]
+
+        # Extract timezone from dtype metadata (None if naive)
+        current_tz = ts_dtype.time_zone if hasattr(ts_dtype, "time_zone") else None
+
+        if current_tz is None:
+            # Naive timestamps - assume already in target timezone, add awareness
+            df = df.with_columns([col("timestamp").dt.replace_time_zone(self.timezone)])
+        elif current_tz != self.timezone:
+            # Timezone-aware but different - CONVERT to target timezone
+            df = df.with_columns([col("timestamp").dt.convert_time_zone(self.timezone)])
+        # else: Already in target timezone, no conversion needed
 
         return df
 
