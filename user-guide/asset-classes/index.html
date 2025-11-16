@@ -678,6 +678,30 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#calendar-period-aggregation" class="md-nav__link">
+    <span class="md-ellipsis">
+      Calendar Period Aggregation
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Calendar Period Aggregation">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#timestamp-alignment-for-calendar-periods" class="md-nav__link">
+    <span class="md-ellipsis">
+      Timestamp Alignment for Calendar Periods
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#best-practices-by-asset-class" class="md-nav__link">
     <span class="md-ellipsis">
       Best Practices by Asset Class
@@ -1210,6 +1234,30 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#calendar-period-aggregation" class="md-nav__link">
+    <span class="md-ellipsis">
+      Calendar Period Aggregation
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Calendar Period Aggregation">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#timestamp-alignment-for-calendar-periods" class="md-nav__link">
+    <span class="md-ellipsis">
+      Timestamp Alignment for Calendar Periods
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#best-practices-by-asset-class" class="md-nav__link">
     <span class="md-ellipsis">
       Best Practices by Asset Class
@@ -1627,6 +1675,64 @@
 </span><span id="__span-9-53"><a id="__codelineno-9-53" name="__codelineno-9-53" href="#__codelineno-9-53"></a>
 </span><span id="__span-9-54"><a id="__codelineno-9-54" name="__codelineno-9-54" href="#__codelineno-9-54"></a><span class="n">portfolio_analysis</span> <span class="o">=</span> <span class="n">analyze_multi_asset_portfolio</span><span class="p">(</span><span class="n">portfolio</span><span class="p">)</span>
 </span></code></pre></div>
+<h2 id="calendar-period-aggregation">Calendar Period Aggregation</h2>
+<h3 id="timestamp-alignment-for-calendar-periods">Timestamp Alignment for Calendar Periods</h3>
+<p>When aggregating to calendar-based periods (monthly, quarterly, yearly), TheStrat uses <code>start_by="datapoint"</code> instead of minute-based offset calculation. This ensures timestamps align correctly to each asset class's session start time.</p>
+<p><strong>Equities Example:</strong>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">thestrat</span><span class="w"> </span><span class="kn">import</span> <span class="n">Factory</span>
+</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">thestrat.schemas</span><span class="w"> </span><span class="kn">import</span> <span class="n">FactoryConfig</span><span class="p">,</span> <span class="n">AggregationConfig</span>
+</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>
+</span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="c1"># Aggregate daily equities data to monthly</span>
+</span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="n">config</span> <span class="o">=</span> <span class="n">FactoryConfig</span><span class="p">(</span>
+</span><span id="__span-10-6"><a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a>    <span class="n">aggregation</span><span class="o">=</span><span class="n">AggregationConfig</span><span class="p">(</span>
+</span><span id="__span-10-7"><a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a>        <span class="n">target_timeframes</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;1m&quot;</span><span class="p">],</span>  <span class="c1"># Monthly</span>
+</span><span id="__span-10-8"><a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a>        <span class="n">asset_class</span><span class="o">=</span><span class="s2">&quot;equities&quot;</span><span class="p">,</span>
+</span><span id="__span-10-9"><a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a>        <span class="n">timezone</span><span class="o">=</span><span class="s2">&quot;US/Eastern&quot;</span>
+</span><span id="__span-10-10"><a id="__codelineno-10-10" name="__codelineno-10-10" href="#__codelineno-10-10"></a>    <span class="p">)</span>
+</span><span id="__span-10-11"><a id="__codelineno-10-11" name="__codelineno-10-11" href="#__codelineno-10-11"></a><span class="p">)</span>
+</span><span id="__span-10-12"><a id="__codelineno-10-12" name="__codelineno-10-12" href="#__codelineno-10-12"></a>
+</span><span id="__span-10-13"><a id="__codelineno-10-13" name="__codelineno-10-13" href="#__codelineno-10-13"></a><span class="n">pipeline</span> <span class="o">=</span> <span class="n">Factory</span><span class="o">.</span><span class="n">create_all</span><span class="p">(</span><span class="n">config</span><span class="p">)</span>
+</span><span id="__span-10-14"><a id="__codelineno-10-14" name="__codelineno-10-14" href="#__codelineno-10-14"></a><span class="n">result</span> <span class="o">=</span> <span class="n">pipeline</span><span class="p">[</span><span class="s2">&quot;aggregation&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">process</span><span class="p">(</span><span class="n">daily_data</span><span class="p">)</span>
+</span><span id="__span-10-15"><a id="__codelineno-10-15" name="__codelineno-10-15" href="#__codelineno-10-15"></a>
+</span><span id="__span-10-16"><a id="__codelineno-10-16" name="__codelineno-10-16" href="#__codelineno-10-16"></a><span class="c1"># Monthly bars timestamp at 09:30 ET (not 08:30)</span>
+</span><span id="__span-10-17"><a id="__codelineno-10-17" name="__codelineno-10-17" href="#__codelineno-10-17"></a><span class="nb">print</span><span class="p">(</span><span class="n">result</span><span class="p">[</span><span class="s2">&quot;timestamp&quot;</span><span class="p">][</span><span class="mi">0</span><span class="p">])</span>  <span class="c1"># 2023-01-02 09:30:00-05:00</span>
+</span></code></pre></div></p>
+<p><strong>Asset Class Behavior:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Asset Class</th>
+<th>Session Start</th>
+<th>Monthly/Quarterly/Yearly Timestamp</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Equities</strong></td>
+<td>09:30 ET</td>
+<td>09:30 ET (session start)</td>
+</tr>
+<tr>
+<td><strong>Crypto</strong></td>
+<td>00:00 UTC</td>
+<td>00:00 UTC (midnight UTC)</td>
+</tr>
+<tr>
+<td><strong>Forex</strong></td>
+<td>00:00 UTC</td>
+<td>00:00 UTC (midnight UTC)</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Why This Matters:</strong></p>
+<p>This alignment ensures calendar period bars start at the correct session time for each asset class. For example:
+- Monthly equity bars at <code>09:30 ET</code> (correct - session start)
+- Monthly crypto bars at <code>00:00 UTC</code> (correct - midnight UTC)</p>
+<p><strong>Supported Calendar Periods:</strong>
+- <code>"1m"</code> - Monthly
+- <code>"1q"</code> - Quarterly
+- <code>"1y"</code> - Yearly</p>
+<p><strong>Non-Calendar Periods</strong> (hourly, daily, weekly) continue to use offset-based alignment as before, ensuring backward compatibility.</p>
 <h2 id="best-practices-by-asset-class">Best Practices by Asset Class</h2>
 <h3 id="crypto">Crypto</h3>
 <ul>
@@ -1744,7 +1850,7 @@
     
     
       
-      <script id="__config" type="application/json">{"base": "../..", "features": ["navigation.tracking", "navigation.sections", "navigation.expand", "navigation.top", "navigation.tabs", "search.highlight", "search.suggest", "content.code.copy", "content.code.annotate", "content.code.select", "navigation.footer", "content.tooltips"], "search": "../../assets/javascripts/workers/search.973d3a69.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": "0.0.1a28"}</script>
+      <script id="__config" type="application/json">{"base": "../..", "features": ["navigation.tracking", "navigation.sections", "navigation.expand", "navigation.top", "navigation.tabs", "search.highlight", "search.suggest", "content.code.copy", "content.code.annotate", "content.code.select", "navigation.footer", "content.tooltips"], "search": "../../assets/javascripts/workers/search.973d3a69.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": "0.0.1a29"}</script>
     
     
       <script src="../../assets/javascripts/bundle.92b07e13.min.js"></script>

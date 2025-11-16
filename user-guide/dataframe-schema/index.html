@@ -776,6 +776,30 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#volume-data-type-handling" class="md-nav__link">
+    <span class="md-ellipsis">
+      Volume Data Type Handling
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Volume Data Type Handling">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#volume-integer-precision" class="md-nav__link">
+    <span class="md-ellipsis">
+      Volume Integer Precision
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#best-practices" class="md-nav__link">
     <span class="md-ellipsis">
       Best Practices
@@ -1327,6 +1351,30 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#volume-data-type-handling" class="md-nav__link">
+    <span class="md-ellipsis">
+      Volume Data Type Handling
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Volume Data Type Handling">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#volume-integer-precision" class="md-nav__link">
+    <span class="md-ellipsis">
+      Volume Integer Precision
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#best-practices" class="md-nav__link">
     <span class="md-ellipsis">
       Best Practices
@@ -1562,7 +1610,7 @@
 </span><span id="__span-9-15"><a id="__codelineno-9-15" name="__codelineno-9-15" href="#__codelineno-9-15"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Optional: </span><span class="si">{</span><span class="n">optional_inputs</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-9-16"><a id="__codelineno-9-16" name="__codelineno-9-16" href="#__codelineno-9-16"></a><span class="c1"># [&#39;symbol&#39;, &#39;volume&#39;]</span>
 </span><span id="__span-9-17"><a id="__codelineno-9-17" name="__codelineno-9-17" href="#__codelineno-9-17"></a>
-</span><span id="__span-9-18"><a id="__codelineno-9-18" name="__codelineno-9-18" href="#__codelineno-9-18"></a><span class="c1"># Get all output columns (NEW in v0.0.1a28)</span>
+</span><span id="__span-9-18"><a id="__codelineno-9-18" name="__codelineno-9-18" href="#__codelineno-9-18"></a><span class="c1"># Get all output columns</span>
 </span><span id="__span-9-19"><a id="__codelineno-9-19" name="__codelineno-9-19" href="#__codelineno-9-19"></a><span class="n">output_columns</span> <span class="o">=</span> <span class="n">IndicatorSchema</span><span class="o">.</span><span class="n">get_output_columns</span><span class="p">()</span>
 </span><span id="__span-9-20"><a id="__codelineno-9-20" name="__codelineno-9-20" href="#__codelineno-9-20"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Output columns (</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">output_columns</span><span class="p">)</span><span class="si">}</span><span class="s2">): </span><span class="si">{</span><span class="n">output_columns</span><span class="p">[:</span><span class="mi">5</span><span class="p">]</span><span class="si">}</span><span class="s2">...&quot;</span><span class="p">)</span>
 </span><span id="__span-9-21"><a id="__codelineno-9-21" name="__codelineno-9-21" href="#__codelineno-9-21"></a><span class="c1"># Output columns (33): [&#39;ath&#39;, &#39;atl&#39;, &#39;bias&#39;, &#39;continuity&#39;, &#39;entry_price&#39;]...</span>
@@ -1600,7 +1648,7 @@
 </span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="k">def</span><span class="w"> </span><span class="nf">document_schema_version</span><span class="p">():</span>
 </span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Generate schema documentation for version control.&quot;&quot;&quot;</span>
 </span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a>    <span class="k">return</span> <span class="p">{</span>
-</span><span id="__span-13-5"><a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a>        <span class="s2">&quot;version&quot;</span><span class="p">:</span> <span class="s2">&quot;0.0.1a28&quot;</span><span class="p">,</span>
+</span><span id="__span-13-5"><a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a>        <span class="s2">&quot;version&quot;</span><span class="p">:</span> <span class="s2">&quot;0.0.1a29&quot;</span><span class="p">,</span>
 </span><span id="__span-13-6"><a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a>        <span class="s2">&quot;input_columns&quot;</span><span class="p">:</span> <span class="n">IndicatorSchema</span><span class="o">.</span><span class="n">get_all_input_columns</span><span class="p">(),</span>
 </span><span id="__span-13-7"><a id="__codelineno-13-7" name="__codelineno-13-7" href="#__codelineno-13-7"></a>        <span class="s2">&quot;output_columns&quot;</span><span class="p">:</span> <span class="n">IndicatorSchema</span><span class="o">.</span><span class="n">get_output_columns</span><span class="p">(),</span>
 </span><span id="__span-13-8"><a id="__codelineno-13-8" name="__codelineno-13-8" href="#__codelineno-13-8"></a>        <span class="s2">&quot;total_columns&quot;</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">IndicatorSchema</span><span class="o">.</span><span class="n">model_fields</span><span class="p">)</span>
@@ -1651,6 +1699,37 @@
 </span><span id="__span-15-11"><a id="__codelineno-15-11" name="__codelineno-15-11" href="#__codelineno-15-11"></a>
 </span><span id="__span-15-12"><a id="__codelineno-15-12" name="__codelineno-15-12" href="#__codelineno-15-12"></a>    <span class="k">return</span> <span class="n">result</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;converted_df&#39;</span><span class="p">,</span> <span class="n">df</span><span class="p">)</span>
 </span></code></pre></div>
+<h2 id="volume-data-type-handling">Volume Data Type Handling</h2>
+<h3 id="volume-integer-precision">Volume Integer Precision</h3>
+<p>During timeframe aggregation, volume values are summed across bars. To prevent floating-point arithmetic from introducing precision errors (like <code>117289485.035470001399517059326171875</code>), all volume values are explicitly cast to <code>Int64</code> after aggregation.</p>
+<p><strong>Example:</strong>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">thestrat</span><span class="w"> </span><span class="kn">import</span> <span class="n">Factory</span>
+</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">thestrat.schemas</span><span class="w"> </span><span class="kn">import</span> <span class="n">FactoryConfig</span><span class="p">,</span> <span class="n">AggregationConfig</span>
+</span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a>
+</span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a><span class="c1"># Aggregate 1-minute data to hourly</span>
+</span><span id="__span-16-5"><a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a><span class="n">config</span> <span class="o">=</span> <span class="n">FactoryConfig</span><span class="p">(</span>
+</span><span id="__span-16-6"><a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a>    <span class="n">aggregation</span><span class="o">=</span><span class="n">AggregationConfig</span><span class="p">(</span>
+</span><span id="__span-16-7"><a id="__codelineno-16-7" name="__codelineno-16-7" href="#__codelineno-16-7"></a>        <span class="n">target_timeframes</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;1h&quot;</span><span class="p">],</span>
+</span><span id="__span-16-8"><a id="__codelineno-16-8" name="__codelineno-16-8" href="#__codelineno-16-8"></a>        <span class="n">asset_class</span><span class="o">=</span><span class="s2">&quot;crypto&quot;</span>
+</span><span id="__span-16-9"><a id="__codelineno-16-9" name="__codelineno-16-9" href="#__codelineno-16-9"></a>    <span class="p">)</span>
+</span><span id="__span-16-10"><a id="__codelineno-16-10" name="__codelineno-16-10" href="#__codelineno-16-10"></a><span class="p">)</span>
+</span><span id="__span-16-11"><a id="__codelineno-16-11" name="__codelineno-16-11" href="#__codelineno-16-11"></a>
+</span><span id="__span-16-12"><a id="__codelineno-16-12" name="__codelineno-16-12" href="#__codelineno-16-12"></a><span class="n">pipeline</span> <span class="o">=</span> <span class="n">Factory</span><span class="o">.</span><span class="n">create_all</span><span class="p">(</span><span class="n">config</span><span class="p">)</span>
+</span><span id="__span-16-13"><a id="__codelineno-16-13" name="__codelineno-16-13" href="#__codelineno-16-13"></a><span class="n">result</span> <span class="o">=</span> <span class="n">pipeline</span><span class="p">[</span><span class="s2">&quot;aggregation&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">process</span><span class="p">(</span><span class="n">minute_data</span><span class="p">)</span>
+</span><span id="__span-16-14"><a id="__codelineno-16-14" name="__codelineno-16-14" href="#__codelineno-16-14"></a>
+</span><span id="__span-16-15"><a id="__codelineno-16-15" name="__codelineno-16-15" href="#__codelineno-16-15"></a><span class="c1"># Volume column is Int64, not Float64</span>
+</span><span id="__span-16-16"><a id="__codelineno-16-16" name="__codelineno-16-16" href="#__codelineno-16-16"></a><span class="nb">print</span><span class="p">(</span><span class="n">result</span><span class="o">.</span><span class="n">schema</span><span class="p">[</span><span class="s2">&quot;volume&quot;</span><span class="p">])</span>  <span class="c1"># Int64</span>
+</span><span id="__span-16-17"><a id="__codelineno-16-17" name="__codelineno-16-17" href="#__codelineno-16-17"></a><span class="nb">print</span><span class="p">(</span><span class="n">result</span><span class="p">[</span><span class="s2">&quot;volume&quot;</span><span class="p">][</span><span class="mi">0</span><span class="p">])</span>      <span class="c1"># 23457897 (exact integer, no decimals)</span>
+</span></code></pre></div></p>
+<p><strong>Benefits:</strong>
+- <strong>Exact values</strong>: Volume remains as precise integers through all aggregation levels
+- <strong>Database compatibility</strong>: Integer volume fields work correctly with SQL INT/BIGINT columns
+- <strong>No precision drift</strong>: Multi-level aggregation (1min → 1h → 1d → 1w) maintains exactness</p>
+<p><strong>Important Notes:</strong>
+- Volume is cast to <code>Int64</code> <strong>after</strong> aggregation but <strong>before</strong> returning results
+- Input data can have volume as <code>Int64</code> or <code>Float64</code> - both work
+- Multi-level aggregation maintains integer precision at each level
+- Very large volumes (billions) are supported by <code>Int64</code> type</p>
 <h2 id="best-practices">Best Practices</h2>
 <ul>
 <li><strong>Always validate</strong> input data before processing</li>
@@ -1658,6 +1737,7 @@
 <li><strong>Leverage auto-conversion</strong> for Pandas compatibility</li>
 <li><strong>Check type_issues</strong> for data quality problems</li>
 <li><strong>Use descriptions</strong> for database comments and API documentation</li>
+<li><strong>Expect Int64 volume</strong>: Design database schemas with INTEGER/BIGINT for volume columns</li>
 </ul>
 
 
@@ -1753,7 +1833,7 @@
     
     
       
-      <script id="__config" type="application/json">{"base": "../..", "features": ["navigation.tracking", "navigation.sections", "navigation.expand", "navigation.top", "navigation.tabs", "search.highlight", "search.suggest", "content.code.copy", "content.code.annotate", "content.code.select", "navigation.footer", "content.tooltips"], "search": "../../assets/javascripts/workers/search.973d3a69.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": "0.0.1a28"}</script>
+      <script id="__config" type="application/json">{"base": "../..", "features": ["navigation.tracking", "navigation.sections", "navigation.expand", "navigation.top", "navigation.tabs", "search.highlight", "search.suggest", "content.code.copy", "content.code.annotate", "content.code.select", "navigation.footer", "content.tooltips"], "search": "../../assets/javascripts/workers/search.973d3a69.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": "0.0.1a29"}</script>
     
     
       <script src="../../assets/javascripts/bundle.92b07e13.min.js"></script>

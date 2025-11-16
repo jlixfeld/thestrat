@@ -1614,7 +1614,7 @@
 <p><strong>Key Parameters:</strong>
 - <code>upper_bound</code>: Boundary for long signal targets (<code>higher_high</code>, <code>lower_high</code>)
 - <code>lower_bound</code>: Boundary for short signal targets (<code>lower_low</code>, <code>higher_low</code>)
-- <code>merge_threshold_pct</code>: Merge nearby targets (0.02 = 2%)
+- <code>merge_threshold_pct</code>: Merge middle targets within threshold (0.02 = 2%). First and last targets are never merged.
 - <code>max_targets</code>: Maximum targets per signal (None = unlimited)</p>
 <h3 id="multi-timeframe-analysis">Multi-Timeframe Analysis</h3>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">thestrat</span><span class="w"> </span><span class="kn">import</span> <span class="n">Factory</span>
@@ -2423,7 +2423,7 @@
     
     
       
-      <script id="__config" type="application/json">{"base": "../..", "features": ["navigation.tracking", "navigation.sections", "navigation.expand", "navigation.top", "navigation.tabs", "search.highlight", "search.suggest", "content.code.copy", "content.code.annotate", "content.code.select", "navigation.footer", "content.tooltips"], "search": "../../assets/javascripts/workers/search.973d3a69.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": "0.0.1a28"}</script>
+      <script id="__config" type="application/json">{"base": "../..", "features": ["navigation.tracking", "navigation.sections", "navigation.expand", "navigation.top", "navigation.tabs", "search.highlight", "search.suggest", "content.code.copy", "content.code.annotate", "content.code.select", "navigation.footer", "content.tooltips"], "search": "../../assets/javascripts/workers/search.973d3a69.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": "0.0.1a29"}</script>
     
     
       <script src="../../assets/javascripts/bundle.92b07e13.min.js"></script>
