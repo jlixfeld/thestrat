@@ -392,8 +392,8 @@ class TestTimezoneHandling:
         # Should have timezone-aware timestamps
         assert result.schema["timestamp"] == Datetime("us", "US/Eastern")
 
-    def test_normalize_timezone_already_aware_unchanged(self):
-        """Test that timezone-aware timestamps pass through unchanged."""
+    def test_normalize_timezone_already_aware_same_timezone(self):
+        """Test that timezone-aware timestamps in target timezone pass through unchanged."""
         from .utils.thestrat_data_utils import create_timestamp_series
 
         timestamps = create_timestamp_series("2023-01-01 09:30:00", 2, 60, timezone="UTC")
@@ -411,10 +411,172 @@ class TestTimezoneHandling:
         agg = Aggregation(create_crypto_aggregation_config())  # UTC timezone
         result = agg.normalize_timezone(aware_data)
 
-        # Should preserve timezone-aware format
+        # Should preserve timezone-aware format (same timezone, no conversion)
         timestamp_dtype = result.schema["timestamp"]
         assert isinstance(timestamp_dtype, Datetime)
         assert timestamp_dtype.time_zone == "UTC"
+
+        # Timestamps should be unchanged
+        assert result["timestamp"].to_list() == aware_data["timestamp"].to_list()
+
+    def test_normalize_timezone_aware_utc_to_eastern_est(self):
+        """Test conversion of UTC timezone-aware timestamps to US/Eastern during EST (no DST)."""
+        from .utils.thestrat_data_utils import create_timestamp_series
+
+        # January 1, 2023 is EST (not DST) - UTC offset is -5 hours
+        # 14:30 UTC = 09:30 EST
+        timestamps_utc = create_timestamp_series("2023-01-01 14:30:00", 3, 60, timezone="UTC")
+        aware_data = DataFrame(
+            {
+                "timestamp": timestamps_utc,
+                "open": [100.0, 101.0, 102.0],
+                "high": [100.5, 101.5, 102.5],
+                "low": [99.5, 100.5, 101.5],
+                "close": [100.2, 101.2, 102.2],
+                "volume": [1000, 1100, 1200],
+            }
+        )
+
+        agg = Aggregation(AggregationConfig(target_timeframes=["1h"], asset_class="equities", timezone="US/Eastern"))
+        result = agg.normalize_timezone(aware_data)
+
+        # Should convert to US/Eastern
+        assert result.schema["timestamp"] == Datetime("us", "US/Eastern")
+
+        # Check first timestamp: 14:30 UTC → 09:30 EST
+        result_timestamps = result["timestamp"].to_list()
+        assert result_timestamps[0].hour == 9
+        assert result_timestamps[0].minute == 30
+
+    def test_normalize_timezone_aware_utc_to_eastern_edt(self):
+        """Test conversion of UTC timezone-aware timestamps to US/Eastern during EDT (DST active)."""
+        from .utils.thestrat_data_utils import create_timestamp_series
+
+        # July 1, 2023 is EDT (DST active) - UTC offset is -4 hours
+        # 14:30 UTC = 10:30 EDT
+        timestamps_utc = create_timestamp_series("2023-07-01 14:30:00", 3, 60, timezone="UTC")
+        aware_data = DataFrame(
+            {
+                "timestamp": timestamps_utc,
+                "open": [100.0, 101.0, 102.0],
+                "high": [100.5, 101.5, 102.5],
+                "low": [99.5, 100.5, 101.5],
+                "close": [100.2, 101.2, 102.2],
+                "volume": [1000, 1100, 1200],
+            }
+        )
+
+        agg = Aggregation(AggregationConfig(target_timeframes=["1h"], asset_class="equities", timezone="US/Eastern"))
+        result = agg.normalize_timezone(aware_data)
+
+        # Should convert to US/Eastern
+        assert result.schema["timestamp"] == Datetime("us", "US/Eastern")
+
+        # Check first timestamp: 14:30 UTC → 10:30 EDT
+        result_timestamps = result["timestamp"].to_list()
+        assert result_timestamps[0].hour == 10
+        assert result_timestamps[0].minute == 30
+
+    def test_validate_input_timezones_naive_warning(self, caplog):
+        """Test that naive timestamps trigger warning with conversion example."""
+        import logging
+
+        naive_data = DataFrame(
+            {
+                "timestamp": [datetime(2023, 1, 1, 9, 30), datetime(2023, 1, 1, 10, 30)],
+                "open": [100.0, 101.0],
+                "high": [100.5, 101.5],
+                "low": [99.5, 100.5],
+                "close": [100.2, 101.2],
+                "volume": [1000, 1100],
+            }
+        )
+
+        agg = Aggregation(AggregationConfig(target_timeframes=["1h"], asset_class="equities", timezone="US/Eastern"))
+
+        with caplog.at_level(logging.WARNING):
+            agg.validate_input_timezones(naive_data)
+
+        # Should log warning about naive timestamps
+        assert any("Naive timestamps detected" in record.message for record in caplog.records)
+        assert any("US/Eastern" in record.message for record in caplog.records)
+        assert any("convert before feeding" in record.message for record in caplog.records)
+
+    def test_validate_input_timezones_aware_different_info(self, caplog):
+        """Test that different timezone-aware timestamps trigger info log."""
+        import logging
+
+        from .utils.thestrat_data_utils import create_timestamp_series
+
+        timestamps_utc = create_timestamp_series("2023-01-01 14:30:00", 2, 60, timezone="UTC")
+        aware_data = DataFrame(
+            {
+                "timestamp": timestamps_utc,
+                "open": [100.0, 101.0],
+                "high": [100.5, 101.5],
+                "low": [99.5, 100.5],
+                "close": [100.2, 101.2],
+                "volume": [1000, 1100],
+            }
+        )
+
+        agg = Aggregation(AggregationConfig(target_timeframes=["1h"], asset_class="equities", timezone="US/Eastern"))
+
+        with caplog.at_level(logging.INFO):
+            agg.validate_input_timezones(aware_data)
+
+        # Should log info about timezone conversion
+        assert any("Converting timestamps from UTC to US/Eastern" in record.message for record in caplog.records)
+
+    def test_validate_input_timezones_aware_same_no_log(self, caplog):
+        """Test that matching timezone-aware timestamps don't trigger logging."""
+        import logging
+
+        from .utils.thestrat_data_utils import create_timestamp_series
+
+        timestamps_utc = create_timestamp_series("2023-01-01 09:30:00", 2, 60, timezone="UTC")
+        aware_data = DataFrame(
+            {
+                "timestamp": timestamps_utc,
+                "open": [100.0, 101.0],
+                "high": [100.5, 101.5],
+                "low": [99.5, 100.5],
+                "close": [100.2, 101.2],
+                "volume": [1000, 1100],
+            }
+        )
+
+        agg = Aggregation(create_crypto_aggregation_config())  # UTC timezone
+
+        with caplog.at_level(logging.INFO):
+            agg.validate_input_timezones(aware_data)
+
+        # Should NOT log anything (timezone already matches)
+        timezone_logs = [record for record in caplog.records if "timezone" in record.message.lower()]
+        assert len(timezone_logs) == 0
+
+    def test_backward_compatibility_naive_timestamps(self):
+        """Test that existing code with naive timestamps continues to work."""
+        # This test ensures backward compatibility - naive timestamps should still work
+        # They will just trigger a warning now
+        naive_data = DataFrame(
+            {
+                "timestamp": [datetime(2023, 1, 1, 9, 30), datetime(2023, 1, 1, 10, 30)],
+                "open": [100.0, 101.0],
+                "high": [100.5, 101.5],
+                "low": [99.5, 100.5],
+                "close": [100.2, 101.2],
+                "volume": [1000, 1100],
+            }
+        )
+
+        agg = Aggregation(AggregationConfig(target_timeframes=["1h"], asset_class="equities", timezone="US/Eastern"))
+        result = agg.normalize_timezone(naive_data)
+
+        # Should still work - converts naive to aware by assuming target timezone
+        assert result.schema["timestamp"] == Datetime("us", "US/Eastern")
+        assert result["timestamp"].to_list()[0].hour == 9
+        assert result["timestamp"].to_list()[0].minute == 30
 
 
 @pytest.mark.unit
@@ -637,11 +799,11 @@ class TestAssetClassSpecificFeatures:
 
         assert len(result) >= 1
 
-        # Daily bars should align with market sessions
+        # Daily bars should align with market sessions (09:30 ET for equities)
         timestamps = result["timestamp"].to_list()
         for ts in timestamps[:3]:  # Check first few
-            # Should be aligned to market hours or start of day
-            assert ts.hour in [0, 9] or (ts.hour == 9 and ts.minute == 30)
+            # Equities should align to session_start (09:30)
+            assert ts.hour == 9 and ts.minute == 30, f"Expected 09:30, got {ts.hour}:{ts.minute:02d}"
 
     def test_fx_weekend_gaps(self):
         """Test FX handling of weekend trading gaps."""
@@ -672,6 +834,122 @@ class TestAssetClassSpecificFeatures:
             for vol in volumes:
                 assert vol > 0, f"Zero volume in {asset_class}"
                 assert isinstance(vol, (int, float)), f"Invalid volume type in {asset_class}"
+
+
+@pytest.mark.unit
+class TestVolumeIntegerPrecision:
+    """Test that volume remains as integer after aggregation (Issue #45)."""
+
+    def test_volume_remains_integer_after_single_aggregation(self):
+        """Test that volume is Int64 type with no decimal places after aggregation."""
+        from .utils.thestrat_data_utils import create_timestamp_series
+
+        # Create 1-minute data with specific volume values
+        timestamps = create_timestamp_series("2023-01-01 00:00:00", 60, 1)  # 60 minutes
+        data = DataFrame(
+            {
+                "timestamp": timestamps,
+                "open": [100.0 + i * 0.1 for i in range(60)],
+                "high": [100.5 + i * 0.1 for i in range(60)],
+                "low": [99.5 + i * 0.1 for i in range(60)],
+                "close": [100.2 + i * 0.1 for i in range(60)],
+                "volume": [1000 + i for i in range(60)],
+                "timeframe": ["1min"] * 60,
+            }
+        )
+
+        # Aggregate to 1 hour
+        agg = Aggregation(AggregationConfig(target_timeframes=["1h"], asset_class="crypto"))
+        result = agg.process(data)
+
+        assert "volume" in result.columns
+
+        # Check volume dtype is Int64
+        assert str(result.schema["volume"]) == "Int64", f"Volume dtype should be Int64, got {result.schema['volume']}"
+
+        # Check volume values are integers (no decimal places)
+        volumes = result["volume"].to_list()
+        for vol in volumes:
+            assert isinstance(vol, int), f"Volume should be int, got {type(vol)}"
+            # Verify it's an actual integer value
+            assert vol == int(vol), f"Volume {vol} has decimal places"
+
+    def test_volume_precision_across_multiple_aggregation_levels(self):
+        """Test that volume stays integer across multiple aggregation levels (1min → 1h → 1d)."""
+        from .utils.thestrat_data_utils import create_timestamp_series
+
+        # Create minute data
+        timestamps = create_timestamp_series("2023-01-01 00:00:00", 1440, 1)  # 24 hours of minute data
+        data = DataFrame(
+            {
+                "timestamp": timestamps,
+                "open": [100.0 + i * 0.01 for i in range(1440)],
+                "high": [100.5 + i * 0.01 for i in range(1440)],
+                "low": [99.5 + i * 0.01 for i in range(1440)],
+                "close": [100.2 + i * 0.01 for i in range(1440)],
+                "volume": [1000 + i for i in range(1440)],
+                "timeframe": ["1min"] * 1440,
+            }
+        )
+
+        # Aggregate to hourly
+        agg_hourly = Aggregation(AggregationConfig(target_timeframes=["1h"], asset_class="crypto"))
+        hourly_result = agg_hourly.process(data)
+
+        # Check hourly volumes are integers
+        assert str(hourly_result.schema["volume"]) == "Int64"
+        hourly_volumes = hourly_result["volume"].to_list()
+        for vol in hourly_volumes:
+            assert isinstance(vol, int), f"Hourly volume should be int, got {type(vol)}"
+
+        # Aggregate hourly to daily
+        agg_daily = Aggregation(AggregationConfig(target_timeframes=["1d"], asset_class="crypto"))
+        daily_result = agg_daily.process(hourly_result)
+
+        # Check daily volumes are still integers
+        assert str(daily_result.schema["volume"]) == "Int64"
+        daily_volumes = daily_result["volume"].to_list()
+        for vol in daily_volumes:
+            assert isinstance(vol, int), f"Daily volume should be int, got {type(vol)}"
+            # Verify no floating-point accumulation
+            assert vol == int(vol), f"Daily volume {vol} has decimal places"
+
+    def test_large_volume_values_no_precision_issues(self):
+        """Test that large volume values don't gain floating-point precision."""
+        from .utils.thestrat_data_utils import create_timestamp_series
+
+        # Create data with large volume values like the issue example
+        large_volume = 23457897  # Example from issue #45
+        timestamps = create_timestamp_series("2023-01-01 00:00:00", 60, 60)  # 60 hours
+
+        data = DataFrame(
+            {
+                "timestamp": timestamps,
+                "open": [100.0 + i * 0.1 for i in range(60)],
+                "high": [100.5 + i * 0.1 for i in range(60)],
+                "low": [99.5 + i * 0.1 for i in range(60)],
+                "close": [100.2 + i * 0.1 for i in range(60)],
+                "volume": [large_volume] * 60,
+                "timeframe": ["1h"] * 60,
+            }
+        )
+
+        # Aggregate to daily (24 hours)
+        agg = Aggregation(AggregationConfig(target_timeframes=["1d"], asset_class="crypto"))
+        result = agg.process(data)
+
+        assert "volume" in result.columns
+
+        # Check that volumes are exact integers
+        volumes = result["volume"].to_list()
+        for actual_volume in volumes:
+            # Volume should be exact integer, not something like 117289485.035470001399517059326171875
+            assert isinstance(actual_volume, int), f"Volume should be int, got {type(actual_volume)}"
+
+            # Each daily bar should have 24 hours worth of volume
+            # Verify no decimal component
+            assert float(actual_volume) == actual_volume, "Volume should have no decimal component"
+            assert actual_volume > large_volume, "Daily volume should be > single hour volume"
 
 
 # ==========================================
@@ -1199,6 +1477,221 @@ class TestDSTEdgeCases:
                 volumes = result["volume"].to_list()
                 for vol in volumes:
                     assert vol >= 0  # Volume should be non-negative
+
+
+@pytest.mark.unit
+class TestCalendarPeriodTimestamps:
+    """Test timestamp alignment for calendar-based periods (Issue #46)."""
+
+    def test_monthly_aggregation_timestamp_alignment_equities(self):
+        """Test that monthly bars align to session_start for equities (09:30 ET)."""
+        from zoneinfo import ZoneInfo
+
+        from .utils.thestrat_data_utils import create_timestamp_series
+
+        ZoneInfo("America/New_York")
+
+        # Create daily bars at 09:30 ET for a full year
+        timestamps = create_timestamp_series("2023-01-01 09:30:00", 400, 1440)  # 400 days
+        test_data = DataFrame(
+            {
+                "timestamp": timestamps,
+                "open": [100.0 + i * 0.01 for i in range(400)],
+                "high": [100.5 + i * 0.01 for i in range(400)],
+                "low": [99.5 + i * 0.01 for i in range(400)],
+                "close": [100.2 + i * 0.01 for i in range(400)],
+                "volume": [1000] * 400,
+                "timeframe": ["1d"] * 400,
+            }
+        )
+
+        # Set timestamps to 09:30 ET
+        test_data = test_data.with_columns(
+            [col("timestamp").dt.replace_time_zone("America/New_York").alias("timestamp")]
+        )
+
+        agg = Aggregation(
+            AggregationConfig(target_timeframes=["1m"], asset_class="equities", timezone="America/New_York")
+        )
+        result = agg.process(test_data)
+
+        # All monthly bars should start at 09:30 ET (not 08:30)
+        timestamps = result["timestamp"].to_list()
+
+        for ts in timestamps:
+            assert ts.hour == 9, f"Monthly bar hour should be 9, got {ts.hour} for {ts}"
+            assert ts.minute == 30, f"Monthly bar minute should be 30, got {ts.minute} for {ts}"
+
+    def test_quarterly_aggregation_timestamp_alignment(self):
+        """Test that quarterly bars align to session_start for equities."""
+        from zoneinfo import ZoneInfo
+
+        from .utils.thestrat_data_utils import create_timestamp_series
+
+        ZoneInfo("America/New_York")
+
+        # Create daily data for multiple quarters at 09:30
+        timestamps = create_timestamp_series("2023-01-01 09:30:00", 400, 1440)
+        test_data = DataFrame(
+            {
+                "timestamp": timestamps,
+                "open": [100.0 + i * 0.01 for i in range(400)],
+                "high": [100.5 + i * 0.01 for i in range(400)],
+                "low": [99.5 + i * 0.01 for i in range(400)],
+                "close": [100.2 + i * 0.01 for i in range(400)],
+                "volume": [1000] * 400,
+                "timeframe": ["1d"] * 400,
+            }
+        )
+
+        test_data = test_data.with_columns(
+            [col("timestamp").dt.replace_time_zone("America/New_York").alias("timestamp")]
+        )
+
+        agg = Aggregation(
+            AggregationConfig(target_timeframes=["1q"], asset_class="equities", timezone="America/New_York")
+        )
+        result = agg.process(test_data)
+
+        timestamps = result["timestamp"].to_list()
+
+        for ts in timestamps:
+            assert ts.hour == 9, f"Quarterly bar hour should be 9, got {ts.hour} for {ts}"
+            assert ts.minute == 30, f"Quarterly bar minute should be 30, got {ts.minute} for {ts}"
+
+    def test_yearly_aggregation_timestamp_alignment(self):
+        """Test that yearly bars align to session_start for equities."""
+        from zoneinfo import ZoneInfo
+
+        from .utils.thestrat_data_utils import create_timestamp_series
+
+        ZoneInfo("America/New_York")
+
+        # Create daily data for multiple years at 09:30
+        timestamps = create_timestamp_series("2023-01-01 09:30:00", 800, 1440)
+        test_data = DataFrame(
+            {
+                "timestamp": timestamps,
+                "open": [100.0 + i * 0.01 for i in range(800)],
+                "high": [100.5 + i * 0.01 for i in range(800)],
+                "low": [99.5 + i * 0.01 for i in range(800)],
+                "close": [100.2 + i * 0.01 for i in range(800)],
+                "volume": [1000] * 800,
+                "timeframe": ["1d"] * 800,
+            }
+        )
+
+        test_data = test_data.with_columns(
+            [col("timestamp").dt.replace_time_zone("America/New_York").alias("timestamp")]
+        )
+
+        agg = Aggregation(
+            AggregationConfig(target_timeframes=["1y"], asset_class="equities", timezone="America/New_York")
+        )
+        result = agg.process(test_data)
+
+        timestamps = result["timestamp"].to_list()
+
+        for ts in timestamps:
+            assert ts.hour == 9, f"Yearly bar hour should be 9, got {ts.hour} for {ts}"
+            assert ts.minute == 30, f"Yearly bar minute should be 30, got {ts.minute} for {ts}"
+
+    def test_asset_class_specific_session_alignment(self):
+        """Test that each asset class maintains correct session start for calendar periods."""
+        from .utils.thestrat_data_utils import create_timestamp_series
+
+        # Test equities (09:30 ET)
+        timestamps_et = create_timestamp_series("2023-01-01 09:30:00", 400, 1440)
+        test_data_et = DataFrame(
+            {
+                "timestamp": timestamps_et,
+                "open": [100.0 + i * 0.01 for i in range(400)],
+                "high": [100.5 + i * 0.01 for i in range(400)],
+                "low": [99.5 + i * 0.01 for i in range(400)],
+                "close": [100.2 + i * 0.01 for i in range(400)],
+                "volume": [1000] * 400,
+                "timeframe": ["1d"] * 400,
+            }
+        )
+        test_data_et = test_data_et.with_columns(
+            [col("timestamp").dt.replace_time_zone("America/New_York").alias("timestamp")]
+        )
+
+        agg_equities = Aggregation(
+            AggregationConfig(target_timeframes=["1m"], asset_class="equities", timezone="America/New_York")
+        )
+        result_equities = agg_equities.process(test_data_et)
+
+        for ts in result_equities["timestamp"].to_list():
+            assert ts.hour == 9 and ts.minute == 30, f"Equities monthly should be 09:30, got {ts.hour}:{ts.minute:02d}"
+
+        # Test crypto (00:00 UTC)
+        timestamps_utc = create_timestamp_series("2023-01-01 00:00:00", 400, 1440)
+        test_data_utc = DataFrame(
+            {
+                "timestamp": timestamps_utc,
+                "open": [100.0 + i * 0.01 for i in range(400)],
+                "high": [100.5 + i * 0.01 for i in range(400)],
+                "low": [99.5 + i * 0.01 for i in range(400)],
+                "close": [100.2 + i * 0.01 for i in range(400)],
+                "volume": [1000] * 400,
+                "timeframe": ["1d"] * 400,
+            }
+        )
+        test_data_utc = test_data_utc.with_columns([col("timestamp").dt.replace_time_zone("UTC").alias("timestamp")])
+
+        agg_crypto = Aggregation(AggregationConfig(target_timeframes=["1m"], asset_class="crypto"))
+        result_crypto = agg_crypto.process(test_data_utc)
+
+        for ts in result_crypto["timestamp"].to_list():
+            assert ts.hour == 0 and ts.minute == 0, f"Crypto monthly should be 00:00, got {ts.hour}:{ts.minute:02d}"
+
+        # Test FX (00:00 UTC)
+        agg_fx = Aggregation(AggregationConfig(target_timeframes=["1m"], asset_class="fx"))
+        result_fx = agg_fx.process(test_data_utc)
+
+        for ts in result_fx["timestamp"].to_list():
+            assert ts.hour == 0 and ts.minute == 0, f"FX monthly should be 00:00, got {ts.hour}:{ts.minute:02d}"
+
+    def test_all_calendar_periods_maintain_session_start(self):
+        """Test that all calendar periods (monthly, quarterly, yearly) maintain session start."""
+        from zoneinfo import ZoneInfo
+
+        from .utils.thestrat_data_utils import create_timestamp_series
+
+        ZoneInfo("America/New_York")
+
+        # Create data at 09:30
+        timestamps = create_timestamp_series("2023-01-01 09:30:00", 800, 1440)
+        test_data = DataFrame(
+            {
+                "timestamp": timestamps,
+                "open": [100.0 + i * 0.01 for i in range(800)],
+                "high": [100.5 + i * 0.01 for i in range(800)],
+                "low": [99.5 + i * 0.01 for i in range(800)],
+                "close": [100.2 + i * 0.01 for i in range(800)],
+                "volume": [1000] * 800,
+                "timeframe": ["1d"] * 800,
+            }
+        )
+        test_data = test_data.with_columns(
+            [col("timestamp").dt.replace_time_zone("America/New_York").alias("timestamp")]
+        )
+
+        calendar_periods = ["1m", "1q", "1y"]
+
+        for timeframe in calendar_periods:
+            agg = Aggregation(
+                AggregationConfig(target_timeframes=[timeframe], asset_class="equities", timezone="America/New_York")
+            )
+            result = agg.process(test_data)
+
+            timestamps = result["timestamp"].to_list()
+
+            for ts in timestamps:
+                assert ts.hour == 9 and ts.minute == 30, (
+                    f"{timeframe}: Expected 09:30, got {ts.hour}:{ts.minute:02d} on {ts.date()}"
+                )
 
 
 # ==========================================

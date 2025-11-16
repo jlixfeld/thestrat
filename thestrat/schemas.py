@@ -333,7 +333,8 @@ class TargetConfig(BaseModel):
     merge_threshold_pct: float = Field(
         default=0.0,
         ge=0,
-        description="Merge targets within this percentage threshold (0 = no merging, 0.02 = 2%)",
+        description="Merge middle targets within this percentage threshold (0 = no merging, 0.02 = 2%). "
+        "Note: First and last targets are never merged as they are fundamental to the pattern.",
         examples=[0.0, 0.01, 0.02, 0.05],
         json_schema_extra={
             "unit": "decimal_percentage",

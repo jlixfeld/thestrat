@@ -1083,17 +1083,23 @@ class Indicators(Component):
                     # Removed: else clause that incorrectly included targets beyond bound
             filtered_targets = final_targets
 
-        # Apply merge logic
-        if merge_threshold_pct > 0 and len(filtered_targets) > 1:
-            merged = []
+        # Apply merge logic (only to middle targets, preserving first and last)
+        if merge_threshold_pct > 0 and len(filtered_targets) > 2:
+            # Extract first and last targets (never merge these)
+            first_target = filtered_targets[0]
+            last_target = filtered_targets[-1]
+            middle_targets = filtered_targets[1:-1]
+
+            # Apply merge logic ONLY to middle targets
+            merged_middle = []
             i = 0
-            while i < len(filtered_targets):
-                current = filtered_targets[i]
+            while i < len(middle_targets):
+                current = middle_targets[i]
                 # Look ahead for targets within merge threshold
                 group = [current]
                 j = i + 1
-                while j < len(filtered_targets):
-                    next_price = filtered_targets[j]
+                while j < len(middle_targets):
+                    next_price = middle_targets[j]
                     pct_diff = abs(next_price - current) / current
                     if pct_diff <= merge_threshold_pct:
                         group.append(next_price)
@@ -1103,12 +1109,14 @@ class Indicators(Component):
 
                 # Pick representative from group
                 if bias == "long":
-                    merged.append(max(group))  # Pick higher for long
+                    merged_middle.append(max(group))  # Pick higher for long
                 else:
-                    merged.append(min(group))  # Pick lower for short
+                    merged_middle.append(min(group))  # Pick lower for short
 
                 i = j
-            filtered_targets = merged
+
+            # Reconstruct: first + merged middle + last
+            filtered_targets = [first_target] + merged_middle + [last_target]
 
         # Apply max_targets limit
         if max_targets is not None and len(filtered_targets) > max_targets:

@@ -367,6 +367,54 @@ portfolio = {
 portfolio_analysis = analyze_multi_asset_portfolio(portfolio)
 ```
 
+## Calendar Period Aggregation
+
+### Timestamp Alignment for Calendar Periods
+
+When aggregating to calendar-based periods (monthly, quarterly, yearly), TheStrat uses `start_by="datapoint"` instead of minute-based offset calculation. This ensures timestamps align correctly to each asset class's session start time.
+
+**Equities Example:**
+```python
+from thestrat import Factory
+from thestrat.schemas import FactoryConfig, AggregationConfig
+
+# Aggregate daily equities data to monthly
+config = FactoryConfig(
+    aggregation=AggregationConfig(
+        target_timeframes=["1m"],  # Monthly
+        asset_class="equities",
+        timezone="US/Eastern"
+    )
+)
+
+pipeline = Factory.create_all(config)
+result = pipeline["aggregation"].process(daily_data)
+
+# Monthly bars timestamp at 09:30 ET (not 08:30)
+print(result["timestamp"][0])  # 2023-01-02 09:30:00-05:00
+```
+
+**Asset Class Behavior:**
+
+| Asset Class | Session Start | Monthly/Quarterly/Yearly Timestamp |
+|-------------|---------------|----------------------------------|
+| **Equities** | 09:30 ET | 09:30 ET (session start) |
+| **Crypto** | 00:00 UTC | 00:00 UTC (midnight UTC) |
+| **Forex** | 00:00 UTC | 00:00 UTC (midnight UTC) |
+
+**Why This Matters:**
+
+This alignment ensures calendar period bars start at the correct session time for each asset class. For example:
+- Monthly equity bars at `09:30 ET` (correct - session start)
+- Monthly crypto bars at `00:00 UTC` (correct - midnight UTC)
+
+**Supported Calendar Periods:**
+- `"1m"` - Monthly
+- `"1q"` - Quarterly
+- `"1y"` - Yearly
+
+**Non-Calendar Periods** (hourly, daily, weekly) continue to use offset-based alignment as before, ensuring backward compatibility.
+
 ## Best Practices by Asset Class
 
 ### Crypto

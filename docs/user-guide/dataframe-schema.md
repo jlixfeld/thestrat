@@ -244,7 +244,7 @@ optional_inputs = IndicatorSchema.get_optional_input_columns()
 print(f"Optional: {optional_inputs}")
 # ['symbol', 'volume']
 
-# Get all output columns (NEW in v0.0.1a28)
+# Get all output columns
 output_columns = IndicatorSchema.get_output_columns()
 print(f"Output columns ({len(output_columns)}): {output_columns[:5]}...")
 # Output columns (33): ['ath', 'atl', 'bias', 'continuity', 'entry_price']...
@@ -291,7 +291,7 @@ def validate_minimal_input(df):
 def document_schema_version():
     """Generate schema documentation for version control."""
     return {
-        "version": "0.0.1a28",
+        "version": "0.0.1a29",
         "input_columns": IndicatorSchema.get_all_input_columns(),
         "output_columns": IndicatorSchema.get_output_columns(),
         "total_columns": len(IndicatorSchema.model_fields)
@@ -350,6 +350,44 @@ def validate_api_response(json_data: list) -> DataFrame:
     return result.get('converted_df', df)
 ```
 
+## Volume Data Type Handling
+
+### Volume Integer Precision
+
+During timeframe aggregation, volume values are summed across bars. To prevent floating-point arithmetic from introducing precision errors (like `117289485.035470001399517059326171875`), all volume values are explicitly cast to `Int64` after aggregation.
+
+**Example:**
+```python
+from thestrat import Factory
+from thestrat.schemas import FactoryConfig, AggregationConfig
+
+# Aggregate 1-minute data to hourly
+config = FactoryConfig(
+    aggregation=AggregationConfig(
+        target_timeframes=["1h"],
+        asset_class="crypto"
+    )
+)
+
+pipeline = Factory.create_all(config)
+result = pipeline["aggregation"].process(minute_data)
+
+# Volume column is Int64, not Float64
+print(result.schema["volume"])  # Int64
+print(result["volume"][0])      # 23457897 (exact integer, no decimals)
+```
+
+**Benefits:**
+- **Exact values**: Volume remains as precise integers through all aggregation levels
+- **Database compatibility**: Integer volume fields work correctly with SQL INT/BIGINT columns
+- **No precision drift**: Multi-level aggregation (1min → 1h → 1d → 1w) maintains exactness
+
+**Important Notes:**
+- Volume is cast to `Int64` **after** aggregation but **before** returning results
+- Input data can have volume as `Int64` or `Float64` - both work
+- Multi-level aggregation maintains integer precision at each level
+- Very large volumes (billions) are supported by `Int64` type
+
 ## Best Practices
 
 - **Always validate** input data before processing
@@ -357,3 +395,4 @@ def validate_api_response(json_data: list) -> DataFrame:
 - **Leverage auto-conversion** for Pandas compatibility
 - **Check type_issues** for data quality problems
 - **Use descriptions** for database comments and API documentation
+- **Expect Int64 volume**: Design database schemas with INTEGER/BIGINT for volume columns
