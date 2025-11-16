@@ -2399,3 +2399,95 @@ class TestMultiTimeframeSource:
         assert "timeframe" in result.columns
         assert result["timeframe"].unique().to_list() == ["15min"]
         assert result["symbol"].unique().to_list() == ["PANDAS"]
+
+
+@pytest.mark.unit
+class TestCalendarBoundaryAlignment:
+    """Test cases for calendar period boundary alignment (issue #49)."""
+
+    def test_monthly_aligns_to_first_of_month(self):
+        """Monthly aggregation should align to 1st of each month, not first datapoint."""
+        # Create data starting Nov 16, 2020 (mimicking AAPL production data)
+        data = create_long_term_data(start_date="2020-11-16", periods=365 * 4, timeframe="1d", symbols=["AAPL"])
+
+        agg = Aggregation(AggregationConfig(target_timeframes=["1m"], asset_class="equities", timezone="US/Eastern"))
+        result = agg.process(data)
+
+        # Extract months from timestamps
+        monthly_data = result.filter(col("timeframe") == "1m")
+        timestamps = monthly_data["timestamp"].to_list()
+
+        # All monthly timestamps should be on the 1st of the month (at session_start time)
+        for ts in timestamps:
+            assert ts.day == 1, f"Expected day=1, got day={ts.day} for {ts}"
+
+    def test_quarterly_aligns_to_calendar_quarters(self):
+        """Quarterly aggregation should align to Jan 1, Apr 1, Jul 1, Oct 1."""
+        data = create_long_term_data(start_date="2020-11-16", periods=365 * 4, timeframe="1d", symbols=["AAPL"])
+
+        agg = Aggregation(AggregationConfig(target_timeframes=["1q"], asset_class="equities", timezone="US/Eastern"))
+        result = agg.process(data)
+
+        quarterly_data = result.filter(col("timeframe") == "1q")
+        timestamps = quarterly_data["timestamp"].to_list()
+
+        # All quarterly timestamps should be on 1st of Jan, Apr, Jul, or Oct
+        valid_months = {1, 4, 7, 10}
+        for ts in timestamps:
+            assert ts.month in valid_months, f"Expected month in {valid_months}, got {ts.month} for {ts}"
+            assert ts.day == 1, f"Expected day=1, got day={ts.day} for {ts}"
+
+    def test_yearly_aligns_to_january_first(self):
+        """Yearly aggregation should align to Jan 1."""
+        data = create_long_term_data(start_date="2020-11-16", periods=365 * 5, timeframe="1d", symbols=["AAPL"])
+
+        agg = Aggregation(AggregationConfig(target_timeframes=["1y"], asset_class="equities", timezone="US/Eastern"))
+        result = agg.process(data)
+
+        yearly_data = result.filter(col("timeframe") == "1y")
+        timestamps = yearly_data["timestamp"].to_list()
+
+        # All yearly timestamps should be Jan 1
+        for ts in timestamps:
+            assert ts.month == 1, f"Expected month=1, got month={ts.month} for {ts}"
+            assert ts.day == 1, f"Expected day=1, got day={ts.day} for {ts}"
+
+    def test_calendar_boundaries_independent_of_start_date(self):
+        """Calendar boundaries should be consistent regardless of data start date."""
+        # Test with two different start dates
+        data1 = create_long_term_data(start_date="2020-11-16", periods=365 * 2, timeframe="1d", symbols=["SYM1"])
+        data2 = create_long_term_data(start_date="2020-01-02", periods=365 * 2, timeframe="1d", symbols=["SYM2"])
+
+        agg = Aggregation(AggregationConfig(target_timeframes=["1m"], asset_class="equities", timezone="US/Eastern"))
+
+        result1 = agg.process(data1).filter(col("timeframe") == "1m")
+        result2 = agg.process(data2).filter(col("timeframe") == "1m")
+
+        # Extract overlapping months (2021-2022)
+        dates1 = set(f"{ts.year}-{ts.month:02d}" for ts in result1["timestamp"].to_list() if 2021 <= ts.year <= 2022)
+        dates2 = set(f"{ts.year}-{ts.month:02d}" for ts in result2["timestamp"].to_list() if 2021 <= ts.year <= 2022)
+
+        # Should have same monthly boundaries
+        assert dates1 == dates2, "Monthly boundaries should align regardless of start date"
+
+    def test_calendar_periods_with_session_start(self):
+        """Calendar periods should apply session_start offset consistently."""
+        data = create_long_term_data(start_date="2020-11-16", periods=365 * 2, timeframe="1d", symbols=["SESS"])
+
+        # Use custom session_start to verify offset is applied
+        agg = Aggregation(
+            AggregationConfig(
+                target_timeframes=["1m"], asset_class="equities", timezone="US/Eastern", session_start="09:30"
+            )
+        )
+        result = agg.process(data)
+
+        monthly_data = result.filter(col("timeframe") == "1m")
+        timestamps = monthly_data["timestamp"].to_list()
+
+        # All timestamps should have the same minutes value (30)
+        # The hour may vary due to DST when offset is applied from UTC
+        for ts in timestamps:
+            assert ts.minute == 30, f"Expected minute=30 (from session_start 09:30), got minute={ts.minute} for {ts}"
+            # Day should still be 1st of month
+            assert ts.day == 1, f"Expected day=1, got day={ts.day} for {ts}"
