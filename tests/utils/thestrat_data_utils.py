@@ -474,22 +474,36 @@ def create_edge_case_data(case_type: str = "identical_prices") -> DataFrame:
 
 
 def create_long_term_data(
-    days: int = 365, freq_minutes: int = 60, symbol: str = "SPY", timeframe: str | None = None
+    days: int = 365,
+    freq_minutes: int = 60,
+    symbol: str = "SPY",
+    timeframe: str | None = None,
+    start_date: str = "2023-01-01",
+    periods: int | None = None,
+    symbols: list[str] | None = None,
 ) -> DataFrame:
     """
     Create long-term dataset for aggregation testing across multiple timeframes.
 
     Args:
-        days: Number of days of data to generate
+        days: Number of days of data to generate (ignored if periods is provided)
         freq_minutes: Frequency in minutes between bars
-        symbol: Symbol name
+        symbol: Symbol name (ignored if symbols is provided)
         timeframe: Optional timeframe string (auto-determined from freq_minutes if None)
+        start_date: Start date for the data
+        periods: Optional specific number of periods (overrides days calculation)
+        symbols: Optional list of symbols (overrides symbol)
 
     Returns:
         DataFrame with long-term OHLC data suitable for all timeframe aggregations
     """
-    periods = days * 24 * 60 // freq_minutes  # Calculate total bars needed
-    timestamps = create_timestamp_series("2023-01-01", periods, freq_minutes)
+    if periods is None:
+        periods = days * 24 * 60 // freq_minutes  # Calculate total bars needed
+
+    if symbols is None:
+        symbols = [symbol]
+
+    timestamps = create_timestamp_series(start_date, periods, freq_minutes)
 
     # Determine timeframe if not provided
     if timeframe is None:
@@ -559,15 +573,38 @@ def create_long_term_data(
         lows.append(low)
         volumes.append(volume)
 
-    return DataFrame(
-        {
-            "timestamp": timestamps[1:],  # Skip first timestamp since we use prices[1:]
-            "symbol": [symbol] * len(opens),
-            "timeframe": [timeframe] * len(opens),
-            "open": opens,
-            "high": highs,
-            "low": lows,
-            "close": closes,
-            "volume": volumes,
-        }
-    )
+    # Handle multiple symbols if requested
+    if len(symbols) == 1:
+        return DataFrame(
+            {
+                "timestamp": timestamps[1:],  # Skip first timestamp since we use prices[1:]
+                "symbol": [symbols[0]] * len(opens),
+                "timeframe": [timeframe] * len(opens),
+                "open": opens,
+                "high": highs,
+                "low": lows,
+                "close": closes,
+                "volume": volumes,
+            }
+        )
+    else:
+        # Create data for multiple symbols - replicate data with different symbols
+        all_data = []
+        for sym in symbols:
+            all_data.append(
+                DataFrame(
+                    {
+                        "timestamp": timestamps[1:],
+                        "symbol": [sym] * len(opens),
+                        "timeframe": [timeframe] * len(opens),
+                        "open": opens,
+                        "high": highs,
+                        "low": lows,
+                        "close": closes,
+                        "volume": volumes,
+                    }
+                )
+            )
+        from polars import concat
+
+        return concat(all_data)
