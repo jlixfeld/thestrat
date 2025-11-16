@@ -1320,6 +1320,10 @@
 
 <h1 id="asset-classes">Asset Classes</h1>
 <p>TheStrat supports multiple asset classes, each with specific market characteristics and trading hours. This guide explains how to configure and work with different asset classes effectively.</p>
+<div class="admonition info">
+<p class="admonition-title">Primary Focus: US Equities</p>
+<p>This library is primarily developed and tested for <strong>US Equities</strong> analysis. While crypto, forex, and futures are supported via configuration, they are not actively tested or used in production.</p>
+</div>
 <h2 id="overview">Overview</h2>
 <p>Asset classes in TheStrat determine:</p>
 <ul>
@@ -1398,7 +1402,7 @@
 <p><strong>Characteristics:</strong>
 - <strong>Trading Hours</strong>: 9:30 AM - 4:00 PM ET (regular session)
 - <strong>Timezone</strong>: US/Eastern (default), configurable
-- <strong>Session Handling</strong>: Pre-market, regular, after-hours
+- <strong>Session Handling</strong>: Session-aligned aggregation via configurable session_start offset. No explicit pre/post-market gating or holiday calendars.
 - <strong>Weekend Behavior</strong>: No trading weekends/holidays</p>
 <p><strong>Market Sessions:</strong></p>
 <p>TheStrat automatically handles market hours for equities. You can configure different timeframes for different analysis needs:</p>
@@ -1492,8 +1496,8 @@
 <p><strong>Characteristics:</strong>
 - <strong>Trading Hours</strong>: Sun 5 PM - Fri 5 PM ET (24/5)
 - <strong>Timezone</strong>: UTC (required)
-- <strong>Session Handling</strong>: Asian, London, New York sessions
-- <strong>Weekend Behavior</strong>: Gap handling for weekend closes</p>
+- <strong>Session Handling</strong>: 24/5 alignment with UTC. Weekend gaps appear in price data as-is; no special stitching logic.
+- <strong>Weekend Behavior</strong>: Weekend gaps appear in price data as-is</p>
 <p><strong>Major FX Sessions:</strong>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">analyze_fx_sessions</span><span class="p">(</span><span class="n">eurusd_data</span><span class="p">):</span>
 </span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Analyze EUR/USD across major FX sessions.&quot;&quot;&quot;</span>
@@ -1660,8 +1664,8 @@
 </span><span id="__span-9-38"><a id="__codelineno-9-38" name="__codelineno-9-38" href="#__codelineno-9-38"></a>            <span class="n">results</span><span class="p">[</span><span class="n">asset_name</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
 </span><span id="__span-9-39"><a id="__codelineno-9-39" name="__codelineno-9-39" href="#__codelineno-9-39"></a>                <span class="s1">&#39;asset_class&#39;</span><span class="p">:</span> <span class="n">asset_class</span><span class="p">,</span>
 </span><span id="__span-9-40"><a id="__codelineno-9-40" name="__codelineno-9-40" href="#__codelineno-9-40"></a>                <span class="s1">&#39;data&#39;</span><span class="p">:</span> <span class="n">analyzed</span><span class="p">,</span>
-</span><span id="__span-9-41"><a id="__codelineno-9-41" name="__codelineno-9-41" href="#__codelineno-9-41"></a>                <span class="s1">&#39;inside_bars&#39;</span><span class="p">:</span> <span class="n">analyzed</span><span class="p">[</span><span class="s1">&#39;inside_bar&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">sum</span><span class="p">(),</span>
-</span><span id="__span-9-42"><a id="__codelineno-9-42" name="__codelineno-9-42" href="#__codelineno-9-42"></a>                <span class="s1">&#39;outside_bars&#39;</span><span class="p">:</span> <span class="n">analyzed</span><span class="p">[</span><span class="s1">&#39;outside_bar&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span>
+</span><span id="__span-9-41"><a id="__codelineno-9-41" name="__codelineno-9-41" href="#__codelineno-9-41"></a>                <span class="s1">&#39;inside_bars&#39;</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">analyzed</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s1">&#39;scenario&#39;</span><span class="p">)</span> <span class="o">==</span> <span class="s2">&quot;1&quot;</span><span class="p">)),</span>
+</span><span id="__span-9-42"><a id="__codelineno-9-42" name="__codelineno-9-42" href="#__codelineno-9-42"></a>                <span class="s1">&#39;outside_bars&#39;</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">analyzed</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s1">&#39;scenario&#39;</span><span class="p">)</span> <span class="o">==</span> <span class="s2">&quot;3&quot;</span><span class="p">))</span>
 </span><span id="__span-9-43"><a id="__codelineno-9-43" name="__codelineno-9-43" href="#__codelineno-9-43"></a>            <span class="p">}</span>
 </span><span id="__span-9-44"><a id="__codelineno-9-44" name="__codelineno-9-44" href="#__codelineno-9-44"></a>
 </span><span id="__span-9-45"><a id="__codelineno-9-45" name="__codelineno-9-45" href="#__codelineno-9-45"></a>    <span class="k">return</span> <span class="n">results</span>
@@ -1745,7 +1749,7 @@
 <ul>
 <li>Respect market hours and gaps</li>
 <li>Lower volatility thresholds (1-2%)</li>
-<li>Consider pre/post market sessions separately</li>
+<li>Session-aligned aggregation via configurable session_start offset</li>
 <li>Account for earnings and announcement gaps</li>
 </ul>
 <h3 id="forex">Forex</h3>

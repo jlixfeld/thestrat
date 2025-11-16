@@ -1129,6 +1129,10 @@
 <a href="https://github.com/jlixfeld/thestrat"><img alt="Python Versions" src="https://img.shields.io/badge/python-3.11%20%7C%203.12-blue" /></a>
 <a href="https://github.com/jlixfeld/thestrat"><img alt="License" src="https://img.shields.io/badge/license-Private-red" /></a></p>
 <p>A Python module for financial data aggregation and technical analysis using <strong>#TheStrat</strong> methodology.</p>
+<div class="admonition info">
+<p class="admonition-title">Primary Focus: US Equities</p>
+<p>This library is primarily developed and tested for <strong>US Equities</strong> analysis. While crypto, forex, and futures are supported via configuration, they are not actively tested or used in production. All examples and documentation focus on US Equities use cases.</p>
+</div>
 <h2 id="overview">Overview</h2>
 <p>TheStrat provides a comprehensive framework for implementing the #TheStrat trading methodology in Python. It offers high-performance timeframe aggregation, complete technical indicators, and robust support for multiple asset classes.</p>
 <h2 id="key-features">Key Features</h2>
@@ -1139,7 +1143,7 @@
 <p>Complete implementation of TheStrat technical indicators with per-timeframe configurations</p>
 <hr />
 <p><span class="twemoji lg middle"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m6 16.5-3 2.94V11h3m5 3.66-1.57-1.34L8 14.64V7h3m5 6-3 3V3h3m2.81 9.81L17 11h5v5l-1.79-1.79L13 21.36l-3.47-3.02L5.75 22H3l6.47-6.34L13 18.64"/></svg></span> <strong>Multi-Asset Support</strong></p>
-<p>Crypto, Equities, and FX with appropriate market hours and timezone handling</p>
+<p>US Equities (primary focus), with additional support for crypto and FX timezone alignment</p>
 <hr />
 <p><span class="twemoji lg middle"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 15.5A3.5 3.5 0 0 1 8.5 12 3.5 3.5 0 0 1 12 8.5a3.5 3.5 0 0 1 3.5 3.5 3.5 3.5 0 0 1-3.5 3.5m7.43-2.53c.04-.32.07-.64.07-.97s-.03-.66-.07-1l2.11-1.63c.19-.15.24-.42.12-.64l-2-3.46c-.12-.22-.39-.31-.61-.22l-2.49 1c-.52-.39-1.06-.73-1.69-.98l-.37-2.65A.506.506 0 0 0 14 2h-4c-.25 0-.46.18-.5.42l-.37 2.65c-.63.25-1.17.59-1.69.98l-2.49-1c-.22-.09-.49 0-.61.22l-2 3.46c-.13.22-.07.49.12.64L4.57 11c-.04.34-.07.67-.07 1s.03.65.07.97l-2.11 1.66c-.19.15-.25.42-.12.64l2 3.46c.12.22.39.3.61.22l2.49-1.01c.52.4 1.06.74 1.69.99l.37 2.65c.04.24.25.42.5.42h4c.25 0 .46-.18.5-.42l.37-2.65c.63-.26 1.17-.59 1.69-.99l2.49 1.01c.22.08.49 0 .61-.22l2-3.46c.12-.22.07-.49-.12-.64z"/></svg></span> <strong>Factory Pattern</strong></p>
 <p>Clean component creation and configuration management</p>
@@ -1159,18 +1163,18 @@
 </span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="c1"># Configure your pipeline with Pydantic models</span>
 </span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="n">config</span> <span class="o">=</span> <span class="n">FactoryConfig</span><span class="p">(</span>
 </span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>    <span class="n">aggregation</span><span class="o">=</span><span class="n">AggregationConfig</span><span class="p">(</span>
-</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>        <span class="n">target_timeframes</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;5m&quot;</span><span class="p">,</span> <span class="s2">&quot;15m&quot;</span><span class="p">],</span>  <span class="c1"># Multiple timeframes supported</span>
+</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>        <span class="n">target_timeframes</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;5min&quot;</span><span class="p">,</span> <span class="s2">&quot;15min&quot;</span><span class="p">],</span>  <span class="c1"># Multiple timeframes supported</span>
 </span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>        <span class="n">asset_class</span><span class="o">=</span><span class="s2">&quot;equities&quot;</span><span class="p">,</span>
 </span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>        <span class="n">timezone</span><span class="o">=</span><span class="s2">&quot;US/Eastern&quot;</span>
 </span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>    <span class="p">),</span>
 </span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>    <span class="n">indicators</span><span class="o">=</span><span class="n">IndicatorsConfig</span><span class="p">(</span>
 </span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>        <span class="n">timeframe_configs</span><span class="o">=</span><span class="p">[</span>
 </span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>            <span class="n">TimeframeItemConfig</span><span class="p">(</span>
-</span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a>                <span class="n">timeframes</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;5m&quot;</span><span class="p">],</span>
+</span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a>                <span class="n">timeframes</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;5min&quot;</span><span class="p">],</span>
 </span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a>                <span class="n">swing_points</span><span class="o">=</span><span class="n">SwingPointsConfig</span><span class="p">(</span><span class="n">window</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="n">threshold</span><span class="o">=</span><span class="mf">1.5</span><span class="p">)</span>  <span class="c1"># Short-term settings</span>
 </span><span id="__span-0-19"><a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a>            <span class="p">),</span>
 </span><span id="__span-0-20"><a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a>            <span class="n">TimeframeItemConfig</span><span class="p">(</span>
-</span><span id="__span-0-21"><a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a>                <span class="n">timeframes</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;15m&quot;</span><span class="p">],</span>
+</span><span id="__span-0-21"><a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a>                <span class="n">timeframes</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;15min&quot;</span><span class="p">],</span>
 </span><span id="__span-0-22"><a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a>                <span class="n">swing_points</span><span class="o">=</span><span class="n">SwingPointsConfig</span><span class="p">(</span><span class="n">window</span><span class="o">=</span><span class="mi">7</span><span class="p">,</span> <span class="n">threshold</span><span class="o">=</span><span class="mf">2.5</span><span class="p">)</span>  <span class="c1"># Long-term settings</span>
 </span><span id="__span-0-23"><a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a>            <span class="p">)</span>
 </span><span id="__span-0-24"><a id="__codelineno-0-24" name="__codelineno-0-24" href="#__codelineno-0-24"></a>        <span class="p">]</span>
@@ -1218,27 +1222,30 @@
 </tbody>
 </table>
 <h2 id="supported-markets">Supported Markets</h2>
-<div class="tabbed-set tabbed-alternate" data-tabs="1:3"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><input id="__tabbed_1_3" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">Crypto</label><label for="__tabbed_1_2">Equities</label><label for="__tabbed_1_3">Forex</label></div>
+<div class="tabbed-set tabbed-alternate" data-tabs="1:3"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><input id="__tabbed_1_3" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">Equities (Primary)</label><label for="__tabbed_1_2">Crypto (Supported)</label><label for="__tabbed_1_3">Forex (Supported)</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
 <ul>
-<li>24/7 trading</li>
+<li><strong>US Equities</strong> (actively tested and used)</li>
+<li>Session-aligned aggregation via configurable <code>session_start</code> offset</li>
+<li>Configurable timezones (default: US/Eastern)</li>
+<li>Note: No explicit pre/post-market gating or holiday calendars</li>
+</ul>
+</div>
+<div class="tabbed-block">
+<ul>
+<li>24/7 trading support</li>
 <li>UTC timezone enforcement</li>
 <li>Continuous aggregation</li>
+<li><strong>Not actively tested</strong> - treat as illustrative</li>
 </ul>
 </div>
 <div class="tabbed-block">
 <ul>
-<li>Market hours (9:30-16:00 ET)</li>
-<li>Configurable timezones</li>
-<li>Pre/post market handling</li>
-</ul>
-</div>
-<div class="tabbed-block">
-<ul>
-<li>24/5 trading (Sun 5pm - Fri 5pm ET)</li>
+<li>24/5 alignment with UTC</li>
 <li>UTC timezone enforcement</li>
-<li>Weekend gap handling</li>
+<li>Weekend gaps appear in price data as-is</li>
+<li><strong>Not actively tested</strong> - treat as illustrative</li>
 </ul>
 </div>
 </div>
