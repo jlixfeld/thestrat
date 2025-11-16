@@ -78,9 +78,9 @@ sample_data = PandasDataFrame({
 # Configure TheStrat components with Pydantic models
 config = FactoryConfig(
     aggregation=AggregationConfig(
-        target_timeframes=["5m"],  # Aggregate to 5-minute bars (now supports multiple)
-        asset_class="equities",    # US equity market
-        timezone="US/Eastern"      # Eastern timezone
+        target_timeframes=["5min"],  # Aggregate to 5-minute bars (now supports multiple)
+        asset_class="equities",      # US equity market
+        timezone="US/Eastern"        # Eastern timezone
     ),
     indicators=IndicatorsConfig(
         timeframe_configs=[
@@ -123,7 +123,7 @@ from thestrat.schemas import (
 
 # Minimal configuration using models
 simple_config = FactoryConfig(
-    aggregation=AggregationConfig(target_timeframes=["5m"]),
+    aggregation=AggregationConfig(target_timeframes=["5min"]),
     indicators=IndicatorsConfig(
         timeframe_configs=[
             TimeframeItemConfig(timeframes=["all"])
@@ -134,18 +134,18 @@ simple_config = FactoryConfig(
 # Full configuration with all options
 full_config = FactoryConfig(
     aggregation=AggregationConfig(
-        target_timeframes=["5m", "15m"],  # Multiple timeframes supported
+        target_timeframes=["5min", "15min"],  # Multiple timeframes supported
         asset_class="equities",
         timezone="US/Eastern"
     ),
     indicators=IndicatorsConfig(
         timeframe_configs=[
             TimeframeItemConfig(
-                timeframes=["5m"],
+                timeframes=["5min"],
                 swing_points=SwingPointsConfig(window=5, threshold=2.0)
             ),
             TimeframeItemConfig(
-                timeframes=["15m"],
+                timeframes=["15min"],
                 swing_points=SwingPointsConfig(window=7, threshold=3.0)
             )
         ]
@@ -185,7 +185,7 @@ analyzed = indicators.process(five_min_bars)
 # New columns are added for TheStrat metrics
 print(analyzed.columns)
 # Original OHLCV + TheStrat indicators like:
-# 'inside_bar', 'outside_bar', 'higher_high', 'lower_low', etc.
+# 'scenario', 'higher_high', 'lower_low', 'signal', etc.
 ```
 
 ### Step 4: Extract Insights
@@ -193,9 +193,13 @@ print(analyzed.columns)
 Work with the results:
 
 ```python
-# Find inside bars
-inside_bars = analyzed[analyzed['inside_bar'] == True]
+# Find inside bars (scenario == "1")
+inside_bars = analyzed.filter(pl.col('scenario') == "1")
 print(f"Found {len(inside_bars)} inside bars")
+
+# Find outside bars (scenario == "3")
+outside_bars = analyzed.filter(pl.col('scenario') == "3")
+print(f"Found {len(outside_bars)} outside bars")
 
 # Find market structure points
 higher_highs = len(analyzed['higher_high'].drop_nulls())
@@ -205,7 +209,7 @@ print(f"Higher highs: {higher_highs}")
 print(f"Lower lows: {lower_lows}")
 
 # Get the latest signals
-latest_signals = analyzed.tail(10)[['timestamp', 'inside_bar', 'outside_bar']]
+latest_signals = analyzed.tail(10).select(['timestamp', 'scenario', 'signal'])
 print(latest_signals)
 ```
 
@@ -214,6 +218,9 @@ print(latest_signals)
 Different asset classes require different configurations:
 
 ### Crypto (24/7 Trading)
+
+!!! warning "Not Actively Tested"
+    Crypto support is illustrative. This configuration is not actively tested or used in production.
 
 ```python
 crypto_config = FactoryConfig(
@@ -236,6 +243,9 @@ crypto_pipeline = Factory.create_all(crypto_config)
 ```
 
 ### Forex (24/5 Trading)
+
+!!! warning "Not Actively Tested"
+    Forex support is illustrative. This configuration is not actively tested or used in production.
 
 ```python
 fx_config = FactoryConfig(
@@ -266,17 +276,17 @@ fx_pipeline = Factory.create_all(fx_config)
 # Analyze multiple timeframes in a single operation using Pydantic models
 config = FactoryConfig(
     aggregation=AggregationConfig(
-        target_timeframes=["5m", "15m", "1h"],  # Process all timeframes together
+        target_timeframes=["5min", "15min", "1h"],  # Process all timeframes together
         asset_class="equities"
     ),
     indicators=IndicatorsConfig(
         timeframe_configs=[
             TimeframeItemConfig(
-                timeframes=["5m"],
+                timeframes=["5min"],
                 swing_points=SwingPointsConfig(window=3, threshold=1.5)  # Aggressive for short timeframe
             ),
             TimeframeItemConfig(
-                timeframes=["15m", "1h"],
+                timeframes=["15min", "1h"],
                 swing_points=SwingPointsConfig(window=7, threshold=2.5)  # Conservative for longer timeframes
             )
         ]
@@ -288,9 +298,10 @@ aggregated = pipeline["aggregation"].process(raw_data)
 analyzed = pipeline["indicators"].process(aggregated)
 
 # Filter results by timeframe using the normalized output
-for tf in ["5m", "15m", "1h"]:
-    tf_data = analyzed[analyzed['timeframe'] == tf]
-    print(f"{tf}: {len(tf_data)} bars, {tf_data['inside_bar'].sum()} inside bars")
+for tf in ["5min", "15min", "1h"]:
+    tf_data = analyzed.filter(pl.col('timeframe') == tf)
+    inside_bars = len(tf_data.filter(pl.col('scenario') == "1"))
+    print(f"{tf}: {len(tf_data)} bars, {inside_bars} inside bars")
 
 print(f"Total analysis: {len(analyzed)} bars across {len(analyzed['timeframe'].unique())} timeframes")
 ```
@@ -304,11 +315,11 @@ def find_breakouts(data):
     breakouts = []
 
     for i in range(1, len(data)):
-        current = data.iloc[i]
-        previous = data.iloc[i-1]
+        current = data.row(i, named=True)
+        previous = data.row(i-1, named=True)
 
-        # Outside bar followed by continuation
-        if (previous['outside_bar'] and
+        # Outside bar (scenario == "3") followed by continuation
+        if (previous['scenario'] == "3" and
             current['close'] > previous['high']):
             breakouts.append({
                 'timestamp': current['timestamp'],
@@ -334,7 +345,7 @@ Now that you understand the basics:
 ## Common Questions
 
 **Q: What timeframes are supported?**
-A: Standard timeframes: 1m, 5m, 15m, 30m, 1h, 4h, 1d. Custom intervals can be configured.
+A: Supported timeframes: 1min, 5min, 15min, 30min, 1h, 4h, 6h, 12h, 1d, 1w, 1m (month), 1q, 1y. These are the only valid timeframe strings.
 
 **Q: Can I use my own data format?**
 A: Yes, as long as it has the required columns including the mandatory `timeframe` column. TheStrat accepts both Pandas and Polars DataFrames and will automatically standardize the data.

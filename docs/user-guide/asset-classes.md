@@ -2,6 +2,9 @@
 
 TheStrat supports multiple asset classes, each with specific market characteristics and trading hours. This guide explains how to configure and work with different asset classes effectively.
 
+!!! info "Primary Focus: US Equities"
+    This library is primarily developed and tested for **US Equities** analysis. While crypto, forex, and futures are supported via configuration, they are not actively tested or used in production.
+
 ## Overview
 
 Asset classes in TheStrat determine:
@@ -96,7 +99,7 @@ equity_config = FactoryConfig(
 **Characteristics:**
 - **Trading Hours**: 9:30 AM - 4:00 PM ET (regular session)
 - **Timezone**: US/Eastern (default), configurable
-- **Session Handling**: Pre-market, regular, after-hours
+- **Session Handling**: Session-aligned aggregation via configurable session_start offset. No explicit pre/post-market gating or holiday calendars.
 - **Weekend Behavior**: No trading weekends/holidays
 
 **Market Sessions:**
@@ -202,8 +205,8 @@ fx_config = FactoryConfig(
 **Characteristics:**
 - **Trading Hours**: Sun 5 PM - Fri 5 PM ET (24/5)
 - **Timezone**: UTC (required)
-- **Session Handling**: Asian, London, New York sessions
-- **Weekend Behavior**: Gap handling for weekend closes
+- **Session Handling**: 24/5 alignment with UTC. Weekend gaps appear in price data as-is; no special stitching logic.
+- **Weekend Behavior**: Weekend gaps appear in price data as-is
 
 **Major FX Sessions:**
 ```python
@@ -351,8 +354,8 @@ def analyze_multi_asset_portfolio(assets):
             results[asset_name] = {
                 'asset_class': asset_class,
                 'data': analyzed,
-                'inside_bars': analyzed['inside_bar'].sum(),
-                'outside_bars': analyzed['outside_bar'].sum()
+                'inside_bars': len(analyzed.filter(pl.col('scenario') == "1")),
+                'outside_bars': len(analyzed.filter(pl.col('scenario') == "3"))
             }
 
     return results
@@ -426,7 +429,7 @@ This alignment ensures calendar period bars start at the correct session time fo
 ### Equities
 - Respect market hours and gaps
 - Lower volatility thresholds (1-2%)
-- Consider pre/post market sessions separately
+- Session-aligned aggregation via configurable session_start offset
 - Account for earnings and announcement gaps
 
 ### Forex

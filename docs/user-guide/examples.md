@@ -28,7 +28,7 @@ data = PandasDataFrame({
 # Configure for 5-minute equity analysis with Pydantic models
 config = FactoryConfig(
     aggregation=AggregationConfig(
-        target_timeframes=["5m"],
+        target_timeframes=["5min"],
         asset_class="equities",
         timezone="US/Eastern"
     ),
@@ -49,8 +49,10 @@ analyzed = pipeline["indicators"].process(aggregated)
 
 # Display results
 print(f"Converted {len(data)} 1-minute bars to {len(aggregated)} 5-minute bars")
-print(f"Found {analyzed['inside_bar'].sum()} inside bars")
-print(f"Found {analyzed['outside_bar'].sum()} outside bars")
+inside_bars = len(analyzed.filter(pl.col('scenario') == "1"))
+outside_bars = len(analyzed.filter(pl.col('scenario') == "3"))
+print(f"Found {inside_bars} inside bars")
+print(f"Found {outside_bars} outside bars")
 ```
 
 ### Multi-Target Configuration
@@ -67,14 +69,14 @@ from thestrat.schemas import (
 # Configure with target detection
 config = FactoryConfig(
     aggregation=AggregationConfig(
-        target_timeframes=["5m"],
+        target_timeframes=["5min"],
         asset_class="equities",
         timezone="US/Eastern"
     ),
     indicators=IndicatorsConfig(
         timeframe_configs=[
             TimeframeItemConfig(
-                timeframes=["5m"],
+                timeframes=["5min"],
                 swing_points=SwingPointsConfig(window=5, threshold=2.0),
                 target_config=TargetConfig(
                     upper_bound="higher_high",    # For long signals - targets until next HH
@@ -92,8 +94,12 @@ aggregated = pipeline["aggregation"].process(market_data)
 analyzed = pipeline["indicators"].process(aggregated)
 
 # Get signal objects with multiple targets
-signals_with_targets = analyzed.filter(analyzed["signal"].is_not_null())
-signal_objects = pipeline["indicators"].get_signal_objects(signals_with_targets)
+from thestrat.indicators import Indicators
+signals_with_targets = analyzed.filter(pl.col("signal").is_not_null())
+signal_objects = [
+    Indicators.get_signal_object(signals_with_targets.slice(i, 1))
+    for i in range(len(signals_with_targets))
+]
 
 for signal in signal_objects:
     print(f"Signal: {signal.pattern} - {signal.bias.value}")
@@ -119,7 +125,7 @@ from thestrat.schemas import (
 )
 from pandas import DataFrame as PandasDataFrame
 
-def analyze_multiple_timeframes(data, timeframes=['5m', '15m', '1h']):
+def analyze_multiple_timeframes(data, timeframes=['5min', '15min', '1h']):
     """Analyze data across multiple timeframes using Pydantic models."""
     # Single configuration for multiple timeframes using models
     config = FactoryConfig(
@@ -131,11 +137,11 @@ def analyze_multiple_timeframes(data, timeframes=['5m', '15m', '1h']):
         indicators=IndicatorsConfig(
             timeframe_configs=[
                 TimeframeItemConfig(
-                    timeframes=["5m"],
+                    timeframes=["5min"],
                     swing_points=SwingPointsConfig(window=3, threshold=1.5)  # Short-term settings
                 ),
                 TimeframeItemConfig(
-                    timeframes=["15m", "1h"],
+                    timeframes=["15min", "1h"],
                     swing_points=SwingPointsConfig(window=7, threshold=2.5)  # Long-term settings
                 )
             ]
@@ -153,8 +159,8 @@ def analyze_multiple_timeframes(data, timeframes=['5m', '15m', '1h']):
         tf_data = analyzed[analyzed['timeframe'] == tf]
         results[tf] = {
             'data': tf_data,
-            'inside_bars': tf_data['inside_bar'].sum(),
-            'outside_bars': tf_data['outside_bar'].sum(),
+            'inside_bars': len(tf_data.filter(pl.col('scenario') == "1")),
+            'outside_bars': len(tf_data.filter(pl.col('scenario') == "3")),
             'higher_highs': len(tf_data['higher_high'].drop_nulls()),
             'lower_lows': len(tf_data['lower_low'].drop_nulls())
         }
@@ -174,6 +180,9 @@ print(f"Total processed: {len(full_data)} bars across {len(full_data['timeframe'
 ## Asset Class Specific Examples
 
 ### Cryptocurrency (24/7 Trading)
+
+!!! warning "Not Actively Tested"
+    This configuration is illustrative only. Crypto/FX are not actively tested or used in production.
 
 ```python
 # Bitcoin/crypto configuration with Pydantic models
@@ -206,6 +215,9 @@ print(f"Crypto analysis: 24/7 trading, {len(crypto_signals)} hourly bars")
 ```
 
 ### Forex (24/5 Trading)
+
+!!! warning "Not Actively Tested"
+    This configuration is illustrative only. Crypto/FX are not actively tested or used in production.
 
 ```python
 # EUR/USD analysis with Pydantic models
@@ -251,18 +263,18 @@ from thestrat import Factory
 # Process multiple timeframes with different configurations using Pydantic models
 config = FactoryConfig(
     aggregation=AggregationConfig(
-        target_timeframes=["5m", "15m", "1h", "1d"],  # All timeframes together
+        target_timeframes=["5min", "15min", "1h", "1d"],  # All timeframes together
         asset_class="equities",
         timezone="US/Eastern"
     ),
     indicators=IndicatorsConfig(
         timeframe_configs=[
             TimeframeItemConfig(
-                timeframes=["5m"],  # Short-term aggressive settings
+                timeframes=["5min"],  # Short-term aggressive settings
                 swing_points=SwingPointsConfig(window=3, threshold=1.0)
             ),
             TimeframeItemConfig(
-                timeframes=["15m"],  # Medium-term balanced settings
+                timeframes=["15min"],  # Medium-term balanced settings
                 swing_points=SwingPointsConfig(window=5, threshold=2.0)
             ),
             TimeframeItemConfig(
@@ -278,9 +290,9 @@ aggregated = pipeline["aggregation"].process(market_data)
 analyzed = pipeline["indicators"].process(aggregated)
 
 # Extract results for each timeframe from normalized output
-for tf in ["5m", "15m", "1h", "1d"]:
+for tf in ["5min", "15min", "1h", "1d"]:
     tf_data = analyzed[analyzed['timeframe'] == tf]
-    print(f"{tf}: {len(tf_data)} bars, {tf_data['inside_bar'].sum()} inside bars")
+    print(f"{tf}: {len(tf_data)} bars, {len(tf_data.filter(pl.col('scenario') == '1'))} inside bars")
 
 print(f"Total: {len(analyzed)} bars across {len(analyzed['timeframe'].unique())} timeframes")
 ```
@@ -305,7 +317,7 @@ def analyze_swing_points(data):
     # Configuration with detailed swing point settings
     config = FactoryConfig(
         aggregation=AggregationConfig(
-            target_timeframes=["5m"],
+            target_timeframes=["5min"],
             asset_class="equities",
             timezone="US/Eastern"
         ),
@@ -373,7 +385,7 @@ def compare_swing_configurations(data):
     for strategy_name, swing_config in configurations:
         config = FactoryConfig(
             aggregation=AggregationConfig(
-                target_timeframes=["5m"],
+                target_timeframes=["5min"],
                 asset_class="equities"
             ),
             indicators=IndicatorsConfig(
@@ -487,7 +499,7 @@ def benchmark_swing_detection(data_size=10000):
 
     config = FactoryConfig(
         aggregation=AggregationConfig(
-            target_timeframes=["5m"],
+            target_timeframes=["5min"],
             asset_class="equities"
         ),
         indicators=IndicatorsConfig(
@@ -529,7 +541,7 @@ def analyze_cross_timeframe_signals(data):
     """Analyze signal correlation across multiple timeframes."""
     config = FactoryConfig(
         aggregation=AggregationConfig(
-            target_timeframes=["5m", "15m", "1h"],
+            target_timeframes=["5min", "15min", "1h"],
             asset_class="equities"
         ),
         indicators=IndicatorsConfig(
@@ -551,13 +563,13 @@ def analyze_cross_timeframe_signals(data):
 
     # Get latest bar for each timeframe
     latest_by_tf = {}
-    for tf in ["5m", "15m", "1h"]:
+    for tf in ["5min", "15min", "1h"]:
         tf_data = analyzed[analyzed['timeframe'] == tf]
         if len(tf_data) > 0:
             latest_by_tf[tf] = tf_data.iloc[-1]
 
     # Check for signal alignment
-    if all(bar.get('outside_bar', False) for bar in latest_by_tf.values()):
+    if all(bar.get('scenario') == "3" for bar in latest_by_tf.values()):
         synchronized_signals.append({
             'type': 'multi_timeframe_breakout',
             'timeframes': list(latest_by_tf.keys()),
@@ -586,8 +598,8 @@ def detect_strat_patterns(data):
         prev2 = data.iloc[i-2]
 
         # Inside bar followed by breakout (2-1-2 Continuation)
-        if (prev2['outside_bar'] and
-            prev1['inside_bar'] and
+        if (prev2['scenario'] == "3" and
+            prev1['scenario'] == "1" and
             current['close'] > prev2['high']):
             patterns.append({
                 'timestamp': current['timestamp'],
@@ -597,7 +609,7 @@ def detect_strat_patterns(data):
             })
 
         # Outside bar reversal
-        if (current['outside_bar'] and
+        if (current['scenario'] == "3" and
             prev1['close'] > prev1['open'] and  # Previous bar was bullish
             current['close'] < current['open']):  # Current bar is bearish
             patterns.append({
@@ -668,7 +680,7 @@ def simulate_real_time_analysis(historical_data, interval_seconds=60):
     """Simulate real-time TheStrat analysis with Pydantic models."""
 
     config = FactoryConfig(
-        aggregation=AggregationConfig(target_timeframes=["5m"], asset_class="equities"),
+        aggregation=AggregationConfig(target_timeframes=["5min"], asset_class="equities"),
         indicators=IndicatorsConfig(
             timeframe_configs=[
                 TimeframeItemConfig(
@@ -693,9 +705,9 @@ def simulate_real_time_analysis(historical_data, interval_seconds=60):
         if len(analyzed) > 0:
             latest = analyzed.iloc[-1]
 
-            if latest['inside_bar']:
+            if latest['scenario'] == "1":
                 print(f"{datetime.now()}: Inside bar detected @ {latest['close']:.2f}")
-            elif latest['outside_bar']:
+            elif latest['scenario'] == "3":
                 print(f"{datetime.now()}: Outside bar detected @ {latest['close']:.2f}")
 
             # Check for market structure changes
@@ -732,8 +744,8 @@ def batch_process_symbols(symbol_data_dict, config_template):
             results[symbol] = {
                 'data': analyzed,
                 'timeframes': analyzed['timeframe'].unique().tolist(),
-                'inside_bars': analyzed['inside_bar'].sum(),
-                'outside_bars': analyzed['outside_bar'].sum(),
+                'inside_bars': len(analyzed.filter(pl.col('scenario') == "1")),
+                'outside_bars': len(analyzed.filter(pl.col('scenario') == "3")),
                 'last_price': analyzed.iloc[-1]['close'],
                 'total_bars': len(analyzed)
             }
@@ -764,7 +776,7 @@ def process_large_dataset(data, chunk_size=1000):
 
     config = FactoryConfig(
         aggregation=AggregationConfig(
-            target_timeframes=["5m"],
+            target_timeframes=["5min"],
             asset_class="equities"
         ),
         indicators=IndicatorsConfig(
@@ -818,7 +830,7 @@ class TheStratStrategy(bt.Strategy):
     def __init__(self):
         self.thestrat_config = FactoryConfig(
             aggregation=AggregationConfig(
-                target_timeframes=["5m"],
+                target_timeframes=["5min"],
                 asset_class="equities"
             ),
             indicators=IndicatorsConfig(
@@ -842,9 +854,9 @@ class TheStratStrategy(bt.Strategy):
         )
 
         # Trading logic based on TheStrat signals
-        if analyzed.iloc[-1]['outside_bar'] and not self.position:
+        if analyzed.iloc[-1]['scenario'] == "3" and not self.position:
             self.buy()
-        elif analyzed.iloc[-1]['inside_bar'] and self.position:
+        elif analyzed.iloc[-1]['scenario'] == "1" and self.position:
             self.close()
 
 # Integration with zipline
@@ -871,10 +883,10 @@ def thestrat_zipline_algo(context, data):
     analyzed = pipeline["indicators"].process(aggregated)
 
     # Trading decisions
-    if analyzed.iloc[-1]['outside_bar']:
+    if analyzed.iloc[-1]['scenario'] == "3":
         order(symbol('AAPL'), 100)
 
-    record(inside_bars=analyzed['inside_bar'].sum())
+    record(inside_bars=len(analyzed.filter(pl.col('scenario') == "1")))
 ```
 
 These examples demonstrate the flexibility and power of TheStrat for various trading scenarios. Adapt the configurations and logic to match your specific trading strategy and requirements.

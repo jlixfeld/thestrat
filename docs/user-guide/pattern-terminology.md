@@ -68,7 +68,7 @@ All TheStrat patterns are built from combinations of these scenarios (e.g., "2D-
 - Detected from historical bars before the **setup bar** (or before inside bar for 1-2-2 rev-strats)
 - **Long signals:** Ascending ladder of highs (each target higher than previous) extending to `higher_high` or `lower_high` bound
 - **Short signals:** Descending ladder of lows (each target lower than previous) extending to `lower_low` or `higher_low` bound
-- First target must be beyond the trigger bar's price (above trigger high for long, below trigger low for short)
+- First target must be beyond the setup bar's breakout level (entry price)
 
 ## Visual Pattern Guide
 

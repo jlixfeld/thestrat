@@ -9,6 +9,9 @@
 
 A Python module for financial data aggregation and technical analysis using **#TheStrat** methodology.
 
+!!! info "Primary Focus: US Equities"
+    This library is primarily developed and tested for **US Equities** analysis. While crypto, forex, and futures are supported via configuration, they are not actively tested or used in production. All examples and documentation focus on US Equities use cases.
+
 ## Overview
 
 TheStrat provides a comprehensive framework for implementing the #TheStrat trading methodology in Python. It offers high-performance timeframe aggregation, complete technical indicators, and robust support for multiple asset classes.
@@ -29,7 +32,7 @@ Complete implementation of TheStrat technical indicators with per-timeframe conf
 
 :material-finance:{ .lg .middle } **Multi-Asset Support**
 
-Crypto, Equities, and FX with appropriate market hours and timezone handling
+US Equities (primary focus), with additional support for crypto and FX timezone alignment
 
 ---
 
@@ -61,18 +64,18 @@ from thestrat.schemas import (
 # Configure your pipeline with Pydantic models
 config = FactoryConfig(
     aggregation=AggregationConfig(
-        target_timeframes=["5m", "15m"],  # Multiple timeframes supported
+        target_timeframes=["5min", "15min"],  # Multiple timeframes supported
         asset_class="equities",
         timezone="US/Eastern"
     ),
     indicators=IndicatorsConfig(
         timeframe_configs=[
             TimeframeItemConfig(
-                timeframes=["5m"],
+                timeframes=["5min"],
                 swing_points=SwingPointsConfig(window=3, threshold=1.5)  # Short-term settings
             ),
             TimeframeItemConfig(
-                timeframes=["15m"],
+                timeframes=["15min"],
                 swing_points=SwingPointsConfig(window=7, threshold=2.5)  # Long-term settings
             )
         ]
@@ -99,20 +102,23 @@ print(f"Timeframes: {analyzed['timeframe'].unique()}")
 
 ## Supported Markets
 
-=== "Crypto"
-    - 24/7 trading
+=== "Equities (Primary)"
+    - **US Equities** (actively tested and used)
+    - Session-aligned aggregation via configurable `session_start` offset
+    - Configurable timezones (default: US/Eastern)
+    - Note: No explicit pre/post-market gating or holiday calendars
+
+=== "Crypto (Supported)"
+    - 24/7 trading support
     - UTC timezone enforcement
     - Continuous aggregation
+    - **Not actively tested** - treat as illustrative
 
-=== "Equities"
-    - Market hours (9:30-16:00 ET)
-    - Configurable timezones
-    - Pre/post market handling
-
-=== "Forex"
-    - 24/5 trading (Sun 5pm - Fri 5pm ET)
+=== "Forex (Supported)"
+    - 24/5 alignment with UTC
     - UTC timezone enforcement
-    - Weekend gap handling
+    - Weekend gaps appear in price data as-is
+    - **Not actively tested** - treat as illustrative
 
 
 ## Getting Started
