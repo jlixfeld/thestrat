@@ -9,6 +9,13 @@ from .aggregation import Aggregation
 from .base import Component
 from .factory import Factory
 from .indicators import Indicators
+from .precision import (  # noqa: F401
+    PrecisionError,
+    apply_precision,
+    get_comparison_tolerance,
+    get_field_decimal_places,
+    get_field_precision_type,
+)
 from .schemas import (
     AggregationConfig,
     FactoryConfig,
@@ -45,4 +52,9 @@ __all__ = [
     "PriceChange",
     "SIGNALS",
     "IndicatorSchema",
+    "PrecisionError",
+    "apply_precision",
+    "get_field_decimal_places",
+    "get_field_precision_type",
+    "get_comparison_tolerance",
 ]

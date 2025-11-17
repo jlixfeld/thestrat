@@ -22,6 +22,9 @@ Detailed examples showing how to use each component and feature.
 ### [Asset Classes](asset-classes.md)
 Understanding how different asset classes work within the framework.
 
+### [Precision Utilities](precision.md)
+Security-type-aware rounding utilities for consistent precision across trading platforms.
+
 ## Prerequisites
 
 Before using TheStrat, you should have:
