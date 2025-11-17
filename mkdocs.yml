@@ -92,6 +92,7 @@ nav:
     - Configuration: user-guide/configuration.md
     - Examples: user-guide/examples.md
     - Asset Classes: user-guide/asset-classes.md
+    - Precision Utilities: user-guide/precision.md
     - Database Integration: user-guide/dataframe-schema.md
   - API Reference: reference/
   - Developer Guide:

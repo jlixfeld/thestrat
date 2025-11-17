@@ -634,22 +634,50 @@ class IndicatorSchema(BaseModel):
     open: float = Field(
         description="Opening price for the time period",
         gt=0,
-        json_schema_extra={"polars_dtype": Float64, "input": True, "category": "base_ohlc", "nullable": False},
+        json_schema_extra={
+            "polars_dtype": Float64,
+            "input": True,
+            "category": "base_ohlc",
+            "nullable": False,
+            "decimal_places": None,
+            "precision_type": "price",
+        },
     )
     high: float = Field(
         description="Highest price during the time period",
         gt=0,
-        json_schema_extra={"polars_dtype": Float64, "input": True, "category": "base_ohlc", "nullable": False},
+        json_schema_extra={
+            "polars_dtype": Float64,
+            "input": True,
+            "category": "base_ohlc",
+            "nullable": False,
+            "decimal_places": None,
+            "precision_type": "price",
+        },
     )
     low: float = Field(
         description="Lowest price during the time period",
         gt=0,
-        json_schema_extra={"polars_dtype": Float64, "input": True, "category": "base_ohlc", "nullable": False},
+        json_schema_extra={
+            "polars_dtype": Float64,
+            "input": True,
+            "category": "base_ohlc",
+            "nullable": False,
+            "decimal_places": None,
+            "precision_type": "price",
+        },
     )
     close: float = Field(
         description="Closing price for the time period",
         gt=0,
-        json_schema_extra={"polars_dtype": Float64, "input": True, "category": "base_ohlc", "nullable": False},
+        json_schema_extra={
+            "polars_dtype": Float64,
+            "input": True,
+            "category": "base_ohlc",
+            "nullable": False,
+            "decimal_places": None,
+            "precision_type": "price",
+        },
     )
     volume: float | None = Field(
         default=None,
@@ -675,6 +703,8 @@ class IndicatorSchema(BaseModel):
             "category": "price_analysis",
             "calculation": "((high - close) / (high - low)) * 100",
             "nullable": False,
+            "decimal_places": 2,
+            "precision_type": "percentage",
         },
     )
     percent_close_from_low: float = Field(
@@ -687,53 +717,118 @@ class IndicatorSchema(BaseModel):
             "category": "price_analysis",
             "calculation": "((close - low) / (high - low)) * 100",
             "nullable": False,
+            "decimal_places": 2,
+            "precision_type": "percentage",
         },
     )
     ath: float = Field(
         description="All-time high (cumulative maximum of high prices)",
         gt=0,
-        json_schema_extra={"polars_dtype": Float64, "output": True, "category": "price_analysis", "nullable": False},
+        json_schema_extra={
+            "polars_dtype": Float64,
+            "output": True,
+            "category": "price_analysis",
+            "nullable": False,
+            "decimal_places": None,
+            "precision_type": "price",
+        },
     )
     atl: float = Field(
         description="All-time low (cumulative minimum of low prices)",
         gt=0,
-        json_schema_extra={"polars_dtype": Float64, "output": True, "category": "price_analysis", "nullable": False},
+        json_schema_extra={
+            "polars_dtype": Float64,
+            "output": True,
+            "category": "price_analysis",
+            "nullable": False,
+            "decimal_places": None,
+            "precision_type": "price",
+        },
     )
     new_ath: bool = Field(
         description="True when current high equals all-time high",
-        json_schema_extra={"polars_dtype": Boolean, "output": True, "category": "price_analysis", "nullable": False},
+        json_schema_extra={
+            "polars_dtype": Boolean,
+            "output": True,
+            "category": "price_analysis",
+            "nullable": False,
+            "decimal_places": None,
+            "precision_type": "integer",
+        },
     )
     new_atl: bool = Field(
         description="True when current low equals all-time low",
-        json_schema_extra={"polars_dtype": Boolean, "output": True, "category": "price_analysis", "nullable": False},
+        json_schema_extra={
+            "polars_dtype": Boolean,
+            "output": True,
+            "category": "price_analysis",
+            "nullable": False,
+            "decimal_places": None,
+            "precision_type": "integer",
+        },
     )
 
     # Gap Detection Columns
     gapper: int = Field(
         description="Threshold-based gap detection: 1=gap up above threshold, 0=gap down below threshold, null=no significant gap",
-        json_schema_extra={"polars_dtype": Int32, "output": True, "category": "gap_detection", "nullable": True},
+        json_schema_extra={
+            "polars_dtype": Int32,
+            "output": True,
+            "category": "gap_detection",
+            "nullable": True,
+            "decimal_places": None,
+            "precision_type": "integer",
+        },
     )
 
     # Market Structure Analysis Columns
     higher_high: float = Field(
         description="Higher high price in uptrend structure",
         gt=0,
-        json_schema_extra={"polars_dtype": Float64, "output": True, "category": "market_structure", "nullable": True},
+        json_schema_extra={
+            "polars_dtype": Float64,
+            "output": True,
+            "category": "market_structure",
+            "nullable": True,
+            "decimal_places": None,
+            "precision_type": "price",
+        },
     )
     lower_high: float = Field(
         description="Lower high price in downtrend structure",
         gt=0,
-        json_schema_extra={"polars_dtype": Float64, "output": True, "category": "market_structure", "nullable": True},
+        json_schema_extra={
+            "polars_dtype": Float64,
+            "output": True,
+            "category": "market_structure",
+            "nullable": True,
+            "decimal_places": None,
+            "precision_type": "price",
+        },
     )
     higher_low: float = Field(
         description="Higher low price in uptrend structure",
         gt=0,
-        json_schema_extra={"polars_dtype": Float64, "output": True, "category": "market_structure", "nullable": True},
+        json_schema_extra={
+            "polars_dtype": Float64,
+            "output": True,
+            "category": "market_structure",
+            "nullable": True,
+            "decimal_places": None,
+            "precision_type": "price",
+        },
     )
     lower_low: float = Field(
         description="Lower low price in downtrend structure",
         gt=0,
-        json_schema_extra={"polars_dtype": Float64, "output": True, "category": "market_structure", "nullable": True},
+        json_schema_extra={
+            "polars_dtype": Float64,
+            "output": True,
+            "category": "market_structure",
+            "nullable": True,
+            "decimal_places": None,
+            "precision_type": "price",
+        },
     )
 
     # TheStrat Pattern Columns
@@ -746,6 +841,8 @@ class IndicatorSchema(BaseModel):
             "output": True,
             "category": "thestrat_patterns",
             "nullable": False,
+            "decimal_places": None,
+            "precision_type": "integer",
             "values": {
                 1: "Close > Open (bullish candle)",
                 0: "Close < Open (bearish candle)",
@@ -755,7 +852,14 @@ class IndicatorSchema(BaseModel):
     )
     in_force: bool = Field(
         description="True when price action confirms directional bias",
-        json_schema_extra={"polars_dtype": Boolean, "output": True, "category": "thestrat_patterns", "nullable": False},
+        json_schema_extra={
+            "polars_dtype": Boolean,
+            "output": True,
+            "category": "thestrat_patterns",
+            "nullable": False,
+            "decimal_places": None,
+            "precision_type": "integer",
+        },
     )
     scenario: str = Field(
         description="TheStrat scenario classification (1, 2U, 2D, 3)",
@@ -764,6 +868,8 @@ class IndicatorSchema(BaseModel):
             "output": True,
             "category": "thestrat_patterns",
             "nullable": True,
+            "decimal_places": None,
+            "precision_type": "integer",
             "values": ["1", "2U", "2D", "3"],
         },
     )
@@ -771,11 +877,25 @@ class IndicatorSchema(BaseModel):
     # Signal Columns
     signal: str = Field(
         description="Detected TheStrat signal pattern",
-        json_schema_extra={"polars_dtype": String, "output": True, "category": "signals", "nullable": True},
+        json_schema_extra={
+            "polars_dtype": String,
+            "output": True,
+            "category": "signals",
+            "nullable": True,
+            "decimal_places": None,
+            "precision_type": "integer",
+        },
     )
     type: str = Field(
         description="Signal type/category (e.g., 'reversal', 'continuation')",
-        json_schema_extra={"polars_dtype": String, "output": True, "category": "signals", "nullable": True},
+        json_schema_extra={
+            "polars_dtype": String,
+            "output": True,
+            "category": "signals",
+            "nullable": True,
+            "decimal_places": None,
+            "precision_type": "integer",
+        },
     )
     bias: str = Field(
         description="Signal directional bias ('long' or 'short')",
@@ -784,6 +904,8 @@ class IndicatorSchema(BaseModel):
             "output": True,
             "category": "signals",
             "nullable": True,
+            "decimal_places": None,
+            "precision_type": "integer",
             "values": ["long", "short"],
         },
     )
@@ -795,6 +917,8 @@ class IndicatorSchema(BaseModel):
             "output": True,
             "category": "signals",
             "nullable": True,
+            "decimal_places": None,
+            "precision_type": "price",
             "note": "Setup bar is the bar being broken/continued, not the trigger bar",
         },
     )
@@ -806,6 +930,8 @@ class IndicatorSchema(BaseModel):
             "output": True,
             "category": "signals",
             "nullable": True,
+            "decimal_places": None,
+            "precision_type": "price",
             "note": "Setup bar is the bar being broken/continued, not the trigger bar",
         },
     )
@@ -817,6 +943,8 @@ class IndicatorSchema(BaseModel):
             "output": True,
             "category": "signals",
             "nullable": True,
+            "decimal_places": None,
+            "precision_type": "price",
         },
     )
     target_count: int | None = Field(
@@ -827,25 +955,55 @@ class IndicatorSchema(BaseModel):
             "output": True,
             "category": "signals",
             "nullable": True,
+            "decimal_places": None,
+            "precision_type": "integer",
         },
     )
 
     # Special Pattern Columns
     hammer: bool = Field(
         description="True when hammer/doji pattern detected",
-        json_schema_extra={"polars_dtype": Boolean, "output": True, "category": "special_patterns", "nullable": False},
+        json_schema_extra={
+            "polars_dtype": Boolean,
+            "output": True,
+            "category": "special_patterns",
+            "nullable": False,
+            "decimal_places": None,
+            "precision_type": "integer",
+        },
     )
     shooter: bool = Field(
         description="True when shooting star pattern detected",
-        json_schema_extra={"polars_dtype": Boolean, "output": True, "category": "special_patterns", "nullable": False},
+        json_schema_extra={
+            "polars_dtype": Boolean,
+            "output": True,
+            "category": "special_patterns",
+            "nullable": False,
+            "decimal_places": None,
+            "precision_type": "integer",
+        },
     )
     kicker: int = Field(
         description="Kicker pattern detection (1=bullish kicker, 0=bearish kicker, null=no kicker)",
-        json_schema_extra={"polars_dtype": Int32, "output": True, "category": "special_patterns", "nullable": True},
+        json_schema_extra={
+            "polars_dtype": Int32,
+            "output": True,
+            "category": "special_patterns",
+            "nullable": True,
+            "decimal_places": None,
+            "precision_type": "integer",
+        },
     )
     f23: bool = Field(
         description="True when F23 pattern detected",
-        json_schema_extra={"polars_dtype": Boolean, "output": True, "category": "special_patterns", "nullable": False},
+        json_schema_extra={
+            "polars_dtype": Boolean,
+            "output": True,
+            "category": "special_patterns",
+            "nullable": False,
+            "decimal_places": None,
+            "precision_type": "integer",
+        },
     )
     f23x: str = Field(
         description="F23 pattern variant (F23U, F23D)",
@@ -854,45 +1012,96 @@ class IndicatorSchema(BaseModel):
             "output": True,
             "category": "special_patterns",
             "nullable": True,
+            "decimal_places": None,
+            "precision_type": "integer",
             "values": ["F23U", "F23D"],
         },
     )
     f23_trigger: float = Field(
         description="F23 trigger price level",
         gt=0,
-        json_schema_extra={"polars_dtype": Float64, "output": True, "category": "special_patterns", "nullable": True},
+        json_schema_extra={
+            "polars_dtype": Float64,
+            "output": True,
+            "category": "special_patterns",
+            "nullable": True,
+            "decimal_places": None,
+            "precision_type": "price",
+        },
     )
     pmg: int = Field(
         description="Price Magnitude Gap pattern result - cumulative directional count",
-        json_schema_extra={"polars_dtype": Int32, "output": True, "category": "special_patterns", "nullable": False},
+        json_schema_extra={
+            "polars_dtype": Int32,
+            "output": True,
+            "category": "special_patterns",
+            "nullable": False,
+            "decimal_places": None,
+            "precision_type": "integer",
+        },
     )
 
     # Mother Bar Analysis Columns
     motherbar_problems: bool = Field(
         description="True when mother bar analysis has issues/conflicts",
-        json_schema_extra={"polars_dtype": Boolean, "output": True, "category": "mother_bar", "nullable": False},
+        json_schema_extra={
+            "polars_dtype": Boolean,
+            "output": True,
+            "category": "mother_bar",
+            "nullable": False,
+            "decimal_places": None,
+            "precision_type": "integer",
+        },
     )
 
     # Signal at Structure Point Columns
     signal_at_higher_high: bool | None = Field(
         default=None,
         description="True when any constituent bar's high equals higher_high structure level (null when no signal)",
-        json_schema_extra={"polars_dtype": Boolean, "output": True, "category": "signals", "nullable": True},
+        json_schema_extra={
+            "polars_dtype": Boolean,
+            "output": True,
+            "category": "signals",
+            "nullable": True,
+            "decimal_places": None,
+            "precision_type": "integer",
+        },
     )
     signal_at_lower_high: bool | None = Field(
         default=None,
         description="True when any constituent bar's high equals lower_high structure level (null when no signal)",
-        json_schema_extra={"polars_dtype": Boolean, "output": True, "category": "signals", "nullable": True},
+        json_schema_extra={
+            "polars_dtype": Boolean,
+            "output": True,
+            "category": "signals",
+            "nullable": True,
+            "decimal_places": None,
+            "precision_type": "integer",
+        },
     )
     signal_at_higher_low: bool | None = Field(
         default=None,
         description="True when any constituent bar's low equals higher_low structure level (null when no signal)",
-        json_schema_extra={"polars_dtype": Boolean, "output": True, "category": "signals", "nullable": True},
+        json_schema_extra={
+            "polars_dtype": Boolean,
+            "output": True,
+            "category": "signals",
+            "nullable": True,
+            "decimal_places": None,
+            "precision_type": "integer",
+        },
     )
     signal_at_lower_low: bool | None = Field(
         default=None,
         description="True when any constituent bar's low equals lower_low structure level (null when no signal)",
-        json_schema_extra={"polars_dtype": Boolean, "output": True, "category": "signals", "nullable": True},
+        json_schema_extra={
+            "polars_dtype": Boolean,
+            "output": True,
+            "category": "signals",
+            "nullable": True,
+            "decimal_places": None,
+            "precision_type": "integer",
+        },
     )
 
     @classmethod
@@ -1155,3 +1364,23 @@ class IndicatorSchema(BaseModel):
     def get_standard_column_order(cls) -> list[str]:
         """Get the standard column ordering for aggregation output."""
         return ["timestamp", "symbol", "timeframe", "open", "high", "low", "close", "volume"]
+
+    @classmethod
+    def get_precision_metadata(cls) -> dict[str, dict[str, Any]]:
+        """
+        Get precision metadata for all fields.
+
+        Returns:
+            Dict mapping field_name → {'precision_type': str, 'decimal_places': int | None}
+        """
+        metadata = {}
+
+        for field_name, field_info in cls.model_fields.items():
+            json_extra = getattr(field_info, "json_schema_extra", {}) or {}
+            if "precision_type" in json_extra:
+                metadata[field_name] = {
+                    "precision_type": json_extra["precision_type"],
+                    "decimal_places": json_extra.get("decimal_places"),
+                }
+
+        return metadata

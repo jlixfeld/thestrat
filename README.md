@@ -56,6 +56,7 @@ A Python module for financial data aggregation and technical analysis using #The
 - **Asset Class Support**: Crypto, Equities, FX
 - **Factory Pattern**: Clean component creation and configuration
 - **High Performance**: Vectorized operations using Polars
+- **Precision Utilities**: Security-type-aware rounding for consistent behavior across trading platforms
 
 ## Quick Start
 
@@ -108,4 +109,26 @@ analyzed = pipeline["indicators"].process(aggregated)
 
 print(f"Processed {len(analyzed)} bars with TheStrat indicators")
 print(f"Timeframes processed: {analyzed['timeframe'].unique()}")
+```
+
+### Precision Rounding
+
+Apply security-aware precision for consistent rounding:
+
+```python
+from thestrat import apply_precision
+
+# Define precision per security (from IBKR minTick)
+precision_map = {
+    "AAPL": 2,      # Equities: 2 decimals
+    "EURUSD": 5,    # Forex: 5 decimals
+    "BTC": 8,       # Crypto: 8 decimals
+}
+
+# Apply precision rounding to all indicator fields
+rounded = apply_precision(analyzed, precision_map)
+
+# Percentage fields always round to 2 decimals
+# Price fields round to security-specific decimals
+# Integer/boolean fields are never rounded
 ```
