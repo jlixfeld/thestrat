@@ -107,9 +107,7 @@ class TestMonthlyDSTTimestamps:
 
         # Aggregate to all calendar periods
         agg_all = Aggregation(
-            AggregationConfig(
-                target_timeframes=["1m", "1q", "1y"], asset_class="equities", timezone="America/New_York"
-            )
+            AggregationConfig(target_timeframes=["1m", "1q", "1y"], asset_class="equities", timezone="America/New_York")
         )
         result = agg_all.process(test_data)
 
