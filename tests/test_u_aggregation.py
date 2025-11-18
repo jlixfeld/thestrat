@@ -332,6 +332,46 @@ class TestAggregationOHLC:
         # Since we have only 3 bars and need 5min aggregation, we get partial aggregation
         assert result["volume"][0] == 6000  # 1000 + 2000 + 3000
 
+    def test_aggregate_same_timeframe_passthrough(self):
+        """Test aggregating 1d data to 1d preserves OHLCV values (pass-through)."""
+        from .utils.thestrat_data_utils import create_timestamp_series
+
+        # Create 5 days of 1d data
+        timestamps = create_timestamp_series("2023-01-01 09:30:00", periods=5, freq_minutes=1440)  # Daily
+        data_1d = DataFrame(
+            {
+                "timestamp": timestamps,
+                "open": [100.0, 102.0, 101.0, 103.0, 105.0],
+                "high": [103.0, 104.0, 103.0, 105.0, 107.0],
+                "low": [99.0, 101.0, 100.0, 102.0, 104.0],
+                "close": [102.0, 101.0, 103.0, 105.0, 104.0],
+                "volume": [1000000, 1100000, 1200000, 1300000, 1400000],
+                "symbol": ["TEST"] * 5,
+                "timeframe": ["1d"] * 5,
+            }
+        )
+
+        # Aggregate 1d to 1d (should be pass-through)
+        agg = Aggregation(AggregationConfig(target_timeframes=["1d"], asset_class="equities"))
+        result = agg.process(data_1d)
+
+        # Should have same number of rows
+        assert len(result) == len(data_1d)
+
+        # OHLCV values should be IDENTICAL (no aggregation should occur)
+        assert result["open"].to_list() == data_1d["open"].to_list()
+        assert result["high"].to_list() == data_1d["high"].to_list()
+        assert result["low"].to_list() == data_1d["low"].to_list()
+        assert result["close"].to_list() == data_1d["close"].to_list()
+        assert result["volume"].to_list() == data_1d["volume"].to_list()
+        assert result["symbol"].to_list() == data_1d["symbol"].to_list()
+
+        # Timestamps should be preserved (ignoring timezone info that aggregation adds)
+        # Compare as strings to ignore timezone differences
+        result_timestamps = [ts.replace(tzinfo=None) for ts in result["timestamp"].to_list()]
+        data_timestamps = [ts.replace(tzinfo=None) if hasattr(ts, "tzinfo") else ts for ts in data_1d["timestamp"].to_list()]
+        assert result_timestamps == data_timestamps
+
     def test_aggregate_without_volume_column(self):
         """Test aggregation works correctly when volume column is missing."""
         from .utils.thestrat_data_utils import create_timestamp_series

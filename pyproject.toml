@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "thestrat"
-version = "0.0.1a33"
+version = "0.0.1a34"
 description = "#TheStrat indicators and timeframe aggregation for financial market data"
 authors = [
     {name = "Jason Lixfeld", email = "nominal_choroid0y@icloud.com"}

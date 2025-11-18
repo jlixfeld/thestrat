@@ -105,40 +105,40 @@ class Indicators(Component):
 
         # Check if data has timeframe column for per-timeframe processing
         if "timeframe" in df.columns:
+            # ALWAYS partition by timeframe to prevent cross-timeframe pollution in rolling/cumulative operations
+            # This ensures market structure calculations only consider bars from the same timeframe
+            timeframe_groups = df.partition_by("timeframe", as_dict=True)
+            processed_groups = []
+
             # Check if "all" timeframe is configured
             has_all_config = any("all" in tf_config.timeframes for tf_config in self.config.timeframe_configs)
 
-            if has_all_config:
-                # Process all data with the "all" configuration
-                all_config = self._get_config_for_timeframe("any_timeframe_will_get_all_config")
-                df = self._process_single_timeframe(df, all_config)
-            else:
-                # Process each timeframe group with its specific configuration
-                timeframe_groups = df.partition_by("timeframe", as_dict=True)
-                processed_groups = []
+            for timeframe_key, timeframe_data in timeframe_groups.items():
+                # Extract timeframe string from tuple key
+                timeframe = timeframe_key[0] if isinstance(timeframe_key, tuple) else timeframe_key
 
-                for timeframe_key, timeframe_data in timeframe_groups.items():
-                    # Extract timeframe string from tuple key
-                    timeframe = timeframe_key[0] if isinstance(timeframe_key, tuple) else timeframe_key
-
-                    # Get config for this timeframe
+                # Get config for this timeframe
+                # If "all" config exists, use it for every timeframe; otherwise use timeframe-specific config
+                if has_all_config:
+                    tf_config = self._get_config_for_timeframe("any_timeframe_will_get_all_config")
+                else:
                     tf_config = self._get_config_for_timeframe(timeframe)
 
-                    # Process this timeframe with its specific config
-                    processed_data = self._process_single_timeframe(timeframe_data, tf_config)
-                    processed_groups.append(processed_data)
+                # Process this timeframe with its specific config
+                processed_data = self._process_single_timeframe(timeframe_data, tf_config)
+                processed_groups.append(processed_data)
 
-                # Combine all processed groups
-                df = processed_groups[0]
-                for group in processed_groups[1:]:
-                    df = df.vstack(group)
+            # Combine all processed groups
+            df = processed_groups[0]
+            for group in processed_groups[1:]:
+                df = df.vstack(group)
 
-                # Sort by original order (symbol, timeframe, timestamp)
-                sort_cols = []
-                if "symbol" in df.columns:
-                    sort_cols.append("symbol")
-                sort_cols.extend(["timeframe", "timestamp"])
-                df = df.sort(sort_cols)
+            # Sort by original order (symbol, timeframe, timestamp)
+            sort_cols = []
+            if "symbol" in df.columns:
+                sort_cols.append("symbol")
+            sort_cols.extend(["timeframe", "timestamp"])
+            df = df.sort(sort_cols)
         else:
             # No timeframe column - must have "all" configuration
             has_all_config = any("all" in tf_config.timeframes for tf_config in self.config.timeframe_configs)
