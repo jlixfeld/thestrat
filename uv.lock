@@ -1098,7 +1098,7 @@ wheels = [
 
 [[package]]
 name = "thestrat"
-version = "0.0.1a33"
+version = "0.0.1a34"
 source = { editable = "." }
 dependencies = [
     { name = "coverage", extra = ["toml"] },
