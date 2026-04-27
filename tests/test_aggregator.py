@@ -24,6 +24,72 @@ def _make_daily_bars(days: list[tuple]) -> pl.DataFrame:
     )
 
 
+def test_aggregate_daily_from_intraday():
+    """Aggregates intraday bars into daily bars (UTC midnight-aligned)."""
+    # Two days, three intraday bars each
+    bars = pl.DataFrame(
+        [
+            {
+                "timestamp": datetime(2026, 4, 7, 13, 30, tzinfo=UTC),
+                "open": 100.0,
+                "high": 102.0,
+                "low": 99.0,
+                "close": 101.0,
+                "volume": 100.0,
+            },
+            {
+                "timestamp": datetime(2026, 4, 7, 18, 0, tzinfo=UTC),
+                "open": 101.0,
+                "high": 105.0,
+                "low": 100.0,
+                "close": 104.0,
+                "volume": 200.0,
+            },
+            {
+                "timestamp": datetime(2026, 4, 7, 19, 59, tzinfo=UTC),
+                "open": 104.0,
+                "high": 106.0,
+                "low": 103.0,
+                "close": 105.0,
+                "volume": 150.0,
+            },
+            {
+                "timestamp": datetime(2026, 4, 8, 13, 30, tzinfo=UTC),
+                "open": 105.5,
+                "high": 107.0,
+                "low": 104.0,
+                "close": 106.0,
+                "volume": 120.0,
+            },
+            {
+                "timestamp": datetime(2026, 4, 8, 18, 0, tzinfo=UTC),
+                "open": 106.0,
+                "high": 108.0,
+                "low": 105.0,
+                "close": 107.5,
+                "volume": 180.0,
+            },
+        ]
+    )
+    agg = TimeframeAggregator()
+    result = agg.aggregate(bars, "1d").sort("timestamp")
+
+    assert len(result) == 2
+    day1 = result.row(0, named=True)
+    assert day1["open"] == 100.0
+    assert day1["high"] == 106.0
+    assert day1["low"] == 99.0
+    assert day1["close"] == 105.0
+    assert day1["volume"] == 450.0
+
+    day2 = result.row(1, named=True)
+    assert day2["open"] == 105.5
+    assert day2["high"] == 108.0
+    assert day2["low"] == 104.0
+    assert day2["close"] == 107.5
+    assert day2["volume"] == 300.0
+
+
 def test_aggregate_weekly():
     """Aggregates daily bars into weekly bars (Monday-aligned)."""
     bars = _make_daily_bars(

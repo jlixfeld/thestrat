@@ -63,7 +63,9 @@ class TimeframeAggregator:
             return ts.dt.truncate(duration)
 
         # Daily+ — calendar-based
-        if timeframe == "1w":
+        if timeframe == "1d":
+            return ts.dt.truncate("1d")
+        elif timeframe == "1w":
             return ts.dt.truncate("1w")
         elif timeframe == "1m":
             return ts.dt.truncate("1mo")
