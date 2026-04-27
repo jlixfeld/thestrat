@@ -1,60 +1,50 @@
-"""
-TheStrat Python Module
+"""TheStrat — portable aggregator and bar classifier for Strat methodology.
 
-Standalone module for vectorized Strat technical analysis and OHLC timeframe aggregation.
-Supports historical and real-time market data processing across all asset classes.
+Public API:
+- TimeframeAggregator: 1m → {5m, 15m, 30m, 1h, D, W, M, Q, Y} OHLCV aggregation
+- classify_bar / classify_bars_df / classify_bars_multi_symbol: scenario, color, shape, in-force
+- BarDict, ClassifiedBar, Color, Scenario, Shape, Timeframe: domain types
 """
 
-from .aggregation import Aggregation
-from .base import Component
-from .factory import Factory
-from .indicators import Indicators
-from .precision import (  # noqa: F401
-    PrecisionError,
-    apply_precision,
-    get_comparison_tolerance,
-    get_field_decimal_places,
-    get_field_precision_type,
+from importlib.metadata import PackageNotFoundError, version
+
+from thestrat.aggregator import EQUITY_OFFSET_MINUTES, TimeframeAggregator
+from thestrat.classifier import (
+    SHAPE_BODY_ZONE,
+    classify_bar,
+    classify_bars_df,
+    classify_bars_multi_symbol,
+    classify_color,
+    classify_scenario,
 )
-from .schemas import (
-    AggregationConfig,
-    FactoryConfig,
-    GapDetectionConfig,
-    IndicatorSchema,
-    IndicatorsConfig,
-    SwingPointsConfig,
-    TimeframeItemConfig,
+from thestrat.types import (
+    BarDict,
+    ClassifiedBar,
+    Color,
+    Scenario,
+    Shape,
+    Timeframe,
 )
-from .signals import SIGNALS, PriceChange, SignalBias, SignalCategory, SignalMetadata, SignalStatus
 
 try:
-    from importlib.metadata import version
-
     __version__ = version("thestrat")
-except Exception:
-    # Fallback if package not found (development mode)
-    __version__ = "ERROR: VERSION NOT FOUND"
+except PackageNotFoundError:
+    __version__ = "0.0.0+unknown"
+
 __all__ = [
-    "Factory",
-    "Component",
-    "Aggregation",
-    "Indicators",
-    "AggregationConfig",
-    "FactoryConfig",
-    "GapDetectionConfig",
-    "IndicatorsConfig",
-    "SwingPointsConfig",
-    "TimeframeItemConfig",
-    "SignalMetadata",
-    "SignalCategory",
-    "SignalBias",
-    "SignalStatus",
-    "PriceChange",
-    "SIGNALS",
-    "IndicatorSchema",
-    "PrecisionError",
-    "apply_precision",
-    "get_field_decimal_places",
-    "get_field_precision_type",
-    "get_comparison_tolerance",
+    "TimeframeAggregator",
+    "EQUITY_OFFSET_MINUTES",
+    "classify_bar",
+    "classify_bars_df",
+    "classify_bars_multi_symbol",
+    "classify_color",
+    "classify_scenario",
+    "SHAPE_BODY_ZONE",
+    "BarDict",
+    "ClassifiedBar",
+    "Color",
+    "Scenario",
+    "Shape",
+    "Timeframe",
+    "__version__",
 ]

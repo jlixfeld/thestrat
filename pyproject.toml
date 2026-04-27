@@ -4,8 +4,8 @@ build-backend = "hatchling.build"
 
 [project]
 name = "thestrat"
-version = "0.0.1a34"
-description = "#TheStrat indicators and timeframe aggregation for financial market data"
+version = "1.0.0"
+description = "Vectorized OHLCV timeframe aggregation and Strat bar classification (Polars)"
 authors = [
     {name = "Jason Lixfeld", email = "nominal_choroid0y@icloud.com"}
 ]
@@ -17,18 +17,13 @@ classifiers = [
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: Office/Business :: Financial :: Investment",
     "Topic :: Scientific/Engineering :: Information Analysis",
     "Private :: Do Not Upload",
 ]
 dependencies = [
     "polars[timezone]>=1.0.0",
-    "pandas>=1.5.0",
-    "numpy>=1.21.0",
-    "pytz>=2022.1",
-    "pyarrow>=10.0.0",
-    "pydantic>=2.9.0",
-    "coverage[toml]>=7.10.6",
 ]
 
 [project.urls]
@@ -37,20 +32,12 @@ dependencies = [
 
 [project.optional-dependencies]
 test = [
-    "pytest>=6.0",
-    "pytest-asyncio>=0.18.0",
-    "pytest-cov>=2.0",
+    "pytest>=8.0",
+    "pytest-cov>=5.0",
 ]
 dev = [
-    "ruff==0.11.13",
-]
-docs = [
-    "mkdocs-material>=9.4.0",
-    "mkdocstrings[python]>=0.24.0",
-    "mkdocs-gen-files>=0.5.0",
-    "mkdocs-literate-nav>=0.6.0",
-    "mkdocs-section-index>=0.3.0",
-    "black>=22.0.0",  # For signature formatting
+    "ruff>=0.11.13",
+    "pyright>=1.1.405",
 ]
 
 
@@ -70,35 +57,22 @@ indent-style = "space"
 line-ending = "auto"
 
 [tool.pytest.ini_options]
-markers = [
-    "unit: Unit tests",
-    "integration: Integration tests",
-]
+testpaths = ["tests"]
+addopts = "-ra"
 
 [tool.pyright]
 pythonVersion = "3.11"
 venvPath = "."
 venv = ".venv"
+include = ["thestrat", "tests"]
 typeCheckingMode = "basic"
 reportMissingImports = true
 reportMissingTypeStubs = false
-reportPrivateUsage = false
-reportUnusedImport = false
-reportUnusedClass = false
-reportUnusedFunction = false
-reportUnusedVariable = false
-reportUntypedFunctionDecorator = false
-reportIncompatibleMethodOverride = false
-reportIncompatibleVariableOverride = false
-reportOverlappingOverload = false
-reportUninitializedInstanceVariable = false
-reportArgumentType = false
-reportAttributeAccessIssue = false
 
 [dependency-groups]
 dev = [
-    "git-changelog>=2.6.2",
     "pytest>=8.4.2",
+    "pytest-cov>=5.0",
     "ruff>=0.11.13",
     "pre-commit>=3.0.0",
     "pyright>=1.1.405",
