@@ -17,6 +17,7 @@ from thestrat.classifier import (
     classify_color,
     classify_scenario,
 )
+from thestrat.sessions import SESSIONS, InstrumentType, Session, session_for
 from thestrat.types import (
     BarDict,
     ClassifiedBar,
@@ -46,5 +47,9 @@ __all__ = [
     "Scenario",
     "Shape",
     "Timeframe",
+    "Session",
+    "InstrumentType",
+    "SESSIONS",
+    "session_for",
     "__version__",
 ]
