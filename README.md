@@ -40,95 +40,102 @@ I don't provide support for this code. The Strat community has many great resour
 
 ---
 
-[![Version](https://img.shields.io/badge/dynamic/toml?url=https://raw.githubusercontent.com/jlixfeld/thestrat/main/pyproject.toml&query=project.version&label=version&color=green)](https://github.com/jlixfeld/thestrat/releases)
 [![Tests](https://github.com/jlixfeld/thestrat/actions/workflows/tests.yml/badge.svg)](https://github.com/jlixfeld/thestrat/actions/workflows/tests.yml)
-[![Coverage](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/jlixfeld/c383059dafef5a6c070532174f3f0ba8/raw/coverage.json)](https://github.com/jlixfeld/thestrat/actions/workflows/coverage.yml)
-[![Documentation](https://github.com/jlixfeld/thestrat/actions/workflows/docs.yml/badge.svg)](https://jlixfeld.github.io/thestrat/)
-[![Python Versions](https://img.shields.io/badge/python-3.11%20%7C%203.12-blue)](https://github.com/jlixfeld/thestrat)
+[![Python Versions](https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13-blue)](https://github.com/jlixfeld/thestrat)
 [![License](https://img.shields.io/badge/license-Private-red)](https://github.com/jlixfeld/thestrat)
 
-A Python module for financial data aggregation and technical analysis using #TheStrat methodology.
+A small Polars-based library for OHLCV timeframe aggregation and Strat bar classification.
+
+> **1.0.0 is a clean rewrite.** The pre-1.0 API (Factory / Indicators / Signals / Schemas) has been removed. Old import paths now raise `ImportError` with a message identifying the consumer as defunct. New surface area is intentionally minimal: an aggregator, a classifier, and a small set of types.
 
 ## Features
 
-- **Multi-Timeframe Aggregation**: OHLCV data aggregation across multiple timeframes in a single operation
-- **#TheStrat Indicators**: Complete implementation of TheStrat technical indicators with per-timeframe configurations
-- **Asset Class Support**: Crypto, Equities, FX
-- **Factory Pattern**: Clean component creation and configuration
-- **High Performance**: Vectorized operations using Polars
-- **Precision Utilities**: Security-type-aware rounding for consistent behavior across trading platforms
+- **Multi-timeframe OHLCV aggregation** (1m → 5m, 15m, 30m, 1h, 4h, 6h, 12h, 1d, 1w, 1m, 1q, 1y) with optional equity-session offset.
+- **Vectorized Strat bar classification** — scenario (1 / 2U / 2D / 3), color, shape (hammer / shooter), in-force flag, plus 3 bars of history.
+- **Single-symbol and multi-symbol** classification paths (the latter using `over("symbol")` for per-symbol shifts).
+- **Pure functions over Polars DataFrames.** No async, no I/O, no global state.
 
-## Quick Start
-
-### Installation
+## Installation
 
 ```bash
-# Install from GitHub
 uv add git+https://github.com/jlixfeld/thestrat.git
+```
 
-# Install in development mode
+For development:
+
+```bash
 git clone https://github.com/jlixfeld/thestrat.git
 cd thestrat
 uv sync --extra test --extra dev
 ```
 
-### Basic Usage
+## Usage
+
+### Aggregation
 
 ```python
-from thestrat import Factory
-from thestrat.schemas import (
-    FactoryConfig, AggregationConfig, IndicatorsConfig,
-    TimeframeItemConfig, SwingPointsConfig
-)
+import polars as pl
+from thestrat import TimeframeAggregator
 
-# Create components with validated configuration
-config = FactoryConfig(
-    aggregation=AggregationConfig(
-        target_timeframes=["5m"],
-        asset_class="equities",
-        timezone="US/Eastern"
-    ),
-    indicators=IndicatorsConfig(
-        timeframe_configs=[
-            TimeframeItemConfig(
-                timeframes=["all"],  # Apply to all target timeframes
-                swing_points=SwingPointsConfig(
-                    window=5,
-                    threshold=2.0  # 2% threshold
-                )
-            )
-        ]
-    )
-)
+bars = pl.DataFrame({
+    "timestamp": [...],
+    "open": [...], "high": [...], "low": [...], "close": [...],
+    "volume": [...],
+})
 
-pipeline = Factory.create_all(config)
-
-# Process market data - returns normalized output with timeframe column
-aggregated = pipeline["aggregation"].process(market_data)
-analyzed = pipeline["indicators"].process(aggregated)
-
-print(f"Processed {len(analyzed)} bars with TheStrat indicators")
-print(f"Timeframes processed: {analyzed['timeframe'].unique()}")
+agg = TimeframeAggregator()
+hourly = agg.aggregate(bars, "1h")
+hourly_eq = agg.aggregate(bars, "1h", equity_offset=True)  # 9:30, 10:30, ...
+daily = agg.aggregate(bars, "1d")
 ```
 
-### Precision Rounding
-
-Apply security-aware precision for consistent rounding:
+### Classification (single symbol)
 
 ```python
-from thestrat import apply_precision
+from thestrat import classify_bars_df
 
-# Define precision per security (from IBKR minTick)
-precision_map = {
-    "AAPL": 2,      # Equities: 2 decimals
-    "EURUSD": 5,    # Forex: 5 decimals
-    "BTC": 8,       # Crypto: 8 decimals
-}
-
-# Apply precision rounding to all indicator fields
-rounded = apply_precision(analyzed, precision_map)
-
-# Percentage fields always round to 2 decimals
-# Price fields round to security-specific decimals
-# Integer/boolean fields are never rounded
+# Input must be sorted by timestamp for a single symbol+timeframe.
+classified = classify_bars_df(bars)
+# Adds columns: scenario0..3, color0..3, shape, in_force
 ```
+
+### Classification (multi-symbol)
+
+```python
+from thestrat import classify_bars_multi_symbol
+
+# Input must have a `symbol` column and be sorted by (symbol, timestamp).
+classified = classify_bars_multi_symbol(bars)
+```
+
+### Scalar helpers
+
+```python
+from thestrat import classify_bar, classify_color, classify_scenario
+
+color = classify_color(open_price=100.0, close_price=101.0)         # Color.GREEN
+scenario = classify_scenario(curr_high=105, curr_low=95,
+                             prev_high=104, prev_low=96)            # Scenario.TWO_UP
+
+bar = classify_bar(
+    bar={"symbol": "ESM6", "timestamp": ts, "timeframe": "1d",
+         "open": 100, "high": 105, "low": 95, "close": 103, "volume": 1000},
+    prior=prior_bar_dict_or_None,
+)
+```
+
+### Types
+
+```python
+from thestrat import BarDict, ClassifiedBar, Color, Scenario, Shape, Timeframe
+```
+
+## Public API
+
+| Symbol | Where |
+|---|---|
+| `TimeframeAggregator`, `EQUITY_OFFSET_MINUTES` | `thestrat.aggregator` |
+| `classify_bars_df`, `classify_bars_multi_symbol`, `classify_bar`, `classify_color`, `classify_scenario`, `SHAPE_BODY_ZONE` | `thestrat.classifier` |
+| `BarDict`, `ClassifiedBar`, `Color`, `Scenario`, `Shape`, `Timeframe` | `thestrat.types` |
+
+All of the above are re-exported from the package root (`from thestrat import ...`).

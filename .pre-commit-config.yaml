@@ -33,7 +33,7 @@ repos:
         name: "🧹 Text · Fix end of files"
       - id: check-yaml
         name: "📋 YAML · Validate syntax"
-        exclude: ^\.github/workflows/auto-close-issues\.yml$|^mkdocs\.yml$
+        exclude: ^\.github/workflows/auto-close-issues\.yml$
       - id: check-added-large-files
         name: "📁 Files · Check for large files"
         args: [--maxkb=500]
