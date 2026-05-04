@@ -18,6 +18,21 @@ jobs:
       - run: ruff format --check .
       - run: mypy . || true
 
+  secrets:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
+          base: ${{ github.event.pull_request.base.sha }}
+          head: ${{ github.event.pull_request.head.sha }}
+          extra_args: --only-verified --fail
+
   claude-review:
     needs: lint
     runs-on: ubuntu-latest
