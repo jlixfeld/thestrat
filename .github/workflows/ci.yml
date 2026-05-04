@@ -21,19 +21,6 @@ jobs:
   claude-review:
     needs: lint
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        command:
-          - name: simplify
-            prompt: '/simplify'
-          - name: pr-review-toolkit
-            prompt: '/pr-review-toolkit:review-pr'
-          - name: security-review
-            prompt: '/security-review'
-          - name: code-review
-            prompt: '/code-review:code-review ${{ github.repository }}/pull/${{ github.event.pull_request.number }}'
-    name: claude-review (${{ matrix.command.name }})
     permissions:
       contents: read
       pull-requests: write
@@ -46,16 +33,12 @@ jobs:
         with:
           fetch-depth: 1
 
-      - name: Run ${{ matrix.command.name }}
+      - name: Run Claude Code Review
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           plugin_marketplaces: 'https://github.com/anthropics/claude-code.git'
-          plugins: |
-            code-review@claude-code-plugins
-            pr-review-toolkit@claude-code-plugins
+          plugins: 'code-review@claude-code-plugins'
           additional_permissions: |
             actions: read
-          show_full_output: true
-          claude_args: "--max-turns 30"
-          prompt: ${{ matrix.command.prompt }}
+          prompt: '/code-review:code-review ${{ github.repository }}/pull/${{ github.event.pull_request.number }}'
