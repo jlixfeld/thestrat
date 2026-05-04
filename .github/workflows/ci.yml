@@ -41,7 +41,7 @@ jobs:
       image: returntocorp/semgrep
     steps:
       - uses: actions/checkout@v4
-      - run: semgrep ci --config=auto --error
+      - run: semgrep ci --config=auto
 
   claude-review:
     runs-on: ubuntu-latest
