@@ -2,16 +2,13 @@ name: CI
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened]
-
-permissions:
-  contents: read
-  pull-requests: write
-  id-token: write
+    types: [opened, synchronize, reopened, ready_for_review]
 
 jobs:
   lint:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
@@ -24,16 +21,26 @@ jobs:
   claude-review:
     needs: lint
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+      issues: read
+      id-token: write
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
         with:
-          fetch-depth: 0
-      - uses: anthropics/claude-code-action@v1
+          fetch-depth: 1
+
+      - name: Run Claude review chain
+        uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          plugin_marketplaces: 'https://github.com/anthropics/claude-code.git'
+          plugins: 'code-review@claude-code-plugins,pr-review-toolkit@claude-code-plugins'
           claude_args: "--max-turns 30"
           prompt: |
-            Run these four slash commands in this exact order on the diff in this PR.
+            Run these four slash commands in this exact order against the diff in PR ${{ github.repository }}#${{ github.event.pull_request.number }}.
             After each command, post its output as a top-level PR comment titled with the command name.
             Do not skip any. Do not reorder.
 
