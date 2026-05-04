@@ -21,6 +21,19 @@ jobs:
   claude-review:
     needs: lint
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        command:
+          - name: simplify
+            prompt: '/simplify'
+          - name: pr-review-toolkit
+            prompt: '/pr-review-toolkit:review-pr'
+          - name: security-review
+            prompt: '/security-review'
+          - name: code-review
+            prompt: '/code-review:code-review ${{ github.repository }}/pull/${{ github.event.pull_request.number }}'
+    name: claude-review (${{ matrix.command.name }})
     permissions:
       contents: read
       pull-requests: write
@@ -32,7 +45,7 @@ jobs:
         with:
           fetch-depth: 1
 
-      - name: Run Claude review chain
+      - name: Run ${{ matrix.command.name }}
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
@@ -42,10 +55,4 @@ jobs:
             pr-review-toolkit@claude-code-plugins
           show_full_output: true
           claude_args: "--max-turns 30"
-          prompt: |
-            Review PR ${{ github.repository }}#${{ github.event.pull_request.number }} by running each of the following slash commands in order. Each command posts its own findings as PR comments — do not duplicate them.
-
-            /simplify
-            /pr-review-toolkit:review-pr
-            /security-review
-            /code-review:code-review ${{ github.repository }}/pull/${{ github.event.pull_request.number }}
+          prompt: ${{ matrix.command.prompt }}
