@@ -34,7 +34,6 @@ jobs:
           extra_args: --only-verified
 
   claude-review:
-    needs: lint
     runs-on: ubuntu-latest
     permissions:
       contents: read
