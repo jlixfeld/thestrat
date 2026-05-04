@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv tool install ruff
+      - run: uv tool install mypy
+      - run: ruff check .
+      - run: ruff format --check .
+      - run: mypy . || true
+
+  claude-review:
+    needs: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          claude_args: "--max-turns 30"
+          prompt: |
+            Run these four slash commands in this exact order on the diff in this PR.
+            After each command, post its output as a top-level PR comment titled with the command name.
+            Do not skip any. Do not reorder.
+
+            1. /simplify
+            2. /pr-review-toolkit:review-pr
+            3. /security-review
+            4. /code-review:code-review
+
+            After all four finish, post one final comment with a summary table:
+            | Command | Findings | Worst severity |
