@@ -8,7 +8,7 @@ Public API:
 
 from importlib.metadata import PackageNotFoundError, version
 
-from thestrat.aggregator import EQUITY_OFFSET_MINUTES, TimeframeAggregator
+from thestrat.aggregator import EQUITY_OFFSET_MINUTES, TimeframeAggregator, bucket_key_expr
 from thestrat.classifier import (
     SHAPE_BODY_ZONE,
     classify_bar,
@@ -34,6 +34,7 @@ except PackageNotFoundError:
 
 __all__ = [
     "TimeframeAggregator",
+    "bucket_key_expr",
     "EQUITY_OFFSET_MINUTES",
     "classify_bar",
     "classify_bars_df",

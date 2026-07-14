@@ -18,7 +18,6 @@ from thestrat.sessions import SESSIONS, InstrumentType, Session
 EQUITY_OFFSET_MINUTES = 30
 
 _HOUR_BASED = {"1h", "4h", "6h", "12h"}
-_DAILY_PLUS = {"1d", "1w", "1m", "1q", "1y"}
 _TRUNC_UNIT = {
     "1min": "1m",
     "5min": "5m",
@@ -34,6 +33,81 @@ _TRUNC_UNIT = {
     "1q": "1q",
     "1y": "1y",
 }
+
+
+def bucket_key_expr(timeframe: str, session: Session | None) -> pl.Expr:
+    """Return the Polars expression that maps each timestamp to its bucket key.
+
+    The "bucket key" is the value thestrat groups on to aggregate 1-minute bars
+    into a higher timeframe — internally the aggregator calls it `_group`. This
+    is the supported public form of that grouping logic, so consumers can reuse
+    it instead of re-implementing the session-anchored bucketing.
+
+    Args:
+        timeframe: Target timeframe ("1min", "5min", "15min", "30min", "1h",
+            "4h", "6h", "12h", "1d", "1w", "1m", "1q", "1y").
+        session: Session preset (timezone + anchor minutes). When given, all
+            hour-and-above timeframes are aligned to this anchor (e.g.
+            `SESSIONS[EQUITY_US]` anchors hourly buckets to 09:30 ET and daily+
+            to the 09:30 ET session start). When None, hour-and-above buckets
+            fall back to plain UTC-anchored truncation. Sub-hour timeframes
+            (1min, 5min, 15min, 30min) are always plain truncation regardless
+            of `session`.
+
+    Returns:
+        A `pl.Expr` over a `timestamp` column producing the bucket key.
+        If a `session` is provided, the `timestamp` column must be
+        timezone-aware — the expression calls `dt.convert_time_zone`, which
+        raises on a naive column. (`TimeframeAggregator.aggregate` coerces
+        naive timestamps to UTC before applying it; consumers using this
+        expression directly must do the same.)
+
+    DST note:
+        Session-aware bucketing is wall-clock ("calendar") bucketing in the
+        session timezone. Anchor arithmetic is performed on naive local
+        timestamps so a DST transition inside a bucket does not shift its
+        boundary (subtracting a physical duration from a tz-aware column
+        would misanchor buckets that span a transition — e.g. the CME Globex
+        Sunday session on a US spring-forward date). Consequences: on a
+        fall-back date the repeated local hour merges into one wall-clock
+        bucket, and a bucket key that would land inside a spring-forward gap
+        (a non-existent local time) is shifted forward one hour to the first
+        instant that exists — the true start of that bucket.
+
+    Raises:
+        ValueError: if `timeframe` is not a supported aggregation timeframe.
+    """
+    if timeframe not in _TRUNC_UNIT:
+        raise ValueError(f"Unsupported aggregation timeframe: {timeframe}")
+
+    ts = pl.col("timestamp")
+    unit = _TRUNC_UNIT[timeframe]
+
+    # Sub-hour: simple truncation, never session-aligned.
+    if timeframe in ("1min", "5min", "15min", "30min"):
+        return ts.dt.truncate(unit)
+
+    # Session-aware path (preferred): aligns hour+ buckets to the session anchor.
+    if session is not None:
+        offset = pl.duration(minutes=session.anchor_minutes)
+        # Wall-clock arithmetic: strip the timezone so the anchor offset and
+        # truncation operate on local calendar time. Physical-duration
+        # arithmetic on a tz-aware column shifts by exact physical time and
+        # misanchors any bucket spanning a DST transition (see DST note).
+        ts_naive = ts.dt.convert_time_zone(session.timezone).dt.replace_time_zone(None)
+        key_naive = (ts_naive - offset).dt.truncate(unit) + offset
+        # Re-attach the timezone. `ambiguous="earliest"`: a key in a repeated
+        # (fall-back) hour is the first occurrence — the bucket's true start.
+        # `non_existent="null"` + fill: a key inside a spring-forward gap is
+        # shifted forward one hour to the first local instant that exists.
+        key = key_naive.dt.replace_time_zone(session.timezone, ambiguous="earliest", non_existent="null")
+        gap_shifted = (key_naive + pl.duration(hours=1)).dt.replace_time_zone(
+            session.timezone, ambiguous="earliest", non_existent="null"
+        )
+        return key.fill_null(gap_shifted).dt.convert_time_zone("UTC")
+
+    # No session: UTC-anchored truncation (legacy behavior).
+    return ts.dt.truncate(unit)
 
 
 class TimeframeAggregator:
@@ -120,26 +194,19 @@ class TimeframeAggregator:
         equity_offset: bool,
         session: Session | None,
     ) -> pl.Expr:
-        """Return a Polars expression that groups timestamps by timeframe."""
-        ts = pl.col("timestamp")
-        unit = _TRUNC_UNIT[timeframe]
+        """Return a Polars expression that groups timestamps by timeframe.
 
-        # Sub-hour: simple truncation, never session-aligned.
-        if timeframe in ("1min", "5min", "15min", "30min"):
-            return ts.dt.truncate(unit)
+        Delegates to the public `bucket_key_expr` for the session-aware and
+        no-session paths. The only branch retained here is the legacy
+        `equity_offset` shortcut (hour-based only, no session) preserved for
+        backward compatibility of `aggregate(..., equity_offset=True)`.
+        """
+        # Legacy `equity_offset` path: 30-min shift for hour-based only, and
+        # only when no session is supplied (a session takes precedence).
+        if session is None and equity_offset and timeframe in _HOUR_BASED:
+            ts = pl.col("timestamp")
+            unit = _TRUNC_UNIT[timeframe]
+            offset = pl.duration(minutes=EQUITY_OFFSET_MINUTES)
+            return (ts - offset).dt.truncate(unit) + offset
 
-        # Session-aware path (preferred): aligns hour+ buckets to session anchor.
-        if session is not None and (timeframe in _HOUR_BASED or timeframe in _DAILY_PLUS):
-            offset = pl.duration(minutes=session.anchor_minutes)
-            ts_local = ts.dt.convert_time_zone(session.timezone)
-            return ((ts_local - offset).dt.truncate(unit) + offset).dt.convert_time_zone("UTC")
-
-        # Legacy `equity_offset` path: 30-min shift for hour-based only.
-        if timeframe in _HOUR_BASED:
-            if equity_offset:
-                offset = pl.duration(minutes=EQUITY_OFFSET_MINUTES)
-                return (ts - offset).dt.truncate(unit) + offset
-            return ts.dt.truncate(unit)
-
-        # Daily+ without session: UTC-anchored truncation (legacy behavior).
-        return ts.dt.truncate(unit)
+        return bucket_key_expr(timeframe, session)
