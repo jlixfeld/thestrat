@@ -123,6 +123,78 @@ def test_sub_hour_ignores_session():
 
 
 # ---------------------------------------------------------------------------
+# DST transitions (wall-clock anchoring — regression for the physical-duration
+# misanchor: the Globex Sunday session must not split on a spring-forward date)
+# ---------------------------------------------------------------------------
+
+
+def _minute_frame(start_utc: datetime, end_utc: datetime, interval: str = "1m") -> pl.DataFrame:
+    ts = pl.datetime_range(start=start_utc, end=end_utc, interval=interval, time_zone="UTC", eager=True)
+    return pl.DataFrame({"timestamp": ts})
+
+
+def test_futures_spring_forward_sunday_session_is_one_daily_bucket():
+    """US spring-forward 2025-03-09: the CME session (Sun 18:00 ET -> Mon 17:00 ET)
+    spans the 02:00 transition. Physical-duration arithmetic split its first hour
+    into a Saturday-keyed bucket; wall-clock arithmetic must keep one bucket
+    keyed at the Sunday 18:00 ET open (22:00 UTC, EDT after the transition)."""
+    frame = _minute_frame(_utc(2025, 3, 9, 22, 0), _utc(2025, 3, 10, 20, 59))
+    groups = _apply(bucket_key_expr("1d", SESSIONS[InstrumentType.FUTURES_CME]), frame)
+
+    assert groups.n_unique() == 1
+    assert groups.unique().to_list() == [_utc(2025, 3, 9, 22, 0)]
+
+
+def test_futures_fall_back_sunday_session_keyed_at_open():
+    """US fall-back 2025-11-02: session opens Sun 18:00 EST = 23:00 UTC. The
+    physical-duration arithmetic kept one bucket but keyed it 17:00 ET; the
+    wall-clock key must be the 18:00 ET open."""
+    frame = _minute_frame(_utc(2025, 11, 2, 23, 0), _utc(2025, 11, 3, 21, 59))
+    groups = _apply(bucket_key_expr("1d", SESSIONS[InstrumentType.FUTURES_CME]), frame)
+
+    assert groups.n_unique() == 1
+    assert groups.unique().to_list() == [_utc(2025, 11, 2, 23, 0)]
+
+
+def test_equity_rth_unaffected_by_dst_transitions():
+    """RTH timestamps never cross the 02:00 Sunday transition when shifted by
+    the 570-min anchor: hourly buckets on the Mondays after both 2025
+    transitions still anchor 09:30..15:30 local."""
+    for monday, utc_offset in (((2025, 3, 10), 4), ((2025, 11, 3), 5)):
+        y, m, d = monday
+        frame = _minute_frame(_utc(y, m, d, 9 + utc_offset, 30), _utc(y, m, d, 15 + utc_offset, 59))
+        groups = _apply(bucket_key_expr("1h", SESSIONS[InstrumentType.EQUITY_US]), frame)
+        et = groups.unique().sort().dt.convert_time_zone("America/New_York")
+        assert et.dt.minute().to_list() == [30] * 7, f"{monday}: hourly buckets off :30"
+        assert et.dt.hour().to_list() == [9, 10, 11, 12, 13, 14, 15], f"{monday}: wrong anchors"
+
+
+def test_spring_forward_gap_bucket_key_shifts_past_gap():
+    """A 4h futures bucket key of 02:00 local on a spring-forward date does not
+    exist; it must shift forward to 03:00 EDT (07:00 UTC), not go null or raise."""
+    # Sun 2025-03-09 03:30 / 05:30 EDT (07:30 / 09:30 UTC) — inside the
+    # 02:00-06:00 wall-clock bucket whose nominal key is the non-existent 02:00.
+    frame = _minute_frame(_utc(2025, 3, 9, 7, 30), _utc(2025, 3, 9, 9, 30), interval="2h")
+    groups = _apply(bucket_key_expr("4h", SESSIONS[InstrumentType.FUTURES_CME]), frame)
+
+    assert groups.null_count() == 0
+    assert groups.n_unique() == 1
+    assert groups.unique().to_list() == [_utc(2025, 3, 9, 7, 0)]  # 03:00 EDT
+
+
+def test_fall_back_repeated_hour_merges_into_one_wall_clock_bucket():
+    """On fall-back the 01:00-01:59 local hour occurs twice; wall-clock
+    bucketing merges both occurrences into one 1h bucket keyed at the first
+    01:00 EDT instant (05:00 UTC)."""
+    frame = _minute_frame(_utc(2025, 11, 2, 5, 30), _utc(2025, 11, 2, 6, 30), interval="1h")
+    # 05:30 UTC = 01:30 EDT (first pass); 06:30 UTC = 01:30 EST (second pass)
+    groups = _apply(bucket_key_expr("1h", SESSIONS[InstrumentType.FUTURES_CME]), frame)
+
+    assert groups.n_unique() == 1
+    assert groups.unique().to_list() == [_utc(2025, 11, 2, 5, 0)]  # 01:00 EDT, earliest
+
+
+# ---------------------------------------------------------------------------
 # (c) unknown timeframe raises ValueError
 # ---------------------------------------------------------------------------
 

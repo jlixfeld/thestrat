@@ -56,6 +56,23 @@ def bucket_key_expr(timeframe: str, session: Session | None) -> pl.Expr:
 
     Returns:
         A `pl.Expr` over a `timestamp` column producing the bucket key.
+        If a `session` is provided, the `timestamp` column must be
+        timezone-aware — the expression calls `dt.convert_time_zone`, which
+        raises on a naive column. (`TimeframeAggregator.aggregate` coerces
+        naive timestamps to UTC before applying it; consumers using this
+        expression directly must do the same.)
+
+    DST note:
+        Session-aware bucketing is wall-clock ("calendar") bucketing in the
+        session timezone. Anchor arithmetic is performed on naive local
+        timestamps so a DST transition inside a bucket does not shift its
+        boundary (subtracting a physical duration from a tz-aware column
+        would misanchor buckets that span a transition — e.g. the CME Globex
+        Sunday session on a US spring-forward date). Consequences: on a
+        fall-back date the repeated local hour merges into one wall-clock
+        bucket, and a bucket key that would land inside a spring-forward gap
+        (a non-existent local time) is shifted forward one hour to the first
+        instant that exists — the true start of that bucket.
 
     Raises:
         ValueError: if `timeframe` is not a supported aggregation timeframe.
@@ -73,8 +90,21 @@ def bucket_key_expr(timeframe: str, session: Session | None) -> pl.Expr:
     # Session-aware path (preferred): aligns hour+ buckets to the session anchor.
     if session is not None:
         offset = pl.duration(minutes=session.anchor_minutes)
-        ts_local = ts.dt.convert_time_zone(session.timezone)
-        return ((ts_local - offset).dt.truncate(unit) + offset).dt.convert_time_zone("UTC")
+        # Wall-clock arithmetic: strip the timezone so the anchor offset and
+        # truncation operate on local calendar time. Physical-duration
+        # arithmetic on a tz-aware column shifts by exact physical time and
+        # misanchors any bucket spanning a DST transition (see DST note).
+        ts_naive = ts.dt.convert_time_zone(session.timezone).dt.replace_time_zone(None)
+        key_naive = (ts_naive - offset).dt.truncate(unit) + offset
+        # Re-attach the timezone. `ambiguous="earliest"`: a key in a repeated
+        # (fall-back) hour is the first occurrence — the bucket's true start.
+        # `non_existent="null"` + fill: a key inside a spring-forward gap is
+        # shifted forward one hour to the first local instant that exists.
+        key = key_naive.dt.replace_time_zone(session.timezone, ambiguous="earliest", non_existent="null")
+        gap_shifted = (key_naive + pl.duration(hours=1)).dt.replace_time_zone(
+            session.timezone, ambiguous="earliest", non_existent="null"
+        )
+        return key.fill_null(gap_shifted).dt.convert_time_zone("UTC")
 
     # No session: UTC-anchored truncation (legacy behavior).
     return ts.dt.truncate(unit)
