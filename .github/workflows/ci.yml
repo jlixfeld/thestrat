@@ -1,66 +1,181 @@
 name: CI
 
 on:
+  push:
+    branches: [main]
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
+
+# Auto-cancel superseded runs: a new push to the same PR cancels the prior
+# in-flight run instead of letting both burn Actions minutes (private repos
+# are billed). Without this, rapid successive pushes pile up concurrent runs.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   lint:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v7
       - run: uv tool install ruff
-      - run: uv tool install mypy
       - run: ruff check .
       - run: ruff format --check .
-      - run: mypy . || true
+
+  uv-checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
+      - name: Discover uv projects, run mypy + pytest
+        shell: bash
+        run: |
+          set -uo pipefail
+          # Layout-agnostic: find every uv project (a dir with pyproject.toml
+          # that has a uv.lock or a [tool.uv] table), then per project run
+          # mypy (non-blocking, matches the lint job's fleet default) and
+          # pytest (blocking — only if the project actually ships tests).
+          mapfile -t roots < <(
+            find . \( -path '*/.venv' -o -path '*/node_modules' -o -path './.git' \) -prune \
+              -o -name pyproject.toml -print | xargs -r -n1 dirname | sort -u
+          )
+          ran=0 fail=0
+          for d in "${roots[@]}"; do
+            if [ ! -f "$d/uv.lock" ] && ! grep -q '\[tool\.uv\]' "$d/pyproject.toml" 2>/dev/null; then
+              echo "skip $d (not a uv project)"; continue
+            fi
+            ran=1
+            echo "::group::$d"
+            if ! (
+                  set -e
+                  cd "$d"
+                  # --all-extras so test deps declared as optional-dependencies
+                  # (e.g. a `dev` extra carrying pytest-asyncio) are installed;
+                  # plain `uv sync` only covers core + default dependency-groups,
+                  # which silently drops async-test plugins.
+                  uv sync --all-extras
+                  uv run --with mypy mypy --ignore-missing-imports --check-untyped-defs . || true
+                  if find . -path '*/.venv' -prune -o \( -name 'test_*.py' -o -name '*_test.py' \) -print | grep -q .; then
+                    uv run --with pytest pytest -q
+                  else
+                    echo "no tests in $d — skipping pytest"
+                  fi
+                ); then
+              echo "FAILED: $d"; fail=1
+            fi
+            echo "::endgroup::"
+          done
+          [ "$ran" = 1 ] || echo "no uv projects discovered — nothing to test"
+          [ "$fail" = 0 ] || { echo "one or more uv projects failed"; exit 1; }
 
   secrets:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - uses: trufflesecurity/trufflehog@main
+      # No explicit base/head: the action derives the commit range from the
+      # event itself (PR range on pull_request, pushed commits on push).
+      # Hardcoding the pull_request refs made them empty on push events,
+      # which is why this workflow was PR-only.
+      - uses: trufflesecurity/trufflehog@v3.96.0
         with:
           path: ./
-          base: ${{ github.event.pull_request.base.sha }}
-          head: ${{ github.event.pull_request.head.sha }}
           extra_args: --only-verified
 
   sast:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: read
     container:
-      image: returntocorp/semgrep
+      image: semgrep/semgrep:1.172.0
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - run: semgrep ci --config=auto
 
-  claude-review:
+  docker-build:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     permissions:
       contents: read
-      pull-requests: write
-      issues: read
-      id-token: write
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v6
-        with:
-          fetch-depth: 1
-
-      - name: Run Claude Code Review
-        uses: anthropics/claude-code-action@v1
-        with:
-          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          plugin_marketplaces: 'https://github.com/anthropics/claude-code.git'
-          plugins: 'code-review@claude-code-plugins'
-          show_full_output: true
-          prompt: '/code-review:code-review ${{ github.repository }}/pull/${{ github.event.pull_request.number }} --comment'
+      - uses: actions/checkout@v7
+      # QEMU + Buildx so multi-arch `platforms:` builds (e.g. linux/arm64) work.
+      - uses: docker/setup-qemu-action@v4
+      - uses: docker/setup-buildx-action@v4
+      - name: Test-build Docker images
+        shell: bash
+        run: |
+          set -uo pipefail
+          # Layout-agnostic, build-only smoke test. If the repo ships a Compose
+          # file, `docker compose build` covers every service; otherwise build
+          # each Dockerfile in its own directory. Repos with neither no-op.
+          # No secrets, no push — this only proves the images still build.
+          shopt -s nullglob
+          # Compose `${VAR}` / `${VAR:?msg}` placeholders need a .env to exist.
+          # Seed a stub next to each compose file from an example if present,
+          # else synthesize one. NB: `${VAR:?msg}` hard-fails at parse time on an
+          # EMPTY value, so an empty .env is not enough — every referenced var
+          # gets a placeholder. CI holds no real secrets; these only let the
+          # compose file parse so the build resolves.
+          stub_env() {
+            local compose="$1" dir env cur vars v
+            dir="$(dirname "$compose")"
+            env="$dir/.env"
+            # Seed from an example if present, else start empty.
+            if [ ! -f "$env" ]; then
+              for ex in "$dir/.env.example" "$dir/.env.sample"; do
+                [ -f "$ex" ] && { cp "$ex" "$env"; break; }
+              done
+              [ -f "$env" ] || : > "$env"
+            fi
+            # Only `${VAR:?msg}` / `${VAR?msg}` hard-fail at parse time on an
+            # empty/unset value. `${VAR:-default}` and bare `${VAR}` tolerate
+            # empty — stubbing them would override a sensible default and break
+            # the build. So placeholder ONLY the required vars, and only when
+            # blank/missing (an example may ship the key blank). `|| true` keeps
+            # a no-match grep from aborting the `-e` shell. CI holds no secrets.
+            vars="$(grep -hoE '\$\{[A-Za-z_][A-Za-z0-9_]*:?\?' "$compose" 2>/dev/null \
+                    | sed -E 's/^\$\{//; s/:?\?$//' | sort -u || true)"
+            for v in $vars; do
+              cur="$(grep -E "^$v=" "$env" 2>/dev/null | tail -1 | cut -d= -f2- || true)"
+              [ -n "$cur" ] || echo "$v=ci-stub" >> "$env"
+            done
+          }
+          compose=( docker-compose.y*ml compose.y*ml */docker-compose.y*ml */compose.y*ml )
+          if [ ${#compose[@]} -gt 0 ]; then
+            fail=0
+            for f in "${compose[@]}"; do
+              stub_env "$f"
+              echo "::group::docker compose -f $f build"
+              docker compose -f "$f" build || fail=1
+              echo "::endgroup::"
+            done
+            [ "$fail" = 0 ] || { echo "one or more compose builds failed"; exit 1; }
+            exit 0
+          fi
+          mapfile -t dfs < <(
+            find . -path ./.git -prune -o \( -name Dockerfile -o -name 'Dockerfile.*' \) -print
+          )
+          if [ ${#dfs[@]} -eq 0 ]; then
+            echo "no Dockerfile or Compose file — nothing to build"
+            exit 0
+          fi
+          fail=0
+          for df in "${dfs[@]}"; do
+            echo "::group::docker build -f $df $(dirname "$df")"
+            docker build -f "$df" "$(dirname "$df")" || fail=1
+            echo "::endgroup::"
+          done
+          [ "$fail" = 0 ] || { echo "one or more docker builds failed"; exit 1; }
