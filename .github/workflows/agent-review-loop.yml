@@ -1,0 +1,547 @@
+name: Agent review loop
+
+on:
+  push:
+  workflow_run:
+    workflows: [CI, Codex review signal]
+    types: [completed]
+
+concurrency:
+  group: agent-review-loop-${{ github.repository }}-${{ github.event.workflow_run.pull_requests[0].number || github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  orchestrate:
+    if: >-
+      (github.event_name == 'workflow_run' &&
+       (github.event.workflow_run.event == 'pull_request' ||
+        github.event.workflow_run.event == 'pull_request_review') &&
+       github.event.workflow_run.pull_requests[0].number != null) ||
+      (github.event_name == 'push' &&
+       github.ref_name == github.event.repository.default_branch)
+    runs-on: ubuntu-latest
+    environment: agent-review-trusted
+    permissions:
+      actions: read
+      contents: read
+      issues: write
+      pull-requests: write
+      statuses: write
+    outputs:
+      should-fix: ${{ steps.review.outputs.should-fix }}
+      pr-number: ${{ steps.review.outputs.pr-number }}
+      head-ref: ${{ steps.review.outputs.head-ref }}
+      head-sha: ${{ steps.review.outputs.head-sha }}
+      prompt: ${{ steps.review.outputs.prompt }}
+      attempt: ${{ steps.review.outputs.attempt }}
+    steps:
+      - name: Mint repository-scoped coordinator token
+        id: coordinator-token
+        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349
+        with:
+          app-id: "4408921"
+          private-key: ${{ secrets.REVIEW_COORDINATOR_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+
+      - name: Check out trusted orchestration code
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: jlixfeld/review-automation
+          ref: ac36c092158964de90228356070f1dc7ae084509
+          path: review-automation
+          persist-credentials: false
+
+      - name: Review current pull request revision
+        id: review
+        uses: ./review-automation
+        with:
+          github-token: ${{ github.token }}
+          coordinator-token: ${{ steps.coordinator-token.outputs.token }}
+          review-provider: codex
+          codex-login: chatgpt-codex-connector[bot]
+          max-fix-attempts: 10
+
+  remediate:
+    needs: orchestrate
+    if: >-
+      needs.orchestrate.outputs.should-fix == 'true' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: agent-review-trusted
+    permissions:
+      actions: read
+      contents: read
+      issues: write
+      pull-requests: write
+    steps:
+      - name: Check out trusted pull request head
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ needs.orchestrate.outputs.head-sha }}
+          persist-credentials: false
+
+      - name: Create locked-down Claude runtime configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s\n' '{"mcpServers":{}}' > "$RUNNER_TEMP/agent-review-mcp.json"
+          printf '%s\n' '{"permissions":{"allow":["Read(./**)","Edit(./**)"],"deny":["Read(../**)","Read(//proc/**)","Read(//sys/**)","Read(//dev/**)","Read(//run/**)","Read(//home/runner/work/_temp/**)","Read(~/.claude/**)","Read(.git/**)","Edit(../**)","Edit(.git/**)"]}}' > "$RUNNER_TEMP/agent-review-settings.json"
+
+      - name: Create trusted remediation worktree reset helper
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > "$RUNNER_TEMP/reset-remediation-worktree" <<'BASH'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          git reset --hard "$EXPECTED_HEAD_SHA"
+          git clean -ffdx
+          python3 - <<'PY'
+          import json
+          import os
+          import subprocess
+          from pathlib import Path
+
+          root = Path.cwd()
+          records = subprocess.check_output(["git", "ls-files", "-s", "-z"])
+          neutralized = []
+          for record in records.split(b"\0"):
+              if not record:
+                  continue
+              metadata, raw_path = record.split(b"\t", 1)
+              if metadata.split(b" ", 1)[0] != b"120000":
+                  continue
+              path = os.fsdecode(raw_path)
+              link = root / path
+              target = os.readlink(link)
+              link.unlink()
+              link.write_text(f"[tracked symlink target: {target}]\n")
+              neutralized.append(path)
+          manifest = Path(os.environ["RUNNER_TEMP"]) / "agent-review-symlinks.json"
+          manifest.write_text(json.dumps(neutralized))
+          PY
+          auth_header="$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+          git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $auth_header" \
+            fetch --no-tags origin "$DEFAULT_BRANCH"
+          rm -f AGENTS.md
+          if git cat-file -e "origin/$DEFAULT_BRANCH:AGENTS.md" 2>/dev/null; then
+            git show "origin/$DEFAULT_BRANCH:AGENTS.md" > AGENTS.md
+          else
+            printf '%s\n' '# No trusted project agent instructions.' > AGENTS.md
+          fi
+          BASH
+          chmod 700 "$RUNNER_TEMP/reset-remediation-worktree"
+
+      - name: Prepare trusted remediation worktree
+        shell: bash
+        env: &remediation-reset-env
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          EXPECTED_HEAD_SHA: ${{ needs.orchestrate.outputs.head-sha }}
+          GH_TOKEN: ${{ github.token }}
+        run: "$RUNNER_TEMP/reset-remediation-worktree"
+
+      - name: Create remediation transcript classifier
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > "$RUNNER_TEMP/classify-remediation.py" <<'PY'
+          import json
+          import os
+          import shutil
+          from pathlib import Path
+
+          source = Path(os.environ.get("EXECUTION_FILE", ""))
+          attempt = os.environ["ATTEMPT"]
+          output = Path(os.environ["GITHUB_OUTPUT"])
+          snapshot = Path(os.environ["RUNNER_TEMP"]) / f"remediation-attempt-{attempt}.json"
+
+          def emit(name, value):
+              with output.open("a") as handle:
+                  handle.write(f"{name}={value}\n")
+
+          def finish(success, retryable, category, execution_file=""):
+              emit("success", str(success).lower())
+              emit("retryable", str(retryable).lower())
+              emit("category", category)
+              emit("execution-file", execution_file)
+
+          def outcomes_are_publishable(outcomes):
+              """Mirror the publish step's validation so a transcript is only
+              accepted here if it will actually survive publishing."""
+              if not isinstance(outcomes, list) or not 1 <= len(outcomes) <= 20:
+                  return False
+              for outcome in outcomes:
+                  if not isinstance(outcome, dict):
+                      return False
+                  if outcome.get("decision") not in {"fixed", "rejected"}:
+                      return False
+                  title = outcome.get("title")
+                  rationale = outcome.get("rationale")
+                  if not isinstance(title, str) or not title.strip():
+                      return False
+                  if not isinstance(rationale, str) or not rationale.strip():
+                      return False
+              return True
+
+          if not source.is_file():
+              finish(False, True, "action-failure")
+              raise SystemExit(0)
+
+          shutil.copyfile(source, snapshot)
+          try:
+              transcript = json.loads(snapshot.read_text())
+              results = [
+                  event for event in transcript
+                  if isinstance(event, dict) and event.get("type") == "result"
+              ]
+              if not results:
+                  finish(False, True, "missing-result")
+                  raise SystemExit(0)
+              final = results[-1]
+              raw = final.get("result")
+              if not final.get("is_error"):
+                  evaluation = json.loads(raw) if isinstance(raw, str) else None
+                  outcomes = evaluation.get("outcomes") if isinstance(evaluation, dict) else None
+                  if outcomes_are_publishable(outcomes):
+                      finish(True, False, "success", str(snapshot))
+                      raise SystemExit(0)
+                  finish(False, True, "invalid-result")
+                  raise SystemExit(0)
+
+              failure_text = " ".join(
+                  value
+                  for value in (
+                      raw if isinstance(raw, str) else "",
+                      " ".join(final.get("errors", []))
+                      if isinstance(final.get("errors"), list) else "",
+                      str(final.get("subtype", "")),
+                  )
+                  if value
+              ).lower()
+              if any(term in failure_text for term in (
+                  "usage limit", "rate limit", "credit", "capacity", "overloaded",
+              )):
+                  finish(False, True, "capacity")
+              elif any(term in failure_text for term in (
+                  "timeout", "timed out", "network", "temporarily unavailable",
+                  "internal server", "connection",
+              )):
+                  finish(False, True, "transient")
+              elif any(term in failure_text for term in (
+                  "authentication", "unauthorized", "invalid token", "oauth",
+              )):
+                  finish(False, False, "authentication")
+              elif any(term in failure_text for term in (
+                  "max_turns", "max turns", "permission denial",
+              )):
+                  finish(False, False, "agent-limit")
+              else:
+                  finish(False, True, "provider-error")
+          except (OSError, ValueError, TypeError, json.JSONDecodeError):
+              finish(False, True, "invalid-transcript")
+          PY
+
+      - name: Evaluate and address Review Coordinator findings (attempt 1)
+        id: remediation-agent-1
+        continue-on-error: true
+        uses: anthropics/claude-code-action@44423bdec74b97d67543eb16c110546762c110b2
+        env: &remediation-agent-env
+          CLAUDE_CODE_DISABLE_AUTO_MEMORY: "1"
+          CLAUDE_CODE_DISABLE_CLAUDE_MDS: "1"
+        with: &remediation-agent-inputs
+          allowed_bots: review-coordinator[bot]
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ github.token }}
+          show_full_output: false
+          additional_permissions: |
+            actions: read
+          claude_args: >-
+            --allowedTools "Read(./**)" "Edit(./**)" "Glob"
+            --disallowedTools "Bash" "WebFetch" "WebSearch" "Grep"
+            --max-turns 48
+            --settings "${{ runner.temp }}/agent-review-settings.json"
+            --setting-sources user
+            --strict-mcp-config
+            --mcp-config "${{ runner.temp }}/agent-review-mcp.json"
+          prompt: |
+            ${{ needs.orchestrate.outputs.prompt }}
+
+            Workflow transport override: evaluate every finding and edit the
+            worktree for each valid fix. If a finding is invalid, leave the
+            relevant code unchanged. Do not run shell commands or commit. A
+            separate credential-free step exports your file edits as data, and
+            a fresh trusted runner creates and pushes the remediation commit.
+            In your final structured output, include exactly one outcome for
+            every finding, preserving its title. Mark it fixed or rejected and
+            give a concise, repository-grounded technical rationale.
+            Return only a JSON object with this exact shape, without markdown
+            fences or any surrounding text:
+            {"outcomes":[{"title":"finding title","decision":"fixed","rationale":"technical rationale"}]}
+
+      - name: Classify remediation provider attempt 1
+        id: classify-remediation-1
+        env:
+          ATTEMPT: "1"
+          EXECUTION_FILE: ${{ steps.remediation-agent-1.outputs.execution_file }}
+        run: python3 "$RUNNER_TEMP/classify-remediation.py"
+
+      - name: Back off before remediation provider attempt 2
+        if: >-
+          steps.classify-remediation-1.outputs.success != 'true' &&
+          steps.classify-remediation-1.outputs.retryable == 'true'
+        run: sleep 30
+
+      - name: Reset trusted worktree before remediation provider attempt 2
+        if: >-
+          steps.classify-remediation-1.outputs.success != 'true' &&
+          steps.classify-remediation-1.outputs.retryable == 'true'
+        env: *remediation-reset-env
+        run: "$RUNNER_TEMP/reset-remediation-worktree"
+
+      - name: Evaluate and address Review Coordinator findings (attempt 2)
+        id: remediation-agent-2
+        if: >-
+          steps.classify-remediation-1.outputs.success != 'true' &&
+          steps.classify-remediation-1.outputs.retryable == 'true'
+        continue-on-error: true
+        uses: anthropics/claude-code-action@44423bdec74b97d67543eb16c110546762c110b2
+        env: *remediation-agent-env
+        with: *remediation-agent-inputs
+
+      - name: Classify remediation provider attempt 2
+        id: classify-remediation-2
+        if: steps.remediation-agent-2.outcome != 'skipped'
+        env:
+          ATTEMPT: "2"
+          EXECUTION_FILE: ${{ steps.remediation-agent-2.outputs.execution_file }}
+        run: python3 "$RUNNER_TEMP/classify-remediation.py"
+
+      - name: Back off before remediation provider attempt 3
+        if: >-
+          steps.classify-remediation-2.outputs.success != 'true' &&
+          steps.classify-remediation-2.outputs.retryable == 'true'
+        run: sleep 90
+
+      - name: Reset trusted worktree before remediation provider attempt 3
+        if: >-
+          steps.classify-remediation-2.outputs.success != 'true' &&
+          steps.classify-remediation-2.outputs.retryable == 'true'
+        env: *remediation-reset-env
+        run: "$RUNNER_TEMP/reset-remediation-worktree"
+
+      - name: Evaluate and address Review Coordinator findings (attempt 3)
+        id: remediation-agent-3
+        if: >-
+          steps.classify-remediation-2.outputs.success != 'true' &&
+          steps.classify-remediation-2.outputs.retryable == 'true'
+        continue-on-error: true
+        uses: anthropics/claude-code-action@44423bdec74b97d67543eb16c110546762c110b2
+        env: *remediation-agent-env
+        with: *remediation-agent-inputs
+
+      - name: Classify remediation provider attempt 3
+        id: classify-remediation-3
+        if: steps.remediation-agent-3.outcome != 'skipped'
+        env:
+          ATTEMPT: "3"
+          EXECUTION_FILE: ${{ steps.remediation-agent-3.outputs.execution_file }}
+        run: python3 "$RUNNER_TEMP/classify-remediation.py"
+
+      - name: Require a successful remediation provider result
+        if: always()
+        env:
+          SUCCESS: >-
+            ${{ steps.classify-remediation-3.outputs.success == 'true' ||
+                steps.classify-remediation-2.outputs.success == 'true' ||
+                steps.classify-remediation-1.outputs.success == 'true' }}
+          CATEGORY: >-
+            ${{ steps.classify-remediation-3.outputs.category ||
+                steps.classify-remediation-2.outputs.category ||
+                steps.classify-remediation-1.outputs.category ||
+                'unknown' }}
+        run: |
+          if [ "$SUCCESS" != "true" ]; then
+            echo "::error::Remediation provider attempts failed (category: $CATEGORY); raw failure output is intentionally suppressed"
+            exit 1
+          fi
+
+      - name: Publish the remediation evaluation
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ needs.orchestrate.outputs.pr-number }}
+          REVIEWED_SHA: ${{ needs.orchestrate.outputs.head-sha }}
+          EXECUTION_FILE: >-
+            ${{ steps.classify-remediation-3.outputs.execution-file ||
+                steps.classify-remediation-2.outputs.execution-file ||
+                steps.classify-remediation-1.outputs.execution-file }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          transcript = json.loads(Path(os.environ["EXECUTION_FILE"]).read_text())
+          results = [
+              event for event in transcript
+              if isinstance(event, dict) and event.get("type") == "result"
+          ]
+          if not results:
+              raise SystemExit("Claude execution transcript has no result")
+          final = results[-1]
+          if final.get("is_error"):
+              raise SystemExit(
+                  f"Claude execution failed: {final.get('subtype', 'unknown')}"
+              )
+          raw = final.get("result")
+          if not isinstance(raw, str):
+              raise SystemExit("Claude execution result is not text")
+          evaluation = json.loads(raw)
+          outcomes = evaluation.get("outcomes")
+          if not isinstance(outcomes, list) or not 1 <= len(outcomes) <= 20:
+              raise SystemExit("invalid remediation outcome count")
+
+          def safe(value, limit):
+              if not isinstance(value, str) or not value.strip():
+                  raise SystemExit("invalid remediation outcome text")
+              return value.strip()[:limit].replace("<!--", "&lt;!--")
+
+          lines = [
+              f"<!-- codex-review-loop:remediation:{os.environ['REVIEWED_SHA']} -->",
+              f"Remediation agent evaluation for `{os.environ['REVIEWED_SHA'][:12]}`:",
+              "",
+          ]
+          for outcome in outcomes:
+              if not isinstance(outcome, dict):
+                  raise SystemExit("invalid remediation outcome")
+              decision = outcome.get("decision")
+              if decision not in {"fixed", "rejected"}:
+                  raise SystemExit("invalid remediation decision")
+              title = safe(outcome.get("title"), 200)
+              rationale = safe(outcome.get("rationale"), 2000)
+              lines.extend([
+                  f"- **{decision} — {title}**",
+                  f"  {rationale}",
+              ])
+          lines.extend(["", "- Codex"])
+          payload = Path(os.environ["RUNNER_TEMP"]) / "remediation-comment.json"
+          payload.write_text(json.dumps({"body": "\n".join(lines)}))
+          PY
+          gh api --method POST \
+            "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" \
+            --input "$RUNNER_TEMP/remediation-comment.json"
+
+      - name: Export the remediation as data
+        env:
+          EXPECTED_HEAD_SHA: ${{ needs.orchestrate.outputs.head-sha }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import os
+          import subprocess
+          from pathlib import Path
+
+          manifest = Path(os.environ["RUNNER_TEMP"]) / "agent-review-symlinks.json"
+          expected = os.environ["EXPECTED_HEAD_SHA"]
+          for path in json.loads(manifest.read_text()):
+              subprocess.run(
+                  ["git", "checkout", expected, "--", path],
+                  check=True,
+              )
+          PY
+          if git cat-file -e "$EXPECTED_HEAD_SHA:AGENTS.md" 2>/dev/null; then
+            git checkout "$EXPECTED_HEAD_SHA" -- AGENTS.md
+          else
+            rm -f AGENTS.md
+          fi
+          git -c core.hooksPath=/dev/null add -A
+          git --no-pager diff --cached --no-ext-diff --binary --full-index \
+            "$EXPECTED_HEAD_SHA" > "$RUNNER_TEMP/remediation.patch"
+
+      - name: Upload the remediation patch
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: remediation-${{ needs.orchestrate.outputs.head-sha }}
+          path: ${{ runner.temp }}/remediation.patch
+          if-no-files-found: error
+          retention-days: 1
+
+  push:
+    needs: [orchestrate, remediate]
+    if: >-
+      needs.orchestrate.outputs.should-fix == 'true' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: ubuntu-latest
+    environment: agent-review-trusted
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - name: Check out the exact reviewed revision on a fresh runner
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ needs.orchestrate.outputs.head-sha }}
+          persist-credentials: false
+
+      - name: Download the remediation patch
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: remediation-${{ needs.orchestrate.outputs.head-sha }}
+          path: ${{ runner.temp }}/remediation
+
+      - name: Apply the patch and create a local commit
+        env:
+          EXPECTED_HEAD_SHA: ${{ needs.orchestrate.outputs.head-sha }}
+          PATCH_FILE: ${{ runner.temp }}/remediation/remediation.patch
+        run: |
+          set -euo pipefail
+          export GIT_CONFIG_GLOBAL=/dev/null
+          export GIT_CONFIG_NOSYSTEM=1
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD_SHA"
+          git -c core.hooksPath=/dev/null apply --index --binary --allow-empty "$PATCH_FILE"
+          git diff --cached --check
+          git -c user.name="Review Remediation Agent" \
+            -c user.email="review-remediation@users.noreply.github.com" \
+            -c core.hooksPath=/dev/null \
+            commit --no-verify --allow-empty \
+            -m "fix: address Review Coordinator findings"
+
+      - name: Verify the pull request branch has not moved
+        env:
+          EXPECTED_HEAD_SHA: ${{ needs.orchestrate.outputs.head-sha }}
+          HEAD_REF: ${{ needs.orchestrate.outputs.head-ref }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          remote_sha="$(gh api \
+            "repos/${GITHUB_REPOSITORY}/git/ref/heads/${HEAD_REF}" \
+            --jq '.object.sha')"
+          test "$remote_sha" = "$EXPECTED_HEAD_SHA"
+
+      - name: Push remediation from the isolated runner
+        env:
+          EXPECTED_HEAD_SHA: ${{ needs.orchestrate.outputs.head-sha }}
+          HEAD_REF: ${{ needs.orchestrate.outputs.head-ref }}
+          DEPLOY_KEY: ${{ secrets.REMEDIATION_DEPLOY_KEY }}
+        run: |
+          set -euo pipefail
+          key_file="$RUNNER_TEMP/remediation_deploy_key"
+          trap 'rm -f "$key_file"' EXIT
+          printf '%s\n' "$DEPLOY_KEY" > "$key_file"
+          chmod 600 "$key_file"
+          env -i \
+            PATH=/usr/bin:/bin \
+            HOME="$RUNNER_TEMP/remediation-home" \
+            GIT_CONFIG_GLOBAL=/dev/null \
+            GIT_CONFIG_NOSYSTEM=1 \
+            GIT_SSH_COMMAND="/usr/bin/ssh -i $key_file -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new" \
+            /usr/bin/git \
+              -c core.hooksPath=/dev/null \
+              -c credential.helper= \
+              push --no-verify \
+              --force-with-lease="refs/heads/${HEAD_REF}:${EXPECTED_HEAD_SHA}" \
+              "git@github.com:${GITHUB_REPOSITORY}.git" \
+              "HEAD:refs/heads/${HEAD_REF}"
