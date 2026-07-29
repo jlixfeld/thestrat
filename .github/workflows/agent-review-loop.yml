@@ -283,7 +283,7 @@ jobs:
           claude_args: >-
             --allowedTools "Read(./**)" "Edit(./**)" "Glob"
             --disallowedTools "Bash" "WebFetch" "WebSearch" "Grep"
-            --max-turns 48
+            --max-turns 96
             --settings "${{ runner.temp }}/agent-review-settings.json"
             --setting-sources user
             --strict-mcp-config
