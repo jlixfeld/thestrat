@@ -153,6 +153,7 @@ jobs:
           from pathlib import Path
 
           source = Path(os.environ.get("EXECUTION_FILE", ""))
+          structured_output = os.environ.get("STRUCTURED_OUTPUT", "")
           attempt = os.environ["ATTEMPT"]
           output = Path(os.environ["GITHUB_OUTPUT"])
           snapshot = Path(os.environ["RUNNER_TEMP"]) / f"remediation-attempt-{attempt}.json"
@@ -184,6 +185,28 @@ jobs:
                   if not isinstance(rationale, str) or not rationale.strip():
                       return False
               return True
+
+          if structured_output:
+              try:
+                  evaluation = json.loads(structured_output)
+                  outcomes = (
+                      evaluation.get("outcomes")
+                      if isinstance(evaluation, dict)
+                      else None
+                  )
+                  if outcomes_are_publishable(outcomes):
+                      snapshot.write_text(json.dumps([{
+                          "type": "result",
+                          "subtype": "success",
+                          "is_error": False,
+                          "result": json.dumps(evaluation),
+                      }]))
+                      finish(True, False, "success", str(snapshot))
+                  else:
+                      finish(False, True, "invalid-result")
+              except (TypeError, ValueError, json.JSONDecodeError):
+                  finish(False, True, "invalid-result")
+              raise SystemExit(0)
 
           if not source.is_file():
               finish(False, True, "action-failure")
@@ -251,7 +274,7 @@ jobs:
           CLAUDE_CODE_DISABLE_AUTO_MEMORY: "1"
           CLAUDE_CODE_DISABLE_CLAUDE_MDS: "1"
         with: &remediation-agent-inputs
-          allowed_bots: review-coordinator[bot]
+          allowed_bots: review-coordinator[bot],chatgpt-codex-connector[bot]
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           github_token: ${{ github.token }}
           show_full_output: false
@@ -265,6 +288,7 @@ jobs:
             --setting-sources user
             --strict-mcp-config
             --mcp-config "${{ runner.temp }}/agent-review-mcp.json"
+            --json-schema '{"type":"object","required":["outcomes"],"additionalProperties":false,"properties":{"outcomes":{"type":"array","minItems":1,"maxItems":20,"items":{"type":"object","required":["title","decision","rationale"],"additionalProperties":false,"properties":{"title":{"type":"string","minLength":1},"decision":{"type":"string","enum":["fixed","rejected"]},"rationale":{"type":"string","minLength":1}}}}}}'
           prompt: |
             ${{ needs.orchestrate.outputs.prompt }}
 
@@ -285,6 +309,7 @@ jobs:
         env:
           ATTEMPT: "1"
           EXECUTION_FILE: ${{ steps.remediation-agent-1.outputs.execution_file }}
+          STRUCTURED_OUTPUT: ${{ steps.remediation-agent-1.outputs.structured_output }}
         run: python3 "$RUNNER_TEMP/classify-remediation.py"
 
       - name: Back off before remediation provider attempt 2
@@ -316,6 +341,7 @@ jobs:
         env:
           ATTEMPT: "2"
           EXECUTION_FILE: ${{ steps.remediation-agent-2.outputs.execution_file }}
+          STRUCTURED_OUTPUT: ${{ steps.remediation-agent-2.outputs.structured_output }}
         run: python3 "$RUNNER_TEMP/classify-remediation.py"
 
       - name: Back off before remediation provider attempt 3
@@ -347,6 +373,7 @@ jobs:
         env:
           ATTEMPT: "3"
           EXECUTION_FILE: ${{ steps.remediation-agent-3.outputs.execution_file }}
+          STRUCTURED_OUTPUT: ${{ steps.remediation-agent-3.outputs.structured_output }}
         run: python3 "$RUNNER_TEMP/classify-remediation.py"
 
       - name: Require a successful remediation provider result
