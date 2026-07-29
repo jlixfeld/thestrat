@@ -77,11 +77,16 @@ uv sync --extra test --extra dev
 import polars as pl
 from thestrat import TimeframeAggregator
 
-bars = pl.DataFrame({
-    "timestamp": [...],
-    "open": [...], "high": [...], "low": [...], "close": [...],
-    "volume": [...],
-})
+bars = pl.DataFrame(
+    {
+        "timestamp": [...],
+        "open": [...],
+        "high": [...],
+        "low": [...],
+        "close": [...],
+        "volume": [...],
+    }
+)
 
 agg = TimeframeAggregator()
 hourly = agg.aggregate(bars, "1h")
@@ -113,13 +118,20 @@ classified = classify_bars_multi_symbol(bars)
 ```python
 from thestrat import classify_bar, classify_color, classify_scenario
 
-color = classify_color(open_price=100.0, close_price=101.0)         # Color.GREEN
-scenario = classify_scenario(curr_high=105, curr_low=95,
-                             prev_high=104, prev_low=96)            # Scenario.TWO_UP
+color = classify_color(open_price=100.0, close_price=101.0)  # Color.GREEN
+scenario = classify_scenario(curr_high=105, curr_low=95, prev_high=104, prev_low=96)  # Scenario.TWO_UP
 
 bar = classify_bar(
-    bar={"symbol": "ESM6", "timestamp": ts, "timeframe": "1d",
-         "open": 100, "high": 105, "low": 95, "close": 103, "volume": 1000},
+    bar={
+        "symbol": "ESM6",
+        "timestamp": ts,
+        "timeframe": "1d",
+        "open": 100,
+        "high": 105,
+        "low": 95,
+        "close": 103,
+        "volume": 1000,
+    },
     prior=prior_bar_dict_or_None,
 )
 ```
