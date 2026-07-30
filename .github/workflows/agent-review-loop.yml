@@ -1,18 +1,23 @@
 name: Agent review loop
 
 on:
+  issue_comment:
+    types: [created]
   push:
   workflow_run:
     workflows: [CI, Codex review signal]
     types: [completed]
 
 concurrency:
-  group: agent-review-loop-${{ github.repository }}-${{ github.event.workflow_run.pull_requests[0].number || github.sha }}
+  group: agent-review-loop-${{ github.repository }}-${{ (github.event_name == 'issue_comment' && (github.event.comment.user.login != 'chatgpt-codex-connector[bot]' || github.event.issue.pull_request == null)) && format('ignored-comment-{0}', github.run_id) || (github.event.workflow_run.pull_requests[0].number || github.event.issue.number || github.sha) }}
   cancel-in-progress: false
 
 jobs:
   orchestrate:
     if: >-
+      (github.event_name == 'issue_comment' &&
+       github.event.issue.pull_request != null &&
+       github.event.comment.user.login == 'chatgpt-codex-connector[bot]') ||
       (github.event_name == 'workflow_run' &&
        (github.event.workflow_run.event == 'pull_request' ||
         github.event.workflow_run.event == 'pull_request_review') &&
@@ -34,6 +39,7 @@ jobs:
       head-sha: ${{ steps.review.outputs.head-sha }}
       prompt: ${{ steps.review.outputs.prompt }}
       attempt: ${{ steps.review.outputs.attempt }}
+      same-repo: ${{ steps.fork-check.outputs.same-repo }}
     steps:
       - name: Mint repository-scoped coordinator token
         id: coordinator-token
@@ -62,11 +68,26 @@ jobs:
           codex-login: chatgpt-codex-connector[bot]
           max-fix-attempts: 10
 
+      - name: Confirm the reviewed pull request head is not a fork
+        id: fork-check
+        if: steps.review.outputs.should-fix == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ steps.review.outputs.pr-number }}
+        run: |
+          set -euo pipefail
+          head_repo="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --jq '.head.repo.full_name // empty')"
+          same_repo=false
+          if [ "$head_repo" = "$GITHUB_REPOSITORY" ]; then
+            same_repo=true
+          fi
+          echo "same-repo=$same_repo" >> "$GITHUB_OUTPUT"
+
   remediate:
     needs: orchestrate
     if: >-
       needs.orchestrate.outputs.should-fix == 'true' &&
-      github.event.workflow_run.head_repository.full_name == github.repository
+      needs.orchestrate.outputs.same-repo == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     environment: agent-review-trusted
@@ -500,7 +521,7 @@ jobs:
     needs: [orchestrate, remediate]
     if: >-
       needs.orchestrate.outputs.should-fix == 'true' &&
-      github.event.workflow_run.head_repository.full_name == github.repository
+      needs.orchestrate.outputs.same-repo == 'true'
     runs-on: ubuntu-latest
     environment: agent-review-trusted
     permissions:
