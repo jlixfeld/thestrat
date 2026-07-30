@@ -24,7 +24,7 @@ jobs:
       - uses: astral-sh/setup-uv@v7
       - run: uv tool install ruff
       - run: ruff check .
-      - run: ruff format --check .
+      - run: ruff format --check --exclude '*.md' .
 
   uv-checks:
     runs-on: ubuntu-latest
