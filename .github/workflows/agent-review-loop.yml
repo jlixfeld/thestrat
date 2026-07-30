@@ -48,7 +48,7 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           repository: jlixfeld/review-automation
-          ref: ac36c092158964de90228356070f1dc7ae084509
+          ref: 71d6c54360c3e39cbd71447617596372d44decf5
           path: review-automation
           persist-credentials: false
 
