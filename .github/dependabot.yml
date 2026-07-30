@@ -1,10 +1,19 @@
 version: 2
+
+# Delay brand-new releases so a compromised or yanked version is not adopted
+# immediately. SemVer-specific keys are valid only for SemVer ecosystems.
+
 updates:
   - package-ecosystem: pip
     directory: /
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    cooldown:
+      default-days: 7
+      semver-major-days: 14
+      semver-minor-days: 7
+      semver-patch-days: 7
     labels:
       - dependencies
       - python
@@ -14,6 +23,8 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    cooldown:
+      default-days: 7
     labels:
       - dependencies
       - github-actions
@@ -23,6 +34,8 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    cooldown:
+      default-days: 7
     labels:
       - dependencies
       - docker
@@ -32,6 +45,11 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    cooldown:
+      default-days: 7
+      semver-major-days: 14
+      semver-minor-days: 7
+      semver-patch-days: 7
     labels:
       - dependencies
       - npm
