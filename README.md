@@ -262,26 +262,37 @@ green
 
 <!-- /output -->
 
-### Look up window starts
+### Inspect containing and neighboring windows
 
-This returns two starts per requested timeframe, including an exact matching start. It schedules no work and reads no clock.
+`window()` accepts one aware timestamp or a sequence. This batch asks for one preceding and one following window per timestamp/timeframe. Position zero contains the input in an eligible segment; positions -1 and +1 are its neighbors. Input order and repeated inputs are preserved. All geometry timestamps and segment boundaries below are UTC.
 
 ```python
-windows = strat.window_starts(
-    start, timeframes=["1h", "4h"], count=2, direction="forward",
+windows = strat.window(
+    [start, start + timedelta(minutes=90)],
+    timeframes=["1h", "4h"], before=1, after=1,
 )
 ```
 
 <!-- output: windows -->
 
-| timeframe | timestamp (UTC) |
-| --- | --- |
-| 1h | 2026-01-05 14:30 |
-| 1h | 2026-01-05 15:30 |
-| 4h | 2026-01-05 14:30 |
-| 4h | 2026-01-05 18:30 |
+| input_timestamp (UTC) | timeframe | position | window_start (UTC) | window_end (UTC) | segments |
+| --- | --- | --- | --- | --- | --- |
+| 2026-01-05 14:30 | 1h | -1 | 2026-01-02 20:30 | 2026-01-02 21:00 | [2026-01-02 20:30, 2026-01-02 21:00) |
+| 2026-01-05 14:30 | 1h | 0 | 2026-01-05 14:30 | 2026-01-05 15:30 | [2026-01-05 14:30, 2026-01-05 15:30) |
+| 2026-01-05 14:30 | 1h | 1 | 2026-01-05 15:30 | 2026-01-05 16:30 | [2026-01-05 15:30, 2026-01-05 16:30) |
+| 2026-01-05 14:30 | 4h | -1 | 2026-01-02 18:30 | 2026-01-02 21:00 | [2026-01-02 18:30, 2026-01-02 21:00) |
+| 2026-01-05 14:30 | 4h | 0 | 2026-01-05 14:30 | 2026-01-05 18:30 | [2026-01-05 14:30, 2026-01-05 18:30) |
+| 2026-01-05 14:30 | 4h | 1 | 2026-01-05 18:30 | 2026-01-05 21:00 | [2026-01-05 18:30, 2026-01-05 21:00) |
+| 2026-01-05 16:00 | 1h | -1 | 2026-01-05 14:30 | 2026-01-05 15:30 | [2026-01-05 14:30, 2026-01-05 15:30) |
+| 2026-01-05 16:00 | 1h | 0 | 2026-01-05 15:30 | 2026-01-05 16:30 | [2026-01-05 15:30, 2026-01-05 16:30) |
+| 2026-01-05 16:00 | 1h | 1 | 2026-01-05 16:30 | 2026-01-05 17:30 | [2026-01-05 16:30, 2026-01-05 17:30) |
+| 2026-01-05 16:00 | 4h | -1 | 2026-01-02 18:30 | 2026-01-02 21:00 | [2026-01-02 18:30, 2026-01-02 21:00) |
+| 2026-01-05 16:00 | 4h | 0 | 2026-01-05 14:30 | 2026-01-05 18:30 | [2026-01-05 14:30, 2026-01-05 18:30) |
+| 2026-01-05 16:00 | 4h | 1 | 2026-01-05 18:30 | 2026-01-05 21:00 | [2026-01-05 18:30, 2026-01-05 21:00) |
 
 <!-- /output -->
+
+`window_start` is the canonical aggregation label; `window_end` is the last eligible segment end, including an early close. The `segments` list gives the actual eligible half-open intervals. A timestamp outside those intervals has no position-zero row. Neighbor counts default to zero; omit `timeframes` to use configured targets. A missing requested neighbor raises `ScheduleRangeError` rather than returning a shorter result. The method schedules no work and reads no clock.
 
 Aggregation uses the first open, maximum high, minimum low, latest close and summed volume for each symbol/window. Output timestamps are interval starts, including when the opening minute is missing. `1min` means minute; `1m` means calendar month. Higher-timeframe rows can still be forming.
 

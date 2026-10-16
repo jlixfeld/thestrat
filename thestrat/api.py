@@ -10,7 +10,7 @@ from thestrat.classifier import Classifier
 from thestrat.frames import KEY, SCHEMA, normalize, targets
 from thestrat.sessions import Session, segments
 from thestrat.types import DEFAULT_TIMEFRAMES, Timeframe
-from thestrat.windows import lookup, windows
+from thestrat.windows import geometry, windows
 
 
 class InsufficientSourceDataError(ValueError):
@@ -147,18 +147,16 @@ class TheStrat:
                     f"symbol={row['symbol']!r} window={row['timeframe']}@{row['timestamp']}: underlying retained source minutes unavailable"
                 )
 
-    def window_starts(
+    def window(
         self,
-        timestamp: datetime,
+        timestamp: datetime | Sequence[datetime],
         *,
         timeframes: Sequence[Timeframe | str] | None = None,
-        count: int = 1,
-        direction: Literal["backward", "forward"] = "backward",
-        inclusive: bool = True,
+        before: int = 0,
+        after: int = 0,
     ) -> pl.DataFrame:
         selected = self.timeframes if timeframes is None else targets(timeframes)
-        if isinstance(count, bool) or not isinstance(count, int) or count <= 0:
-            raise ValueError("count must be a positive integer per timeframe")
-        if direction not in ("backward", "forward") or not isinstance(inclusive, bool):
-            raise ValueError("invalid direction or inclusive value")
-        return lookup(self.session, timestamp, selected, count, direction, inclusive)
+        for name, value in (("before", before), ("after", after)):
+            if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+                raise ValueError(f"{name} must be a nonnegative integer")
+        return geometry(self.session, timestamp, selected, before, after)

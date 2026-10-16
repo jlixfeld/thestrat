@@ -33,6 +33,12 @@ Daily bars cover a session. Weeks start Monday, months on day one, quarters Jan/
 
 Repeated fall-back local hours merge into their wall-clock bucket, whose label uses the earlier occurrence. One-minute source intervals are the exception: each preserves its physical UTC identity in both aggregate output and lookup, so a snapshot replaces the correct minute in either occurrence. Higher sub-hour targets can merge corresponding repeated local windows. A nonexistent spring-forward boundary shifts forward one local hour. Aggregation and window lookup share the boundary calculation, including session clipping and DST.
 
+`window(timestamp_or_sequence, timeframes=..., before=0, after=0)` reports canonical geometry. Its `window_end` is the last eligible segment end; `segments` includes every eligible interval of the full window, not just intervals near the query. For example, a four-hour equity window on November 27, 2026 runs from 09:30 to the 13:00 Eastern early close (14:30–18:00 UTC).
+
+Position zero means actual membership in an eligible half-open segment. A break, weekend or holiday has no zero row. With no containing window, previous windows end at/before the query and following windows begin strictly after it; a window spanning a break around the query is excluded from both. With membership, neighboring positions follow distinct canonical labels. This matters during fall-back: a second-occurrence query can belong to a window labeled with the first occurrence. One-minute source windows continue to use their physical timestamps.
+
+Counts are per input/timeframe, closest neighbors are -1/+1, and output preserves input order and duplicate timestamps. Requested neighbors are complete or an unavailable-range error is raised. Window queries do not modify working source state. They do not combine older aggregate summaries with recent minutes: retain or reload underlying source minutes before updating a retained aggregate window.
+
 ## Classification
 
 Every predecessor and history shift stays within `(symbol, timeframe)`. Null symbol is a valid anonymous group. There is no cross-symbol or cross-timeframe comparison. Missing predecessors yield null scenario and in-force; current color and shape need no prior bar.

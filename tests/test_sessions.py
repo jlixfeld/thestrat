@@ -75,9 +75,7 @@ def test_early_close_holiday_weekend_and_forward_lookup():
     result = s.aggregate()
     assert result["timestamp"].to_list() == [utc(2026, 11, 27, 14, 30)]
     assert result["volume"].to_list() == [2.0]
-    assert s.window_starts(utc(2026, 11, 28, 12), direction="forward")["timestamp"].to_list() == [
-        utc(2026, 11, 30, 14, 30)
-    ]
+    assert s.window(utc(2026, 11, 28, 12), after=1)["window_start"].to_list() == [utc(2026, 11, 30, 14, 30)]
 
 
 def test_futures_midnight_and_break():
@@ -131,7 +129,7 @@ def test_crypto_weekend_and_naive_storage():
 def test_calendar_range_error():
     s = TheStrat(session=session_for("equity_us"))
     with pytest.raises(ScheduleRangeError):
-        s.window_starts(utc(2200, 1, 1))
+        s.window(utc(2200, 1, 1))
 
 
 def test_session_configuration_validation_and_frozen():

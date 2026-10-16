@@ -20,9 +20,14 @@ def _render(value):
             return str(item).lower()
         if isinstance(item, datetime):
             return item.strftime("%Y-%m-%d %H:%M")
+        if isinstance(item, list):
+            return "; ".join(f"[{cell(segment['start'])}, {cell(segment['end'])})" for segment in item)
         return str(item)
 
-    headers = [f"{name} (UTC)" if name == "timestamp" else name for name in value.columns]
+    headers = [
+        f"{name} (UTC)" if name in {"timestamp", "input_timestamp", "window_start", "window_end"} else name
+        for name in value.columns
+    ]
     lines = ["| " + " | ".join(headers) + " |", "| " + " | ".join(["---"] * len(headers)) + " |"]
     lines.extend("| " + " | ".join(cell(item) for item in row) + " |" for row in value.iter_rows())
     return "\n".join(lines)
@@ -79,9 +84,17 @@ def test_readme_steps_execute_and_every_output_matches():
     assert labels.filter(pl.col("timeframe") == "1min")[0, "in_force"] is True
     assert labels.filter(pl.col("timeframe") == "4h")[0, "in_force"] is None
     assert namespace["color"] == Color.GREEN
-    assert namespace["windows"].rows() == [
-        ("1h", datetime(2026, 1, 5, 14, 30, tzinfo=timezone.utc)),
-        ("1h", datetime(2026, 1, 5, 15, 30, tzinfo=timezone.utc)),
-        ("4h", datetime(2026, 1, 5, 14, 30, tzinfo=timezone.utc)),
-        ("4h", datetime(2026, 1, 5, 18, 30, tzinfo=timezone.utc)),
-    ]
+    windows = namespace["windows"]
+    assert windows.height == 12
+    assert windows["position"].to_list() == [-1, 0, 1] * 4
+    assert (
+        windows["input_timestamp"].to_list()
+        == [datetime(2026, 1, 5, 14, 30, tzinfo=timezone.utc)] * 6 + [datetime(2026, 1, 5, 16, tzinfo=timezone.utc)] * 6
+    )
+    first_hour = windows.row(1, named=True)
+    assert first_hour["window_start"] == datetime(2026, 1, 5, 14, 30, tzinfo=timezone.utc)
+    assert first_hour["window_end"] == datetime(2026, 1, 5, 15, 30, tzinfo=timezone.utc)
+    assert first_hour["segments"] == [{"start": first_hour["window_start"], "end": first_hour["window_end"]}]
+    previous_four_hour = windows.row(3, named=True)
+    assert previous_four_hour["window_start"] == datetime(2026, 1, 2, 18, 30, tzinfo=timezone.utc)
+    assert previous_four_hour["window_end"] == datetime(2026, 1, 2, 21, tzinfo=timezone.utc)

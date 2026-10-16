@@ -13,11 +13,9 @@ aggregate(updates: pl.DataFrame | None = None,
           *, mode: Literal["snapshot"] = "snapshot") -> pl.DataFrame
 classify(bars: pl.DataFrame, *, fields: Sequence[Field] | None = None,
          history: int = 3) -> pl.DataFrame
-window_starts(timestamp: datetime, *,
-              timeframes: Sequence[Timeframe | str] | None = None,
-              count: int = 1,
-              direction: Literal["backward", "forward"] = "backward",
-              inclusive: bool = True) -> pl.DataFrame
+window(timestamp: datetime | Sequence[datetime], *,
+       timeframes: Sequence[Timeframe | str] | None = None,
+       before: int = 0, after: int = 0) -> pl.DataFrame
 ```
 
 `classify` is a callable internal component with a `scalar` component, not another public top-level class. `Field` selects `scenario`, `color`, `shape` or `in_force`.
@@ -96,11 +94,26 @@ Require `session_open <= segment_open < segment_close <= session_close`, sorted 
 
 For top-of-hour equities, construct `Session("America/New_York", 540, session_for("equity_us").schedule)`. The eligibility open stays 09:30 while hourly and longer intraday labels anchor at 09:00. The default anchor 570 gives 09:30. Both aggregation and lookup use the same settings.
 
-## Window lookup
+## Window geometry
 
-`window_starts` returns `timeframe: String, timestamp: Datetime("us", "UTC")`. `count` is positive and applies per requested timeframe; omitted targets use the instance's configured targets. Backward returns starts at/before the supplied timestamp; forward returns at/after it. `inclusive=False` excludes an exact match. Results are ascending within each requested timeframe.
+`window` returns membership and neighboring geometry using the same canonical windows as aggregation. Pass one timezone-aware `datetime` or a sequence of them; inputs normalize to UTC. For a Polars timestamp column, pass `frame["timestamp"].to_list()`. Empty sequences return the typed empty result. Input order and duplicates are preserved, followed by requested timeframe order and chronological canonical labels within each input/timeframe. No public input identifier is added.
 
-The query timestamp must be aware. Lookup skips closed sessions and breaks, recognizes calendar range limits, and may return an interval label before eligible open for top-aligned equities. One-minute starts preserve physical UTC identity across a repeated local hour, matching source rows; larger wall-clock targets use the earlier-fold label for merged repeated windows. Lookup performs no scheduling, finalization, clock advancement or broker work.
+| Column | Type and meaning |
+| --- | --- |
+| `input_timestamp` | Datetime("us", "UTC"): the normalized query timestamp |
+| `timeframe` | String: requested target |
+| `position` | Int64: zero for the containing window, negative for preceding windows, positive for following windows; closest neighbors are -1 and +1 |
+| `window_start` | Datetime("us", "UTC"): canonical aggregation label, which can precede eligible open |
+| `window_end` | Datetime("us", "UTC"): last eligible segment end, including early closes; not a nominal next-period boundary |
+| `segments` | List(Struct({start: Datetime("us", "UTC"), end: Datetime("us", "UTC")})): full sorted eligible half-open intervals for that canonical window |
+
+`before` and `after` are nonnegative integers, default zero, applied per input/timeframe. Booleans and fractional counts are invalid. Omitted `timeframes` uses configured targets; a supplied selection must be nonempty, unique and supported. Requested neighbors must be available or the operation raises `ScheduleRangeError`; it does not silently shorten counts. Custom schedules retain their own supported-range errors. Finite schedules without explicit range errors are searched to representable datetime bounds before an unavailable-neighbor error.
+
+Membership uses the eligible physical segments, including repeated daylight-saving-time intervals, rather than comparing the timestamp with a predecessor label. A contained query returns position zero and requested neighboring distinct windows in canonical label order. Outside eligible sessions—including holidays, weekends and breaks—there is no zero row. Preceding windows must have their last eligible end at/before the query; following windows must have their first eligible start strictly after it. A window spanning a break around the query qualifies for neither direction, and the same canonical label is never returned in both directions.
+
+Segments cover the full canonical period even for a query in the middle of a week, month, quarter or year. Calendar-period geometry uses session-open civil dates and configured local anchors, matching aggregation; for futures this can include a Sunday-opened session whose close falls on the following Monday. One-minute windows preserve physical UTC identity across a repeated local hour. Larger wall-clock targets merge repeated intervals under their earlier-fold label; the segment list preserves each eligible physical contribution.
+
+Batch queries share schedule fetches and canonical geometry for overlapping target ranges within the call. Long-period completeness does not require generating a year of minute windows. There is no persistent geometry cache or source history. Window queries do not aggregate prices, change `bars`, schedule work, finalize bars, advance clocks or contact brokers.
 
 ## Errors and extension
 
