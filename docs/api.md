@@ -20,11 +20,11 @@ window(timestamp: datetime | Sequence[datetime], *,
 
 `classify` is a callable internal component with a `scalar` component, not another public top-level class. `Field` selects `scenario`, `color`, `shape` or `in_force`.
 
-`bars` is an ordinary assignable DataFrame. Assigning or filtering it performs no calculation. Operations validate the frame when consuming it. `aggregate()` calculates the working source minutes, stores source plus aggregate rows in `bars`, and returns only configured target rows. `aggregate(updates)` first applies complete source-minute snapshots by key. An identical repeated snapshot contributes volume once. An error leaves the instance's working frame unchanged.
+`bars` is an ordinary assignable DataFrame. Assigning or filtering it performs no calculation. Operations validate the frame when consuming it. `aggregate()` calculates the working source minutes, stores source plus aggregate rows in `bars`, and returns only configured timeframe rows. `aggregate(updates)` first applies complete source-minute snapshots by key. An identical repeated snapshot contributes volume once. An error leaves the instance's working frame unchanged.
 
 `classify(frame)` returns the same bar rows with requested classification columns, ordered by symbol, timeframe and timestamp. It neither aggregates nor assigns the instance's working frame. Caller metadata is preserved. Aggregation returns standard bar columns and drops metadata; callers manage separate source-freshness and instrument metadata themselves.
 
-Configured targets are nonempty, unique members of `1min, 5min, 15min, 30min, 1h, 4h, 6h, 12h, 1d, 1w, 1m, 1q, 1y`. `DEFAULT_TIMEFRAMES` contains those thirteen targets. `1m` means calendar month. Source updates are one-minute bars. Source minutes remain visible in `bars` even if `1min` is not a selected return target. A new instance supplies an independent batch workflow.
+Configured timeframes are nonempty, unique members of `1min, 5min, 15min, 30min, 1h, 4h, 6h, 12h, 1d, 1w, 1m, 1q, 1y`. `DEFAULT_TIMEFRAMES` contains those thirteen timeframes. `1m` means calendar month. Source updates are one-minute bars. Source minutes remain visible in `bars` even if `1min` is not a selected return timeframe. A new instance supplies an independent batch workflow.
 
 ## Bar frames
 
@@ -101,19 +101,19 @@ For top-of-hour equities, construct `Session("America/New_York", 540, session_fo
 | Column | Type and meaning |
 | --- | --- |
 | `input_timestamp` | Datetime("us", "UTC"): the normalized query timestamp |
-| `timeframe` | String: requested target |
+| `timeframe` | String: requested timeframe |
 | `position` | Int64: zero for the containing window, negative for preceding windows, positive for following windows; closest neighbors are -1 and +1 |
 | `window_start` | Datetime("us", "UTC"): canonical aggregation label, which can precede eligible open |
 | `window_end` | Datetime("us", "UTC"): last eligible segment end, including early closes; not a nominal next-period boundary |
 | `segments` | List(Struct({start: Datetime("us", "UTC"), end: Datetime("us", "UTC")})): full sorted eligible half-open intervals for that canonical window |
 
-`before` and `after` are nonnegative integers, default zero, applied per input/timeframe. Booleans and fractional counts are invalid. Omitted `timeframes` uses configured targets; a supplied selection must be nonempty, unique and supported. Requested neighbors must be available or the operation raises `ScheduleRangeError`; it does not silently shorten counts. Custom schedules retain their own supported-range errors. Finite schedules without explicit range errors are searched to representable datetime bounds before an unavailable-neighbor error.
+`before` and `after` are nonnegative integers, default zero, applied per input/timeframe. Booleans and fractional counts are invalid. Omitted `timeframes` uses configured timeframes; a supplied selection must be nonempty, unique and supported. Requested neighbors must be available or the operation raises `ScheduleRangeError`; it does not silently shorten counts. Custom schedules retain their own supported-range errors. Finite schedules without explicit range errors are searched to representable datetime bounds before an unavailable-neighbor error.
 
 Membership uses the eligible physical segments, including repeated daylight-saving-time intervals, rather than comparing the timestamp with a predecessor label. A contained query returns position zero and requested neighboring distinct windows in canonical label order. Outside eligible sessions—including holidays, weekends and breaks—there is no zero row. Preceding windows must have their last eligible end at/before the query; following windows must have their first eligible start strictly after it. A window spanning a break around the query qualifies for neither direction, and the same canonical label is never returned in both directions.
 
-Segments cover the full canonical period even for a query in the middle of a week, month, quarter or year. Calendar-period geometry uses session-open civil dates and configured local anchors, matching aggregation; for futures this can include a Sunday-opened session whose close falls on the following Monday. One-minute windows preserve physical UTC identity across a repeated local hour. Larger wall-clock targets merge repeated intervals under their earlier-fold label; the segment list preserves each eligible physical contribution.
+Segments cover the full canonical period even for a query in the middle of a week, month, quarter or year. Calendar-period geometry uses session-open civil dates and configured local anchors, matching aggregation; for futures this can include a Sunday-opened session whose close falls on the following Monday. One-minute windows preserve physical UTC identity across a repeated local hour. Larger wall-clock timeframes merge repeated intervals under their earlier-fold label; the segment list preserves each eligible physical contribution.
 
-Batch queries share schedule fetches and canonical geometry for overlapping target ranges within the call. Long-period completeness does not require generating a year of minute windows. There is no persistent geometry cache or source history. Window queries do not aggregate prices, change `bars`, schedule work, finalize bars, advance clocks or contact brokers.
+Batch queries share schedule fetches and canonical geometry for overlapping timeframe ranges within the call. Long-period completeness does not require generating a year of minute windows. There is no persistent geometry cache or source history. Window queries do not aggregate prices, change `bars`, schedule work, finalize bars, advance clocks or contact brokers.
 
 ## Errors and extension
 

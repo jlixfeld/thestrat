@@ -99,7 +99,7 @@ input_preview = minutes.select("symbol", "timeframe", "timestamp", "open", "high
 
 ### Aggregate explicitly
 
-Creating the instance stores the supplied frame. Calling `aggregate()` calculates the configured targets. The result has seventeen rows: five source minutes and twelve higher-timeframe rows. This preview shows the latest row for each of the thirteen timeframes; the `1min` row is the latest source minute.
+Creating the instance stores the supplied frame. Calling `aggregate()` calculates bars for the configured timeframes. The result has seventeen rows: five source minutes and twelve higher-timeframe rows. This preview shows the latest row for each of the thirteen timeframes; the `1min` row is the latest source minute.
 
 ```python
 strat = TheStrat(session=session_for(InstrumentType.EQUITY_US), bars=minutes)
@@ -208,7 +208,7 @@ revised_preview = revised.select("symbol", "timeframe", "timestamp", "open", "hi
 
 ### Recalculate from the replacement
 
-The returned frame still contains every configured target. This projection shows the corrected source minute and its four-hour aggregate. Higher-timeframe volume changes from 150 to 170 because the snapshot replaces the old contribution.
+The returned frame still contains bars for every configured timeframe. This projection shows the corrected source minute and its four-hour aggregate. Higher-timeframe volume changes from 150 to 170 because the snapshot replaces the old contribution.
 
 ```python
 updated = strat.aggregate(revised, mode="snapshot")
@@ -292,13 +292,13 @@ windows = strat.window(
 
 <!-- /output -->
 
-`window_start` is the canonical aggregation label; `window_end` is the last eligible segment end, including an early close. The `segments` list gives the actual eligible half-open intervals. A timestamp outside those intervals has no position-zero row. Neighbor counts default to zero; omit `timeframes` to use configured targets. A missing requested neighbor raises `ScheduleRangeError` rather than returning a shorter result. The method schedules no work and reads no clock.
+`window_start` is the canonical aggregation label; `window_end` is the last eligible segment end, including an early close. The `segments` list gives the actual eligible half-open intervals. A timestamp outside those intervals has no position-zero row. Neighbor counts default to zero; omit `timeframes` to use configured timeframes. A missing requested neighbor raises `ScheduleRangeError` rather than returning a shorter result. The method schedules no work and reads no clock.
 
 Aggregation uses the first open, maximum high, minimum low, latest close and summed volume for each symbol/window. Output timestamps are interval starts, including when the opening minute is missing. `1min` means minute; `1m` means calendar month. Higher-timeframe rows can still be forming.
 
 ## State and ownership
 
-`strat.bars` is the visible working DataFrame, containing source minutes and calculated targets. Callers can filter it with Polars and assign the result back. Assignment alone does no calculation. `aggregate` applies snapshots and calculates bars; `classify` returns labels without aggregating or changing the instance's frame.
+`strat.bars` initially stores the supplied frame. After `aggregate()`, it contains source minutes and calculated timeframe bars. Callers can filter it with Polars and assign the result back. Assignment alone does no calculation. `aggregate` applies snapshots and calculates bars; `classify` returns labels without aggregating or changing the instance's frame.
 
 Callers normalize provider fields, units and timestamps, sanitize duplicates, and choose retention. Updating an aggregate-only seed requires the source minutes behind that window; classification of the summary itself is valid. Do not prune those source minutes and expect later corrections to reconstruct them.
 

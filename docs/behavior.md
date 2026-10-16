@@ -4,7 +4,7 @@ Read [api.md](api.md) for exact signatures and input schemas. All calculations a
 
 ## Source snapshots and aggregation
 
-Normalize provider messages to their source-minute interval start. A snapshot is the complete current OHLCV for that minute; it is not an additive volume contribution. The library replaces the stored source row by symbol/timeframe/timestamp, then calculates target bars from source minutes only. Aggregate rows never feed back as source contributions.
+Normalize provider messages to their source-minute interval start. A snapshot is the complete current OHLCV for that minute; it is not an additive volume contribution. The library replaces the stored source row by symbol/timeframe/timestamp, then calculates aggregated bars from source minutes only. Aggregate rows never feed back as source contributions.
 
 For each symbol/window, timestamp order determines first open and last close; high is maximum, low minimum and volume summed. A corrected older minute cannot replace a later constituent's close. Replacing the earliest constituent can correct the open. Retractions of an extreme use the available underlying source set; they are not handled by retaining an obsolete maximum or minimum. A snapshot volume change from 203 to 296 changes an aggregate already containing 203 by 93. It does not add 296 again.
 
@@ -12,7 +12,7 @@ Both aggregation and classification sort their input; classification orders inde
 
 An aggregate-only summary can be classified but cannot be updated without the source minutes behind its window. The caller must retain or restore those minutes. Missing grid positions do not prove missing data: a minute without an eligible trade may legitimately be absent. No hidden history, automatic pruning or message deduplication is performed.
 
-Aggregation stores the full source-plus-target working frame in `bars`, and returns selected targets. If `1min` is unselected, assigning the returned target-only frame back to `bars` discards source history by the caller's choice. Caller metadata is not reduced into aggregate output. Classification preserves extra columns and does not mutate instance state; requested classification fields are recalculated rather than trusted as current.
+Aggregation stores the full source-plus-aggregate working frame in `bars`, and returns bars for selected timeframes. If `1min` is unselected, assigning the returned aggregate-only frame back to `bars` discards source history by the caller's choice. Caller metadata is not reduced into aggregate output. Classification preserves extra columns and does not mutate instance state; requested classification fields are recalculated rather than trusted as current.
 
 ## Windows and sessions
 
@@ -29,9 +29,9 @@ Hourly, 4h, 6h and 12h use that same session anchor, with shortened final window
 
 Futures sessions can begin on the prior civil date and continue across midnight. Keep the configured exchange anchor; UTC midnight and broker restarts do not reset windows. The preset covers CME equity-index sessions; supply a product-appropriate schedule for other contracts. Crypto uses a continuous UTC day, including weekends, without an equity-style shutdown.
 
-Daily bars cover a session. Weeks start Monday, months on day one, quarters Jan/Apr/Jul/Oct and years January one using the configured local anchor. These calendar targets combine eligible data across sessions rather than splitting at each daily close. Period labels may precede the first eligible session. This convention is explicit; a trade-date calendar with a different week convention needs a different agreed contract.
+Daily bars cover a session. Weeks start Monday, months on day one, quarters Jan/Apr/Jul/Oct and years January one using the configured local anchor. These calendar timeframes combine eligible data across sessions rather than splitting at each daily close. Period labels may precede the first eligible session. This convention is explicit; a trade-date calendar with a different week convention needs a different agreed contract.
 
-Repeated fall-back local hours merge into their wall-clock bucket, whose label uses the earlier occurrence. One-minute source intervals are the exception: each preserves its physical UTC identity in both aggregate output and lookup, so a snapshot replaces the correct minute in either occurrence. Higher sub-hour targets can merge corresponding repeated local windows. A nonexistent spring-forward boundary shifts forward one local hour. Aggregation and window lookup share the boundary calculation, including session clipping and DST.
+Repeated fall-back local hours merge into their wall-clock bucket, whose label uses the earlier occurrence. One-minute source intervals are the exception: each preserves its physical UTC identity in both aggregate output and lookup, so a snapshot replaces the correct minute in either occurrence. Higher sub-hour timeframes can merge corresponding repeated local windows. A nonexistent spring-forward boundary shifts forward one local hour. Aggregation and window lookup share the boundary calculation, including session clipping and DST.
 
 `window(timestamp_or_sequence, timeframes=..., before=0, after=0)` reports canonical geometry. Its `window_end` is the last eligible segment end; `segments` includes every eligible interval of the full window, not just intervals near the query. For example, a four-hour equity window on November 27, 2026 runs from 09:30 to the 13:00 Eastern early close (14:30–18:00 UTC).
 
