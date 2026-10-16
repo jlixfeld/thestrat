@@ -1,0 +1,153 @@
+{
+  "scope": "Synthetic default NYSE, 2026 point-in-time year through Dec 30 15:05 ET; homogeneous price basis",
+  "environment": {
+    "python": "3.14.3",
+    "polars": "1.40.1",
+    "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+    "polars_threads": 18
+  },
+  "preparation_one_symbol": {
+    "generation": {
+      "wall_ms": 88.59108295291662,
+      "cpu_ms": 93.83699999999995
+    },
+    "archive_aggregation": {
+      "wall_ms": 247.39354196935892,
+      "cpu_ms": 375.38200000000006
+    },
+    "initial_geometry": {
+      "wall_ms": 129.59054205566645,
+      "cpu_ms": 146.556
+    },
+    "seed_selection": {
+      "wall_ms": 6.421541096642613,
+      "cpu_ms": 17.663000000000096
+    },
+    "reference_library": {
+      "wall_ms": 603.5463749431074,
+      "cpu_ms": 1193.9640000000002
+    }
+  },
+  "rows_one_symbol": {
+    "fixture_year": 97530,
+    "source_through_watermark": 97086,
+    "archive_including_minutes": 99095,
+    "full_library_return": 129522,
+    "mixed_seed": 66,
+    "mixed_seed_by_timeframe": {
+      "1min": 36,
+      "1h": 5,
+      "1d": 20,
+      "1m": 2,
+      "1q": 3
+    }
+  },
+  "memory_one_symbol": {
+    "source_dataframe_estimated_bytes": 5242644,
+    "seed_dataframe_estimated_bytes": 3504,
+    "coverage_keys_estimated_bytes": 864,
+    "geometry_python_deep_bytes": 139806
+  },
+  "workloads": [
+    {
+      "symbols": 1,
+      "candidate_dispatch": "one Polars batch",
+      "baseline_dispatch": "1 sequential single-symbol calls",
+      "state_rows": 66,
+      "state_dataframe_estimated_bytes": 3504,
+      "coverage_keys_estimated_bytes": 864,
+      "current_output_rows": 13,
+      "snapshot_replacement": {
+        "n": 25,
+        "wall_ms": {
+          "median": 118.38875012472272,
+          "min": 99.87904201261699,
+          "max": 144.0354159567505,
+          "p95": 129.59074997343123
+        },
+        "cpu_ms": {
+          "median": 265.42899999999923,
+          "min": 196.69099999999952,
+          "max": 327.4659999999994,
+          "p95": 322.82299999999964
+        }
+      },
+      "full_library_rebuild": {
+        "n": 5,
+        "wall_ms": {
+          "median": 633.8721658103168,
+          "min": 611.0634168144315,
+          "max": 678.233667043969,
+          "p95": null
+        },
+        "cpu_ms": {
+          "median": 1149.3160000000007,
+          "min": 979.9760000000006,
+          "max": 1182.2850000000003,
+          "p95": null
+        }
+      },
+      "focused_current_full_minutes": {
+        "n": 5,
+        "wall_ms": {
+          "median": 22.628959035500884,
+          "min": 21.824041148647666,
+          "max": 23.156833136454225,
+          "p95": null
+        },
+        "cpu_ms": {
+          "median": 105.58500000000137,
+          "min": 103.06900000000141,
+          "max": 111.16599999999721,
+          "p95": null
+        }
+      },
+      "new_minute": {
+        "n": 20,
+        "wall_ms": {
+          "median": 211.66656306013465,
+          "min": 166.44775005988777,
+          "max": 236.31637496873736,
+          "p95": 236.31637496873736
+        },
+        "cpu_ms": {
+          "median": 373.8254999999988,
+          "min": 280.20599999999973,
+          "max": 449.660999999999,
+          "p95": 449.660999999999
+        }
+      },
+      "older_hour_restoration": {
+        "timing": {
+          "wall_ms": 174.8815830796957,
+          "cpu_ms": 405.4339999999996
+        },
+        "source_minute_rows": 60,
+        "source_estimated_bytes": 3240
+      },
+      "hour_rollover": {
+        "timing": {
+          "wall_ms": 118.92420914955437,
+          "cpu_ms": 255.64899999999824
+        },
+        "input_rows": 32,
+        "input_minute_rows": 1,
+        "input_estimated_bytes": 1666,
+        "fixture_archive_rebuild_one_symbol": {
+          "wall_ms": 202.54658395424485,
+          "cpu_ms": 386.3640000000004
+        }
+      }
+    }
+  ],
+  "definitions": {
+    "timings": "Milliseconds per whole symbol batch, wall and process CPU; preparation and correctness assertions excluded from update timers. Cached geometry lookup/invalidation and source validation included in candidate calls.",
+    "baseline": "Public library rebuilds all historical configured rows then filters the 13 current rows. Focused comparator scans the same year of source minutes but emits only 13 current rows. Both stream separate symbol calls to avoid allocating 100 year copies; candidate batches symbols together.",
+    "memory": "DataFrame estimated_size reports visible data buffers; Python deep size estimates active geometry including segment lists. Process high-water RSS includes fixtures, Polars allocator, oracle and all benchmark phases; it is not candidate-only peak memory.",
+    "coverage": "Fixture archive declared complete including empty trade intervals. Missing row checks use supplied key manifest, never dense-grid inference. Through watermark assertion is caller-owned.",
+    "rollover": "Caller precomputed closed HTF archive is an input. Its cold creation is timed separately. Rollover input is selected outside timer as a simulated source retrieval; measured hydration includes fresh geometry, seed selection, construction and calculate. No database/network cost.",
+    "classification": "Not timed or implemented; predecessor classification context is outside this OHLCV experiment.",
+    "p95": "Nearest-rank-style observed percentile only for n>=20; null otherwise. These are descriptive microbenchmarks, not capacity guarantees."
+  },
+  "process_high_water_rss_bytes": 417595392
+}
