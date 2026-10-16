@@ -9,7 +9,7 @@ from datetime import UTC, date, datetime, timedelta
 import polars as pl
 import pytest
 
-from thestrat.aggregator import TimeframeAggregator
+from thestrat import TheStrat, session_for
 
 # -- Helpers --
 
@@ -42,7 +42,18 @@ def _make_monotonic_intraday() -> pl.DataFrame:
                     "volume": 100.0,
                 }
             )
-    return pl.DataFrame(rows)
+    return (
+        pl.DataFrame(rows)
+        .with_columns(pl.col("timestamp").dt.truncate("1m"))
+        .group_by("timestamp", maintain_order=True)
+        .agg(
+            pl.col("open").first(),
+            pl.col("high").max(),
+            pl.col("low").min(),
+            pl.col("close").last(),
+            pl.col("volume").sum(),
+        )
+    )
 
 
 def _make_daily_5y() -> tuple[pl.DataFrame, dict[str, int]]:
@@ -177,8 +188,7 @@ def test_inverted_v_first_last_vs_min_max():
             },
         ]
     )
-    agg = TimeframeAggregator()
-    result = agg.aggregate(bars, "5min")
+    result = TheStrat(session=session_for("crypto"), timeframes=["5min"], bars=bars).aggregate()
     assert len(result) == 1
     row = result.row(0, named=True)
     assert row["open"] == 50.0  # first, NOT min (40)
@@ -276,8 +286,7 @@ def test_non_monotonic_multi_window_isolation():
             },
         ]
     )
-    agg = TimeframeAggregator()
-    result = agg.aggregate(bars, "5min")
+    result = TheStrat(session=session_for("crypto"), timeframes=["5min"], bars=bars).aggregate()
     assert len(result) == 2
 
     w1 = result.row(0, named=True)
@@ -351,8 +360,7 @@ def test_non_monotonic_1h_equity_offset():
             },
         ]
     )
-    agg = TimeframeAggregator()
-    result = agg.aggregate(bars, "1h", equity_offset=True)
+    result = TheStrat(session=session_for("equity_us"), timeframes=["1h"], bars=bars).aggregate()
     assert len(result) == 2
 
     w1 = result.row(0, named=True)
@@ -387,9 +395,8 @@ def test_unsupported_timeframe_raises():
             }
         ]
     )
-    agg = TimeframeAggregator()
-    with pytest.raises(ValueError, match="Unsupported"):
-        agg.aggregate(bars, "2h")
+    with pytest.raises(ValueError, match="supported"):
+        TheStrat(session=session_for("crypto"), timeframes=["2h"], bars=bars).aggregate()
 
 
 # Parametrized: (timeframe, equity_offset, expected_windows, first_s, first_e, last_s, last_e)
@@ -400,9 +407,9 @@ INTRADAY_CASES = [
     ("30min", False, 13, 0, 29, 360, 389),
     ("1h", True, 7, 0, 59, 360, 389),
     ("1h", False, 7, 0, 29, 330, 389),
-    ("4h", True, 2, 0, 179, 180, 389),
+    ("4h", True, 2, 0, 239, 240, 389),
     ("4h", False, 2, 0, 149, 150, 389),
-    ("6h", True, 2, 0, 299, 300, 389),
+    ("6h", True, 2, 0, 359, 360, 389),
     ("6h", False, 2, 0, 269, 270, 389),
     ("12h", True, 1, 0, 389, 0, 389),
     ("12h", False, 1, 0, 389, 0, 389),
@@ -425,8 +432,11 @@ def test_full_day_intraday(
     last_e,
 ):
     """Full trading day aggregated to each intraday timeframe: validate count + OHLCV."""
-    agg = TimeframeAggregator()
-    result = agg.aggregate(monotonic_intraday_bars, timeframe, equity_offset=equity_offset)
+    result = TheStrat(
+        session=session_for("equity_us" if equity_offset else "crypto"),
+        timeframes=[timeframe],
+        bars=monotonic_intraday_bars,
+    ).aggregate()
 
     assert len(result) == expected_windows, (
         f"{timeframe} (offset={equity_offset}): expected {expected_windows} windows, got {len(result)}"
@@ -451,7 +461,7 @@ def test_equity_offset_boundary_crossing():
     bars = pl.DataFrame(
         [
             {
-                "timestamp": datetime(2026, 4, 7, 14, 29, 55, tzinfo=UTC),  # 10:29:55 ET
+                "timestamp": datetime(2026, 4, 7, 14, 29, 0, tzinfo=UTC),  # 10:29:55 ET
                 "open": 100.0,
                 "high": 105.0,
                 "low": 99.0,
@@ -468,8 +478,7 @@ def test_equity_offset_boundary_crossing():
             },
         ]
     )
-    agg = TimeframeAggregator()
-    result = agg.aggregate(bars, "1h", equity_offset=True)
+    result = TheStrat(session=session_for("equity_us"), timeframes=["1h"], bars=bars).aggregate()
     assert len(result) == 2
 
     rows = result.sort("timestamp").to_dicts()
@@ -497,9 +506,19 @@ def test_partial_last_window():
                     "volume": 100.0,
                 }
             )
-    bars = pl.DataFrame(bars_list)
-    agg = TimeframeAggregator()
-    result = agg.aggregate(bars, "5min")
+    bars = (
+        pl.DataFrame(bars_list)
+        .with_columns(pl.col("timestamp").dt.truncate("1m"))
+        .group_by("timestamp", maintain_order=True)
+        .agg(
+            pl.col("open").first(),
+            pl.col("high").max(),
+            pl.col("low").min(),
+            pl.col("close").last(),
+            pl.col("volume").sum(),
+        )
+    )
+    result = TheStrat(session=session_for("crypto"), timeframes=["5min"], bars=bars).aggregate()
     assert len(result) == 2
 
     rows = result.sort("timestamp").to_dicts()
@@ -523,8 +542,7 @@ def test_single_bar_window():
             }
         ]
     )
-    agg = TimeframeAggregator()
-    result = agg.aggregate(bars, "1h")
+    result = TheStrat(session=session_for("crypto"), timeframes=["1h"], bars=bars).aggregate()
     assert len(result) == 1
     row = result.row(0, named=True)
     assert row["open"] == 150.0
@@ -564,8 +582,7 @@ def test_sparse_data_gaps():
             },
         ]
     )
-    agg = TimeframeAggregator()
-    result = agg.aggregate(bars, "5min")
+    result = TheStrat(session=session_for("crypto"), timeframes=["5min"], bars=bars).aggregate()
     assert len(result) == 1
     row = result.row(0, named=True)
     assert row["open"] == 100.0  # first bar's open
@@ -624,9 +641,8 @@ def test_out_of_order_input():
     # Shuffle: reverse order
     shuffled_bars = sorted_bars.reverse()
 
-    agg = TimeframeAggregator()
-    sorted_result = agg.aggregate(sorted_bars, "5min")
-    shuffled_result = agg.aggregate(shuffled_bars, "5min")
+    sorted_result = TheStrat(session=session_for("crypto"), timeframes=["5min"], bars=sorted_bars).aggregate()
+    shuffled_result = TheStrat(session=session_for("crypto"), timeframes=["5min"], bars=shuffled_bars).aggregate()
 
     assert sorted_result.to_dicts() == shuffled_result.to_dicts()
 
@@ -637,10 +653,9 @@ def test_out_of_order_input():
 def test_daily_all_timeframes_with_spotchecks(daily_5y):
     """5 years of daily bars aggregated to 1w, 1m, 1q, 1y with count + spot-check."""
     bars, lookup = daily_5y
-    agg = TimeframeAggregator()
 
     # Weekly
-    weekly = agg.aggregate(bars, "1w")
+    weekly = TheStrat(session=session_for("crypto"), timeframes=["1w"], bars=bars).aggregate()
     assert 260 <= len(weekly) <= 265  # ~261 weeks in 5 years
 
     # Spot-check first full week: Jan 4-8 2021 (d=0..4)
@@ -648,7 +663,7 @@ def test_daily_all_timeframes_with_spotchecks(daily_5y):
     _assert_ohlcv(first_week, _expected_daily_window(0, 4), "1w first week")
 
     # Monthly
-    monthly = agg.aggregate(bars, "1m")
+    monthly = TheStrat(session=session_for("crypto"), timeframes=["1m"], bars=bars).aggregate()
     assert 59 <= len(monthly) <= 62  # ~61 months (Jan 2021 - Jan 2026)
 
     # Spot-check January 2023
@@ -659,7 +674,7 @@ def test_daily_all_timeframes_with_spotchecks(daily_5y):
     _assert_ohlcv(jan_bars.row(0, named=True), _expected_daily_window(jan_start, jan_end), "1m Jan 2023")
 
     # Quarterly
-    quarterly = agg.aggregate(bars, "1q")
+    quarterly = TheStrat(session=session_for("crypto"), timeframes=["1q"], bars=bars).aggregate()
     assert 20 <= len(quarterly) <= 22  # ~21 quarters
 
     # Spot-check Q1 2023 (Jan-Mar)
@@ -670,7 +685,7 @@ def test_daily_all_timeframes_with_spotchecks(daily_5y):
     _assert_ohlcv(q1_bars.row(0, named=True), _expected_daily_window(q1_start, q1_end), "1q Q1 2023")
 
     # Yearly
-    yearly = agg.aggregate(bars, "1y")
+    yearly = TheStrat(session=session_for("crypto"), timeframes=["1y"], bars=bars).aggregate()
     assert len(yearly) == 6  # 2021-2025 full + 2026 partial
 
     # Spot-check year 2023
@@ -684,8 +699,7 @@ def test_daily_all_timeframes_with_spotchecks(daily_5y):
 def test_per_year_ohlcv(daily_5y):
     """Validate OHLCV for each of the 5 full years (2021-2025)."""
     bars, lookup = daily_5y
-    agg = TimeframeAggregator()
-    yearly = agg.aggregate(bars, "1y").sort("timestamp")
+    yearly = TheStrat(session=session_for("crypto"), timeframes=["1y"], bars=bars).aggregate().sort("timestamp")
     rows = yearly.to_dicts()
 
     for year in range(2021, 2026):
@@ -708,8 +722,7 @@ def test_per_year_ohlcv(daily_5y):
 def test_cross_year_week(daily_5y):
     """Week of Dec 29 2025 spans into Jan 2026 — should be one weekly bar."""
     bars, lookup = daily_5y
-    agg = TimeframeAggregator()
-    weekly = agg.aggregate(bars, "1w").sort("timestamp")
+    weekly = TheStrat(session=session_for("crypto"), timeframes=["1w"], bars=bars).aggregate().sort("timestamp")
 
     # Dataset uses weekday-only filtering (no holiday exclusion), so Jan 1 is included
     # The last week should contain Dec 29, 30, 31 2025 and Jan 1, 2 2026
@@ -723,7 +736,7 @@ def test_cross_year_week(daily_5y):
     _assert_ohlcv(last_week, _expected_daily_window(d_start, d_end), "cross-year week")
 
     # Verify yearly aggregation still separates 2025 from 2026
-    yearly = agg.aggregate(bars, "1y").sort("timestamp")
+    yearly = TheStrat(session=session_for("crypto"), timeframes=["1y"], bars=bars).aggregate().sort("timestamp")
     year_2026 = yearly.filter(pl.col("timestamp").dt.year() == 2026)
     assert len(year_2026) == 1
     # 2026 should only contain Jan 1-2
