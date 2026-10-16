@@ -294,7 +294,7 @@ def test_aggregate_for_instrument_convenience():
 
 
 # ---------------------------------------------------------------------------
-# Naive timestamps (the StratBacktester DuckDB case)
+# Naive timestamps are interpreted as UTC.
 # ---------------------------------------------------------------------------
 
 

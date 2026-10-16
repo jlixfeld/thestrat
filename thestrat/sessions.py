@@ -12,10 +12,8 @@ day boundary. Hour-and-above buckets (1h, 4h, 6h, 12h, 1d, 1w, 1m, 1q,
 Conventions used here come from the Strat methodology and standard
 US market practice:
 
-- **EQUITY_US**: 9:30 ET — the regular session open. Per the
-  StratPlaybookMCP "Bottom of the Hour" concept, hourly buckets at
-  9:30 / 10:30 / ... are preferred because news + open both happen
-  at :30.
+- **EQUITY_US**: 9:30 ET — the regular session open, with hourly
+  buckets at 9:30 / 10:30 / ... .
 - **FUTURES_CME**: 18:00 ET — Globex Sunday open. Each CME futures
   trading day runs ~Sunday 18:00 ET → Friday 17:00 ET.
 - **CRYPTO**: 00:00 UTC — 24/7 markets, no real session.

@@ -169,3 +169,6 @@ scratch_*.py
 # Test files (only allow in /tests/ directory)
 test_*.py
 !/tests/test_*.py
+
+# Local workflow agreement
+.yapstack/plans/
