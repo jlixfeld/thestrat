@@ -1,0 +1,13 @@
+# TheStrat
+
+> A Polars library for explicit OHLCV aggregation, Strat bar classification and session-aware window geometry.
+
+## Library documentation
+
+- [API reference](docs/api.md): Public signatures, frame schemas, configuration and validation.
+- [Calculation and state behavior](docs/behavior.md): Snapshot replacement, classifications, sessions and caller responsibilities.
+- [Executable examples](README.md): Step-by-step usage with checked outputs for each operation.
+
+## Optional
+
+- [Contributor instructions](AGENTS.md): Repository development and verification guidance for agents changing this library.

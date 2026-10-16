@@ -98,3 +98,31 @@ def test_readme_steps_execute_and_every_output_matches():
     previous_four_hour = windows.row(3, named=True)
     assert previous_four_hour["window_start"] == datetime(2026, 1, 2, 18, 30, tzinfo=timezone.utc)
     assert previous_four_hour["window_end"] == datetime(2026, 1, 2, 21, tzinfo=timezone.utc)
+
+
+def test_agent_documentation_index_is_discoverable_and_links_resolve():
+    root = Path(__file__).parents[1].resolve()
+    readme = (root / "README.md").read_text()
+    assert re.search(r"\[Agent documentation\]\(llms\.txt\)", readme)
+    index = (root / "llms.txt").read_text()
+    destinations = re.findall(r"\[[^\]]+\]\(([^)]+)\)", index)
+    assert {"docs/api.md", "docs/behavior.md", "README.md"} <= set(destinations)
+    for destination in destinations:
+        assert not Path(destination).is_absolute(), "index links must use the same checkout"
+        resolved = (root / destination).resolve()
+        assert resolved.is_relative_to(root), "index links must stay within the repository"
+        assert resolved.is_file(), f"broken agent documentation link: {destination}"
+
+
+def test_readme_navigation_anchors_resolve():
+    readme = (Path(__file__).parents[1] / "README.md").read_text()
+    # Fenced examples can contain comments; only prose headings create anchors.
+    prose = re.sub(r"```.*?```", "", readme, flags=re.S)
+    anchors = set()
+    for heading in re.findall(r"^#{1,6} (.+)$", prose, re.M):
+        anchor = re.sub(r"[^\w\- ]", "", heading.lower()).replace(" ", "-")
+        anchors.add(anchor)
+    destinations = re.findall(r"\[[^\]]+\]\(#([^)]+)\)", prose)
+    assert destinations, "README should provide section navigation"
+    for destination in destinations:
+        assert destination in anchors, f"broken README section link: #{destination}"
