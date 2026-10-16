@@ -7,10 +7,12 @@ from typing import Literal, cast
 import polars as pl
 
 from thestrat.classifier import Classifier
+from thestrat.coverage import SourceCoverage
 from thestrat.frames import KEY, SCHEMA, normalize, targets
-from thestrat.sessions import Session, segments
+from thestrat.mixed import calculate_mixed
+from thestrat.sessions import Session
 from thestrat.types import DEFAULT_TIMEFRAMES, Timeframe
-from thestrat.windows import geometry, windows
+from thestrat.windows import WindowCache
 
 
 class InsufficientSourceDataError(ValueError):
@@ -31,14 +33,30 @@ class TheStrat:
         self.timeframes = targets(timeframes)
         self.bars = pl.DataFrame(schema=SCHEMA) if bars is None else bars
         self.classify = Classifier()
+        self._windows = WindowCache(session)
 
-    def aggregate(self, updates: pl.DataFrame | None = None, *, mode: Literal["snapshot"] = "snapshot") -> pl.DataFrame:
+    def aggregate(
+        self,
+        updates: pl.DataFrame | None = None,
+        *,
+        mode: Literal["snapshot"] = "snapshot",
+        coverage: SourceCoverage | None = None,
+        through: datetime | None = None,
+    ) -> pl.DataFrame:
         if mode == "delta":
             raise NotImplementedError("delta ingestion is not implemented")
         if mode != "snapshot":
             raise ValueError("mode must be snapshot")
+        if coverage is None and through is not None:
+            raise ValueError("through requires explicit SourceCoverage")
         current = normalize(self.bars)
         incoming = normalize(updates, updates=True) if updates is not None else pl.DataFrame(schema=SCHEMA)
+        if coverage is not None:
+            if through is None:
+                raise ValueError("mixed aggregation requires through")
+            candidate, output = calculate_mixed(current, incoming, coverage, through, self.timeframes, self._calendar())
+            self.bars = candidate
+            return output
         sources = current.filter(pl.col("timeframe") == "1min")
         summaries = current.filter(pl.col("timeframe") != "1min")
         # Existing sources, rather than newly submitted updates, establish whether a
@@ -54,8 +72,9 @@ class TheStrat:
                 cast(datetime, sources["timestamp"].min()),
                 cast(datetime, sources["timestamp"].max()) + timedelta(minutes=1),
             )
-            boundaries = windows(self.session, start, end, self.timeframes)
-            schedule = segments(self.session, start, end)
+            boundaries, schedule = self._calendar().intervals(
+                start, end, tuple(tf for tf in self.timeframes if tf != "1min")
+            )
             eligible_intervals = [
                 (row["segment_open"], row["segment_open"], row["segment_close"])
                 for row in schedule.iter_rows(named=True)
@@ -98,6 +117,12 @@ class TheStrat:
         self.bars = calculated
         return calculated.filter(pl.col("timeframe").is_in(list(self.timeframes)))
 
+    def _calendar(self) -> WindowCache:
+        identity = (self.session.timezone, self.session.anchor_minutes, id(self.session.schedule))
+        if self._windows.identity != identity:
+            self._windows = WindowCache(self.session)
+        return self._windows
+
     @staticmethod
     def _mapped(sources: pl.DataFrame, intervals: list[tuple[datetime, datetime, datetime]]) -> pl.DataFrame:
         if not intervals or sources.is_empty():
@@ -126,7 +151,7 @@ class TheStrat:
                 cast(datetime, frame["timestamp"].min()),
                 cast(datetime, frame["timestamp"].max()) + timedelta(minutes=1),
             )
-            boundaries = windows(self.session, start, end, self.timeframes)
+            boundaries, _ = self._calendar().intervals(start, end, tuple(tf for tf in self.timeframes if tf != "1min"))
             keys = set()
             for tf in self.timeframes:
                 if tf != "1min":
@@ -159,4 +184,4 @@ class TheStrat:
         for name, value in (("before", before), ("after", after)):
             if isinstance(value, bool) or not isinstance(value, int) or value < 0:
                 raise ValueError(f"{name} must be a nonnegative integer")
-        return geometry(self.session, timestamp, selected, before, after)
+        return self._calendar().geometry(timestamp, selected, before, after)

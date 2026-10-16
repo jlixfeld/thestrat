@@ -30,10 +30,14 @@ def targets(values: Sequence[str]) -> tuple[str, ...]:
     return result
 
 
-def normalize(frame: pl.DataFrame, *, metadata: bool = False, updates: bool = False) -> pl.DataFrame:
+def normalize(
+    frame: pl.DataFrame, *, metadata: bool = False, updates: bool = False, classification: bool = False
+) -> pl.DataFrame:
     if not isinstance(frame, pl.DataFrame):
         raise ValueError("bars must be a Polars DataFrame")
-    missing = set(SCHEMA) - {"symbol", "timeframe"} - set(frame.columns)
+    schema = {k: v for k, v in SCHEMA.items() if not classification or k != "volume"}
+    prices = [name for name in PRICES if not classification or name != "volume"]
+    missing = set(schema) - {"symbol", "timeframe"} - set(frame.columns)
     if missing:
         raise ValueError(f"missing required columns: {sorted(missing)}")
     if "symbol" not in frame.columns:
@@ -46,7 +50,7 @@ def normalize(frame: pl.DataFrame, *, metadata: bool = False, updates: bool = Fa
         raise ValueError("timeframe must be String")
     if not isinstance(frame.schema["timestamp"], pl.Datetime):
         raise ValueError("timestamp must be Datetime")
-    for name in PRICES:
+    for name in prices:
         if not frame.schema[name].is_numeric():
             raise ValueError(f"{name} must be numeric")
     timestamp = pl.col("timestamp")
@@ -62,17 +66,17 @@ def normalize(frame: pl.DataFrame, *, metadata: bool = False, updates: bool = Fa
     frame = frame.with_columns(
         timestamp.cast(SCHEMA["timestamp"]),
         pl.col("symbol").cast(pl.String),
-        *(pl.col(n).cast(pl.Float64) for n in PRICES),
+        *(pl.col(n).cast(pl.Float64) for n in prices),
     )
-    if frame.select(pl.any_horizontal(*(pl.col(n).is_null() for n in SCHEMA if n != "symbol")).any()).item():
+    if frame.select(pl.any_horizontal(*(pl.col(n).is_null() for n in schema if n != "symbol")).any()).item():
         raise ValueError("required bar values must not be null")
-    if frame.select(pl.any_horizontal(*(~pl.col(n).is_finite() for n in PRICES)).any()).item():
+    if frame.select(pl.any_horizontal(*(~pl.col(n).is_finite() for n in prices)).any()).item():
         raise ValueError("OHLCV values must be finite")
-    invalid = (
-        (pl.col("volume") < 0)
-        | (pl.col("low") > pl.min_horizontal("open", "close"))
-        | (pl.col("high") < pl.max_horizontal("open", "close"))
+    invalid = (pl.col("low") > pl.min_horizontal("open", "close")) | (
+        pl.col("high") < pl.max_horizontal("open", "close")
     )
+    if not classification:
+        invalid = invalid | (pl.col("volume") < 0)
     if frame.select(invalid.any()).item():
         raise ValueError("invalid OHLC range or negative volume")
     if frame.filter(~pl.col("timeframe").is_in([str(t) for t in DEFAULT_TIMEFRAMES])).height:

@@ -67,7 +67,8 @@ class CalendarSchedule:
                     (cast(pd.Timestamp, row["break_end"]).to_pydatetime(), closed),
                 ]
             for left, right in segments:
-                if left < end and right > start:
+                left, right = max(opened, left), min(closed, right)
+                if left < right and left < end and right > start:
                     rows.append((opened, closed, left, right))
         return pl.DataFrame(rows, schema=SCHEDULE_SCHEMA, orient="row").sort("session_open", "segment_open")
 

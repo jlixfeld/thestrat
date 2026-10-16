@@ -1,6 +1,10 @@
 # Mixed-timeframe prototype
 
-The prototype reconstructs current OHLCV from a small complete mix of minute and higher-timeframe bars. It is isolated under `experiments/`; the public `TheStrat` API is unchanged.
+For the current public API, see [supported-path measurements](supported_mixed_report.md).
+
+Historical prototype evidence: these measurements predate the supported `TheStrat.aggregate(coverage=..., through=...)` path. The public calculation is documented in `../docs/api.md`; these files remain experimental evidence and are not runtime dependencies.
+
+The prototype reconstructs current OHLCV from a small complete mix of minute and higher-timeframe bars. It is isolated under `experiments/`; the public `TheStrat` API was unchanged by that historical prototype.
 
 The result supports bounded working state, but **does not establish a single-symbol speed advantage over a focused full-minute calculation**. In this run, warm mixed calculation took 29.3 ms versus 24.2 ms for the focused comparator. Updating one new minute took 27.8 ms for mixed state versus 30.1 ms for the focused calculation; these small differences should not be treated as a capacity guarantee.
 

@@ -58,6 +58,8 @@ def test_readme_steps_execute_and_every_output_matches():
         "revised_preview",
         "updated_preview",
         "updated_label_preview",
+        "mixed_preview",
+        "price_only",
         "color",
         "windows",
     ]
@@ -89,6 +91,9 @@ def test_readme_steps_execute_and_every_output_matches():
     labels = namespace["updated_label_preview"]
     assert labels.filter(pl.col("timeframe") == "1min")[0, "in_force"] is True
     assert labels.filter(pl.col("timeframe") == "4h")[0, "in_force"] is None
+    assert namespace["mixed_preview"]["volume"].to_list() == [280.0, 130.0]
+    assert namespace["mixed"].bars.height == 3
+    assert "volume" not in namespace["price_only"].columns
     assert namespace["color"] == Color.GREEN
     windows = namespace["windows"]
     assert windows.height == 12

@@ -10,7 +10,8 @@ TheStrat(*, session: Session,
          bars: pl.DataFrame | None = None)
 
 aggregate(updates: pl.DataFrame | None = None,
-          *, mode: Literal["snapshot"] = "snapshot") -> pl.DataFrame
+          *, mode: Literal["snapshot"] = "snapshot",
+          coverage: SourceCoverage | None = None, through: datetime | None = None) -> pl.DataFrame
 classify(bars: pl.DataFrame, *, fields: Sequence[Field] | None = None) -> pl.DataFrame
 window(timestamp: datetime | Sequence[datetime], *,
        timeframes: Sequence[Timeframe | str] | None = None,
@@ -19,7 +20,7 @@ window(timestamp: datetime | Sequence[datetime], *,
 
 `classify` is a callable internal component with a `scalar` component, not another public top-level class. `Field` selects `scenario`, `color`, `shape` or `in_force`.
 
-`bars` is an ordinary assignable DataFrame. Assigning or filtering it performs no calculation. Operations validate the frame when consuming it. `aggregate()` calculates the working source minutes, stores source plus aggregate rows in `bars`, and returns only configured timeframe rows. `aggregate(updates)` first applies complete source-minute snapshots by key. An identical repeated snapshot contributes volume once. An error leaves the instance's working frame unchanged.
+`bars` is an ordinary assignable DataFrame. Assigning or filtering it performs no calculation. Operations validate the frame when consuming it. Classification validates OHLC, timestamps and grouping; optional volume is unused metadata, not a calculation input. `aggregate()` without coverage calculates the working source minutes, stores source plus aggregate rows in `bars`, and returns only configured timeframe rows. `aggregate(updates)` first applies complete source-minute snapshots by key. An identical repeated snapshot contributes volume once. An error leaves the instance's working frame unchanged.
 
 `classify(frame)` returns the same bar rows with requested classification columns, ordered by symbol, timeframe and timestamp. It neither aggregates nor assigns the instance's working frame. Caller metadata is preserved. Aggregation returns standard bar columns and drops metadata; callers manage separate source-freshness and instrument metadata themselves.
 
@@ -33,13 +34,13 @@ Configured timeframes are nonempty, unique members of `1min, 5min, 15min, 30min,
 | `timestamp` | Non-null Datetime containing source interval start or aggregate window start. Aware values normalize to UTC; naive values are interpreted as UTC. Output uses UTC microseconds. |
 | `timeframe` | Supported timeframe string. Omitted on a source-only input means `1min`. Updates must be `1min`. Mixed minute/aggregate state must identify timeframes. |
 | `open`, `high`, `low`, `close` | Finite numeric prices, normalized Float64; `low <= open,close <= high`. Negative prices are allowed. |
-| `volume` | Finite nonnegative numeric volume, normalized Float64. Fractional volume is preserved. |
+| `volume` | Aggregation requires finite nonnegative numeric volume, normalized Float64; fractional volume is preserved. Classification leaves this optional, unused metadata unchanged when present. |
 
 The working key is `(symbol, timeframe, timestamp)`; null symbol is a group. Supply at most one snapshot per key in an input frame. Replacement across calls is supported; duplicate cleanup and provider normalization belong to the caller. Source timestamps must be minute starts, with zero seconds/subseconds. Receipt and transmission times are not source interval identity.
 
 Frames must have a homogeneous session, instrument-label convention, price-adjustment basis and volume unit. Mixed symbols are automatic; sessions or price bases are not inferred from symbols. Typed empty input returns the documented empty schema after validation. Missing market minutes do not create synthetic rows.
 
-An aggregate-only seed can be classified. Updating its window requires the underlying source minutes. The library raises `InsufficientSourceDataError` when unavailable sources prevent accurate aggregation; it cannot prove missing coverage by looking for a trade in every minute. Callers must supply the full retained source set rather than a partial subset presented as complete. No source history survives secretly after caller pruning.
+An aggregate-only seed can be classified. In ordinary aggregation without coverage, updating its window requires the underlying source minutes. Mixed aggregation with explicit coverage can instead use complete compatible closed children; see [Mixed source coverage](#mixed-source-coverage). The library raises `InsufficientSourceDataError` when unavailable sources prevent accurate aggregation; it cannot prove missing coverage by looking for a trade in every minute. Callers must supply the full retained source set rather than a partial subset presented as complete. No source history survives secretly after caller pruning.
 
 ## Classification fields
 
@@ -68,7 +69,7 @@ Call `strat.classify.scalar(kind=..., ...)`. Each kind has a typed keyword-only 
 | `in_force` | OHLC prices as above, `reference_high`, `reference_low` | bool |
 | `bar` | `bar: BarDict`, optional `prior: BarDict` | `CurrentBar` |
 
-Reference high/low may describe a prior bar or explicit setup levels. `CurrentBar` preserves the bar keys and adds `scenario`, `color`, `shape` and `in_force`. Missing prior means null scenario/in-force, while color/shape still calculate. `BarDict` and `CurrentBar` are TypedDict types, not Pydantic models. The runtime validates supplied values.
+Reference high/low may describe a prior bar or explicit setup levels. `CurrentBar` preserves the bar keys and adds `scenario`, `color`, `shape` and `in_force`. Missing prior means null scenario/in-force, while color/shape still calculate. `BarDict` and `CurrentBar` are TypedDict types, not Pydantic models. Scalar whole-bar classification requires timestamp and OHLC; its volume key is optional unused metadata and is preserved only when supplied. The runtime validates supplied values.
 
 `Color`: green/red/neutral. `Scenario`: 1/2U/2D/3. `Shape`: hammer/shooter. These domain enums derive from StrEnum; DataFrame columns contain their string values.
 
@@ -114,10 +115,30 @@ Membership uses the eligible physical segments, including repeated daylight-savi
 
 Segments cover the full canonical period even for a query in the middle of a week, month, quarter or year. Calendar-period geometry uses session-open civil dates and configured local anchors, matching aggregation; for futures this can include a Sunday-opened session whose close falls on the following Monday. One-minute windows preserve physical UTC identity across a repeated local hour. Larger wall-clock timeframes merge repeated intervals under their earlier-fold label; the segment list preserves each eligible physical contribution.
 
-Batch queries share schedule fetches and canonical geometry for overlapping timeframe ranges within the call. Long-period completeness does not require generating a year of minute windows. There is no persistent geometry cache or source history. Window queries do not aggregate prices, change `bars`, schedule work, finalize bars, advance clocks or contact brokers.
+Batch queries share schedule fetches and canonical geometry for overlapping timeframe ranges within the call. Long-period completeness does not require generating a year of minute windows. A bounded instance-owned cache reuses canonical geometry and schedules across calls; it stores no source prices/history. Session timezone, anchor and schedule identity changes invalidate it. Timeframe/range keys keep distinct windows separate. Treat calendar rules as immutable during an instance lifetime; use a new instance after changing a schedule in place. Window queries do not aggregate prices, change `bars`, schedule work, finalize bars, advance clocks or contact brokers.
 
 ## Errors and extension
 
 Invalid fields, frames, values and configuration raise useful validation errors. `mode="delta"` raises `NotImplementedError` before state changes, including empty inputs; unknown modes are invalid arguments. `InsufficientSourceDataError` and `ScheduleRangeError` derive from ValueError. Native resource failures may still propagate.
 
 Future classification additions belong behind the existing components. Define inputs, formulas, output types, dependencies, nulls, predecessor context and scalar applicability; add expected-result, parity, grouping and performance checks. Explicitly document any change to default fields or whole-bar output. No signal engine, dynamic plugin registry, provider connection or scalar aggregation is provided.
+
+## Mixed source coverage
+
+```python
+SourceCoverage(intervals: pl.DataFrame, expected_keys: pl.DataFrame)
+aggregate(updates: pl.DataFrame | None = None, *, mode="snapshot",
+          coverage: SourceCoverage | None = None,
+          through: datetime | None = None) -> pl.DataFrame
+```
+
+With `coverage`, aggregation calculates only the configured windows containing `through`. `through` is an aware, eligible **source-minute start**, inclusive: coverage may extend up to `through + one minute`, exclusively. It is not a receipt timestamp. Without coverage, the existing full retained-minute aggregation behavior is unchanged; `through` requires coverage.
+
+`SourceCoverage` is a frozen declaration holding two independent DataFrames:
+
+- `intervals`: `symbol` (nullable String), `timeframe` (supported source grain), `start` and `end` (aware Datetime, normalized to UTC). Each nonempty half-open interval asserts that all trades at that grain are represented, including any no-trade portions. Overlapping declarations within a symbol/grain are rejected; adjacent declarations may jointly cover a window.
+- `expected_keys`: `symbol`, `timeframe`, `timestamp`, with unique full source keys. This manifest must exactly match the final source frame after snapshots. An absent expected row is missing data; an interval portion with no expected trade row is explicitly empty. New snapshot keys must already be listed. Declarations and manifests are not silently extended or reconstructed from filtered working state.
+
+Mixed `bars` remains the authoritative supplied source frame after validated minute snapshot replacement; derived rows are returned separately. Callers replace the complete coherent source frame and declaration for rollover or older corrections. Replacing a declaration is a new completeness assertion: the library cannot discover omitted trades from an apparently sparse frame. Stored grains may overlap, but each calculation selects a complete disjoint cover of compatible canonical source windows. Closed higher-timeframe inputs must fit wholly within their declaration and the requested window; a final higher-timeframe bar extending beyond `through` is rejected. Supplied overlapping representations must describe the same point-in-time prices and volume. An incoming minute correction overlapping a retained summary is rejected until the caller replaces the coherent source set. Failed calculations change neither working bars nor coverage frames.
+
+For example, a closed `5min` bar covering 09:30–09:35 plus source minutes at 09:35 and 09:36 can calculate the current `1h` and `5min` bars at 09:36. Declare `5min` coverage `[09:30,09:35)` and `1min` coverage `[09:35,09:37)` and list the three source keys independently. The hourly volume is the sum of all three source rows; current five-minute volume includes only the two source minutes. The README provides executable UTC inputs and outputs.

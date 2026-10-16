@@ -17,6 +17,7 @@ The source code is all rights reserved. Read the [license, community and support
 - [Aggregation](#aggregation)
 - [Classification](#classification)
 - [Snapshot updates](#snapshot-updates)
+- [Mixed source aggregation](#mixed-source-aggregation)
 - [Scalar classification](#scalar-classification)
 - [Window geometry](#window-geometry)
 - [State and ownership](#state-and-ownership)
@@ -233,6 +234,67 @@ updated_label_preview = updated_labels.filter(pl.col("timeframe").is_in(["1min",
 
 <!-- /output -->
 
+### Mixed source aggregation
+
+Supply closed higher-timeframe bars alongside complete minute snapshots when the full source-minute history is not retained. `SourceCoverage` states which source intervals are complete, including no-trade portions, and separately lists every expected source key. Dates in this example are UTC; the closed five-minute bar covers 09:30–09:35 Eastern.
+
+```python
+from thestrat import SourceCoverage
+
+closed = aggregated.filter(pl.col("timeframe") == "5min")
+later = pl.DataFrame({
+    "symbol": ["EXAMPLE", "EXAMPLE"],
+    "timeframe": ["1min", "1min"],
+    "timestamp": [start + timedelta(minutes=5), start + timedelta(minutes=6)],
+    "open": [104.0, 105.0], "high": [106.0, 107.0],
+    "low": [103.0, 104.0], "close": [105.0, 106.0], "volume": [60.0, 70.0],
+}).select(closed.columns)
+mixed_sources = pl.concat([closed, later])
+coverage = SourceCoverage(
+    intervals=pl.DataFrame({
+        "symbol": ["EXAMPLE", "EXAMPLE"], "timeframe": ["5min", "1min"],
+        "start": [start, start + timedelta(minutes=5)],
+        "end": [start + timedelta(minutes=5), start + timedelta(minutes=7)],
+    }),
+    expected_keys=mixed_sources.select("symbol", "timeframe", "timestamp"),
+)
+mixed = TheStrat(session=session_for("equity_us"), timeframes=["1h", "5min"], bars=mixed_sources)
+mixed_result = mixed.aggregate(coverage=coverage, through=start + timedelta(minutes=6))
+mixed_preview = mixed_result.select("timeframe", "timestamp", "open", "high", "low", "close", "volume")
+```
+
+<!-- output: mixed_preview -->
+
+| timeframe | timestamp (UTC) | open | high | low | close | volume |
+| --- | --- | --- | --- | --- | --- | --- |
+| 1h | 2026-01-05 14:30 | 100.0 | 107.0 | 99.0 | 106.0 | 280.0 |
+| 5min | 2026-01-05 14:35 | 104.0 | 107.0 | 103.0 | 106.0 | 130.0 |
+
+<!-- /output -->
+
+`mixed.bars` still contains the three supplied source rows. The calculated rows are returned separately, so they do not silently become additional source contributions. Each configured timeframe receives only its current window at `through`, an inclusive source-minute start. Coverage ends are exclusive. An expected source row that disappears raises an error; an explicitly covered no-trade interval remains empty. New snapshot keys must already be listed in the supplied manifest. Retain that manifest independently when filtering source data.
+
+Closed source windows must fit the required eligible segments. A final higher-timeframe bar extending into the future is rejected. A correction overlapping a retained summary requires a coherent replacement source set and declaration. Callers own retrieval, retention, rollover and archive repairs; the library selects compatible disjoint contributions using the configured session calendar. See [coverage and limits](docs/api.md#mixed-source-coverage).
+
+#### Classify without volume
+
+Classification uses OHLC, grouping and timestamps. It does not require or fabricate volume; supplied volume is preserved as unused metadata. Aggregation still requires numeric OHLCV.
+
+```python
+price_only = mixed.classify(mixed_result.drop("volume"), fields=["color"]).select(
+    "timeframe", "open", "close", "color",
+)
+```
+
+<!-- output: price_only -->
+
+| timeframe | open | close | color |
+| --- | --- | --- | --- |
+| 1h | 100.0 | 106.0 | green |
+| 5min | 104.0 | 106.0 | green |
+
+<!-- /output -->
+
 ### Scalar classification
 
 #### Classify a scalar
@@ -287,9 +349,9 @@ windows = strat.window(
 
 ## State and ownership
 
-`strat.bars` initially stores the supplied frame. After `aggregate()`, it contains source minutes and calculated timeframe bars. Callers can filter it with Polars and assign the result back. Assignment alone does no calculation. `aggregate` applies snapshots and calculates bars; `classify` returns labels without aggregating or changing the instance's frame.
+`strat.bars` initially stores the supplied frame. After ordinary `aggregate()`, it contains source minutes and calculated timeframe bars. With `coverage=...`, it contains only supplied source rows after snapshots; current calculated rows are returned separately. Callers can filter it with Polars and assign the result back. Assignment alone does no calculation. `aggregate` applies snapshots and calculates bars; `classify` returns labels without aggregating or changing the instance's frame.
 
-Callers normalize provider fields, units and timestamps, sanitize duplicates, and choose retention. Updating an aggregate-only seed requires the source minutes behind that window; classification of the summary itself is valid. Do not prune those source minutes and expect later corrections to reconstruct them.
+Callers normalize provider fields, units and timestamps, sanitize duplicates, and choose retention. Ordinary minute aggregation requires underlying source minutes to update a retained aggregate-only window. Mixed aggregation requires an explicitly complete compatible source cover. Classification of a summary itself is valid. Do not prune those source minutes and expect later corrections to reconstruct them.
 
 Only snapshot updates are implemented. Passing `mode="delta"` raises `NotImplementedError` before state changes. Invalid inputs still raise clear validation errors.
 

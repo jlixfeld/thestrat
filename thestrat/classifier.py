@@ -71,7 +71,7 @@ def _force(o: float, h: float, low: float, c: float, rh: float, rl: float) -> bo
 
 
 def _bar_values(bar: dict) -> dict:
-    required = {"timestamp", "open", "high", "low", "close", "volume"}
+    required = {"timestamp", "open", "high", "low", "close"}
     if not isinstance(bar, dict) or required - bar.keys():
         raise ValueError("bar missing required values")
     timestamp = bar["timestamp"]
@@ -91,16 +91,14 @@ def _bar_values(bar: dict) -> dict:
             "high": bar["high"],
             "low": bar["low"],
             "close_price": bar["close"],
-            "volume": bar["volume"],
         }
     )
-    if bar["volume"] < 0:
-        raise ValueError("volume must be nonnegative")
     return {
         "symbol": symbol,
         "timestamp": timestamp,
         "timeframe": timeframe,
-        **{name: float(bar[name]) for name in ("open", "high", "low", "close", "volume")},
+        **{name: float(bar[name]) for name in ("open", "high", "low", "close")},
+        **({"volume": bar["volume"]} if "volume" in bar else {}),
     }
 
 
@@ -144,7 +142,7 @@ class ScalarClassifier:
                 prior = _bar_values(prior)
             o, h, low, c = (bar[n] for n in ("open", "high", "low", "close"))
             return {
-                **{k: bar[k] for k in ("symbol", "timestamp", "timeframe", "open", "high", "low", "close", "volume")},
+                **bar,
                 "color": _color(o, c),
                 "shape": _shape(o, h, low, c),
                 "scenario": None if prior is None else _scenario(h, low, prior["high"], prior["low"]),
@@ -173,7 +171,9 @@ class Classifier:
         selected = _FIELDS if fields is None else tuple(fields)
         if isinstance(fields, str) or len(set(selected)) != len(selected) or any(f not in _FIELDS for f in selected):
             raise ValueError("fields must contain unique supported field names")
-        df = normalize(bars, metadata=True).sort("symbol", "timeframe", "timestamp", nulls_last=False)
+        df = normalize(bars, metadata=True, classification=True).sort(
+            "symbol", "timeframe", "timestamp", nulls_last=False
+        )
         group = ["symbol", "timeframe"]
         ph = pl.col("high").shift(1).over(group)
         previous_low = pl.col("low").shift(1).over(group)

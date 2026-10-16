@@ -150,7 +150,13 @@ def _canonical(
 
 
 def geometry(
-    session: Session, timestamp: datetime | Sequence[datetime], timeframes: tuple[str, ...], before: int, after: int
+    session: Session,
+    timestamp: datetime | Sequence[datetime],
+    timeframes: tuple[str, ...],
+    before: int,
+    after: int,
+    *,
+    cache: "WindowCache | None" = None,
 ) -> pl.DataFrame:
     inputs = (
         [timestamp]
@@ -175,7 +181,7 @@ def geometry(
     pending = {(value, tf) for value in inputs for tf in timeframes}
     results = {}
     schedule_cache = {}
-    geometry_cache = {}
+    geometry_cache = {} if cache is None else cache.lookup
     while True:
         requests = {}
         for value, tf in pending:
@@ -198,12 +204,18 @@ def geometry(
             if (fetch_left, fetch_right) in schedule_cache:
                 schedules.append(schedule_cache[fetch_left, fetch_right])
                 continue
-            fetched = segments(session, fetch_left, fetch_right)
+            fetched = (
+                segments(session, fetch_left, fetch_right) if cache is None else cache.schedule(fetch_left, fetch_right)
+            )
             if not fetched.is_empty():
                 full_left = min(row[0] for row in fetched.select("session_open").iter_rows())
                 full_right = max(row[0] for row in fetched.select("session_close").iter_rows())
                 if full_left < max(_shift(left, -2), lower) or full_right > min(_shift(right, 2), upper):
-                    fetched = segments(session, max(full_left, lower), min(full_right, upper))
+                    fetched = (
+                        segments(session, max(full_left, lower), min(full_right, upper))
+                        if cache is None
+                        else cache.schedule(max(full_left, lower), min(full_right, upper))
+                    )
             schedule_cache[fetch_left, fetch_right] = fetched
             schedules.append(fetched)
         schedule = pl.concat(schedules).unique().sort("session_open", "segment_open")
@@ -217,22 +229,22 @@ def geometry(
                 else:
                     merged.append((left, right))
             groups[tf] = merged
-        cache = {}
+        calculated = {}
         for tf, ranges in groups.items():
             for left, right in ranges:
                 if (tf, left, right) in geometry_cache:
-                    cache[tf, left, right] = geometry_cache[tf, left, right]
+                    calculated[tf, left, right] = geometry_cache[tf, left, right]
                     continue
                 subset = schedule.filter((pl.col("session_close") > left) & (pl.col("session_open") < right))
                 intervals = windows(session, left, right, (tf,), schedule=subset)[tf]
                 candidates = _canonical(intervals)
                 physical = sorted((a, b, i) for i, (_, pieces) in enumerate(candidates) for a, b in pieces)
-                cache[tf, left, right] = candidates, [a for a, _, _ in physical], physical
-                geometry_cache[tf, left, right] = cache[tf, left, right]
+                calculated[tf, left, right] = candidates, [a for a, _, _ in physical], physical
+                WindowCache._keep(geometry_cache, (tf, left, right), calculated[tf, left, right], 32)
         unresolved = set()
         for (value, tf), (request_left, request_right) in requests.items():
             left, right = next((a, b) for a, b in groups[tf] if a <= request_left and b >= request_right)
-            candidates, starts, physical = cache[tf, left, right]
+            candidates, starts, physical = calculated[tf, left, right]
             index = bisect_right(starts, value) - 1
             containing = physical[index][2] if index >= 0 and value < physical[index][1] else None
             if containing is not None:
@@ -268,3 +280,51 @@ def geometry(
             raise ScheduleRangeError("requested neighbors exceed the supported schedule range")
         pending = unresolved
         span *= 2
+
+
+class WindowCache:
+    """Bounded, instance-owned canonical geometry; never stores price/source rows."""
+
+    def __init__(self, session: Session):
+        self.session = session
+        self.identity = (session.timezone, session.anchor_minutes, id(session.schedule))
+        self.schedules: dict[tuple[datetime, datetime], pl.DataFrame] = {}
+        self.canonical: dict[tuple, list] = {}
+        self.lookup: dict[tuple, tuple] = {}
+
+    @staticmethod
+    def _keep(cache: dict, key, value, limit: int = 16):
+        if key not in cache and len(cache) >= limit:
+            del cache[next(iter(cache))]
+        cache[key] = value
+        return value
+
+    def schedule(self, start: datetime, end: datetime) -> pl.DataFrame:
+        for (left, right), frame in self.schedules.items():
+            if left <= start and end <= right:
+                return frame.filter((pl.col("segment_open") < end) & (pl.col("segment_close") > start))
+        return self._keep(self.schedules, (start, end), segments(self.session, start, end), 4)
+
+    def intervals(self, start: datetime, end: datetime, timeframes: tuple[str, ...]):
+        schedule = self.schedule(start, end)
+        return windows(self.session, start, end, timeframes, schedule=schedule), schedule
+
+    def source_windows(self, timeframe: str, start: datetime, end: datetime):
+        left, right = _query_bounds(self.session, start, end - timedelta(microseconds=1), timeframe)
+        key = (timeframe, left, right)
+        if key not in self.canonical:
+            schedule = self.schedule(left, right)
+            if not schedule.is_empty():
+                # A range may intersect only one piece of an overnight session.
+                # Source summaries describe the whole session, including pieces
+                # on the other side of midnight or a scheduled break.
+                full_left = min(left, min(row[0] for row in schedule.select("session_open").iter_rows()))
+                full_right = max(right, max(row[0] for row in schedule.select("session_close").iter_rows()))
+                if full_left < left or full_right > right:
+                    schedule = self.schedule(full_left, full_right)
+            values = _canonical(windows(self.session, left, right, (timeframe,), schedule=schedule)[timeframe])
+            self._keep(self.canonical, key, values)
+        return self.canonical[key]
+
+    def geometry(self, timestamp: datetime | Sequence[datetime], timeframes: tuple[str, ...], before=0, after=0):
+        return geometry(self.session, timestamp, timeframes, before, after, cache=self)

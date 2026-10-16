@@ -1,0 +1,391 @@
+{
+  "implementation": "TheStrat.aggregate(coverage=SourceCoverage(...), through=...)",
+  "environment": {
+    "python": "3.14.3",
+    "polars": "1.40.1",
+    "threads": 18,
+    "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+    "measurement_note": "Shared desktop; test/static-check processes overlapped the initial portion. No hardware isolation or production capacity claim."
+  },
+  "source_minutes_per_symbol": 97086,
+  "source_rows_per_symbol": 66,
+  "preparation_one_symbol": {
+    "generation": {
+      "wall_ms": 110.18283385783434,
+      "cpu_ms": 117.63900000000005
+    },
+    "archive_creation": {
+      "wall_ms": 166.3549169898033,
+      "cpu_ms": 400.80799999999994
+    },
+    "simulated_retrieval_and_bound_geometry": {
+      "wall_ms": 135.68212487734854,
+      "cpu_ms": 189.56299999999993
+    },
+    "focused_geometry": {
+      "wall_ms": 132.2289160452783,
+      "cpu_ms": 148.66299999999998
+    }
+  },
+  "definitions": {
+    "candidate": "Whole batch timings include normalization, independent manifest/coverage validation, closed canonical source planning, geometry lookup/reuse, Polars reductions and atomic source assignment. No prototype runtime used.",
+    "new_minute": "20 strictly advancing minute keys; caller creates extended exclusive intervals and final manifest before timing. No missing-row inference or automatic coverage extension.",
+    "baseline": "Public full-minute baseline emits historical rows before current selection. Streamed baselines execute one real call per normalized symbol, avoiding100 source-year copies. Focused comparator has cached supported geometry and calculates only13 current rows; source ingestion is excluded.",
+    "memory": "Polars estimated_size for caller source/coverage frames only; excludes internal cached geometry, allocator overhead and peak RSS. No isolated candidate peak-memory claim.",
+    "rollover": "Caller-owned archive creation and simulated bounded retrieval reported separately. Timed public hydration includes cold internal geometry and source planning. No database/network timing.",
+    "correctness": "Exact synthetic float equality checked outside timers for every candidate sample and comparator result. Source values use integer/quarter prices and integral volumes.",
+    "limits": "Synthetic homogeneous NYSE data; no classification or external I/O. Multi-symbol streamed comparisons are not equal-batching speed ratios; one equally batched10-symbol focused comparison is included. Desktop activity uncontrolled; n1 has no percentile meaning."
+  },
+  "workloads": [
+    {
+      "symbols": 1,
+      "cold_public_calculation": {
+        "wall_ms": 178.6781249102205,
+        "cpu_ms": 239.31199999999995
+      },
+      "source_rows": 66,
+      "source_estimated_bytes": 3504,
+      "intervals_estimated_bytes": 102,
+      "manifest_estimated_bytes": 864,
+      "warm_calculation": {
+        "n": 10,
+        "wall_ms": {
+          "median": 34.974021022208035,
+          "min": 32.77449985034764,
+          "max": 37.63649985194206
+        },
+        "cpu_ms": {
+          "median": 133.7575,
+          "min": 94.20300000000026,
+          "max": 163.64599999999996
+        }
+      },
+      "snapshot_replacement": {
+        "n": 20,
+        "wall_ms": {
+          "median": 39.616979425773025,
+          "min": 33.32883398979902,
+          "max": 45.02558405511081
+        },
+        "cpu_ms": {
+          "median": 134.9750000000003,
+          "min": 51.04199999999981,
+          "max": 168.17900000000031
+        }
+      },
+      "public_full_minute_streamed": {
+        "n": 3,
+        "wall_ms": {
+          "median": 498.3695410192013,
+          "min": 472.67883317545056,
+          "max": 505.02629205584526
+        },
+        "cpu_ms": {
+          "median": 978.5809999999983,
+          "min": 660.2600000000009,
+          "max": 1014.1849999999995
+        }
+      },
+      "focused_current_streamed": {
+        "n": 3,
+        "wall_ms": {
+          "median": 58.12599998898804,
+          "min": 27.980042155832052,
+          "max": 101.73029103316367
+        },
+        "cpu_ms": {
+          "median": 77.8370000000006,
+          "min": 57.88599999999988,
+          "max": 94.68600000000116
+        }
+      },
+      "focused_current_equal_batch": {
+        "n": 3,
+        "wall_ms": {
+          "median": 31.333958031609654,
+          "min": 29.122959123924375,
+          "max": 41.220457991585135
+        },
+        "cpu_ms": {
+          "median": 43.58599999999946,
+          "min": 28.382000000000573,
+          "max": 55.94999999999928
+        }
+      },
+      "new_minute": {
+        "n": 20,
+        "wall_ms": {
+          "median": 43.26995799783617,
+          "min": 38.41183288022876,
+          "max": 55.5871669203043
+        },
+        "cpu_ms": {
+          "median": 124.4600000000009,
+          "min": 59.686000000001016,
+          "max": 158.03099999999938
+        }
+      },
+      "hour_reload": {
+        "public_calculation": {
+          "wall_ms": 182.38024995662272,
+          "cpu_ms": 279.0390000000009
+        },
+        "caller_archive_one_symbol": {
+          "wall_ms": 194.24895802512765,
+          "cpu_ms": 252.57999999999825
+        },
+        "caller_retrieval_one_symbol": {
+          "wall_ms": 153.8432079833001,
+          "cpu_ms": 187.61399999999995
+        },
+        "input_rows": 32,
+        "input_minute_rows": 1
+      },
+      "day_reload": {
+        "public_calculation": {
+          "wall_ms": 161.73749999143183,
+          "cpu_ms": 227.18099999999808
+        },
+        "caller_archive_one_symbol": {
+          "wall_ms": 170.909333974123,
+          "cpu_ms": 304.987999999998
+        },
+        "caller_retrieval_one_symbol": {
+          "wall_ms": 153.99529202841222,
+          "cpu_ms": 175.89399999999955
+        },
+        "input_rows": 27,
+        "input_minute_rows": 1
+      }
+    },
+    {
+      "symbols": 10,
+      "cold_public_calculation": {
+        "wall_ms": 216.46337513811886,
+        "cpu_ms": 353.0140000000017
+      },
+      "source_rows": 660,
+      "source_estimated_bytes": 35040,
+      "intervals_estimated_bytes": 1020,
+      "manifest_estimated_bytes": 8640,
+      "warm_calculation": {
+        "n": 10,
+        "wall_ms": {
+          "median": 67.83931259997189,
+          "min": 62.97033396549523,
+          "max": 70.36337489262223
+        },
+        "cpu_ms": {
+          "median": 252.13249999999832,
+          "min": 167.03700000000055,
+          "max": 265.6479999999988
+        }
+      },
+      "snapshot_replacement": {
+        "n": 20,
+        "wall_ms": {
+          "median": 71.16787554696202,
+          "min": 64.79562516324222,
+          "max": 192.89766694419086
+        },
+        "cpu_ms": {
+          "median": 223.612499999998,
+          "min": 81.3030000000019,
+          "max": 298.94399999999877
+        }
+      },
+      "public_full_minute_streamed": {
+        "n": 1,
+        "wall_ms": {
+          "median": 5695.477959001437,
+          "min": 5695.477959001437,
+          "max": 5695.477959001437
+        },
+        "cpu_ms": {
+          "median": 8815.227,
+          "min": 8815.227,
+          "max": 8815.227
+        }
+      },
+      "focused_current_streamed": {
+        "n": 1,
+        "wall_ms": {
+          "median": 294.6564999874681,
+          "min": 294.6564999874681,
+          "max": 294.6564999874681
+        },
+        "cpu_ms": {
+          "median": 1265.468999999996,
+          "min": 1265.468999999996,
+          "max": 1265.468999999996
+        }
+      },
+      "focused_current_equal_batch": {
+        "n": 3,
+        "wall_ms": {
+          "median": 66.57895888201892,
+          "min": 65.815124893561,
+          "max": 78.66241689771414
+        },
+        "cpu_ms": {
+          "median": 367.7629999999965,
+          "min": 359.7129999999993,
+          "max": 388.2409999999936
+        }
+      },
+      "new_minute": {
+        "n": 20,
+        "wall_ms": {
+          "median": 81.13172894809395,
+          "min": 67.56583298556507,
+          "max": 101.57583304680884
+        },
+        "cpu_ms": {
+          "median": 207.62799999999615,
+          "min": 91.6169999999994,
+          "max": 325.89300000000065
+        }
+      },
+      "hour_reload": {
+        "public_calculation": {
+          "wall_ms": 193.915540818125,
+          "cpu_ms": 386.40500000000344
+        },
+        "caller_archive_one_symbol": {
+          "wall_ms": 164.60700007155538,
+          "cpu_ms": 346.76199999999824
+        },
+        "caller_retrieval_one_symbol": {
+          "wall_ms": 155.56062501855195,
+          "cpu_ms": 209.59299999999814
+        },
+        "input_rows": 320,
+        "input_minute_rows": 10
+      },
+      "day_reload": {
+        "public_calculation": {
+          "wall_ms": 195.13758295215666,
+          "cpu_ms": 269.5969999999974
+        },
+        "caller_archive_one_symbol": {
+          "wall_ms": 160.06620810367167,
+          "cpu_ms": 338.7560000000036
+        },
+        "caller_retrieval_one_symbol": {
+          "wall_ms": 137.7849169075489,
+          "cpu_ms": 150.4150000000024
+        },
+        "input_rows": 270,
+        "input_minute_rows": 10
+      }
+    },
+    {
+      "symbols": 100,
+      "cold_public_calculation": {
+        "wall_ms": 883.4379999898374,
+        "cpu_ms": 1945.8309999999983
+      },
+      "source_rows": 6600,
+      "source_estimated_bytes": 356340,
+      "intervals_estimated_bytes": 10650,
+      "manifest_estimated_bytes": 92340,
+      "warm_calculation": {
+        "n": 10,
+        "wall_ms": {
+          "median": 342.97156298998743,
+          "min": 295.1633338816464,
+          "max": 467.8871249780059
+        },
+        "cpu_ms": {
+          "median": 1090.5395000000021,
+          "min": 602.3700000000006,
+          "max": 1473.8839999999982
+        }
+      },
+      "snapshot_replacement": {
+        "n": 20,
+        "wall_ms": {
+          "median": 485.1698540151119,
+          "min": 349.396790843457,
+          "max": 626.0731669608504
+        },
+        "cpu_ms": {
+          "median": 1632.2334999999982,
+          "min": 993.7960000000032,
+          "max": 1919.3890000000097
+        }
+      },
+      "public_full_minute_streamed": {
+        "n": 1,
+        "wall_ms": {
+          "median": 46942.45733390562,
+          "min": 46942.45733390562,
+          "max": 46942.45733390562
+        },
+        "cpu_ms": {
+          "median": 88669.10299999999,
+          "min": 88669.10299999999,
+          "max": 88669.10299999999
+        }
+      },
+      "focused_current_streamed": {
+        "n": 1,
+        "wall_ms": {
+          "median": 2183.7523330468684,
+          "min": 2183.7523330468684,
+          "max": 2183.7523330468684
+        },
+        "cpu_ms": {
+          "median": 13133.053999999987,
+          "min": 13133.053999999987,
+          "max": 13133.053999999987
+        }
+      },
+      "new_minute": {
+        "n": 20,
+        "wall_ms": {
+          "median": 505.20316686015576,
+          "min": 344.4679998792708,
+          "max": 834.2556660063565
+        },
+        "cpu_ms": {
+          "median": 1596.8975000000114,
+          "min": 1121.5059999999824,
+          "max": 1865.6489999999906
+        }
+      },
+      "hour_reload": {
+        "public_calculation": {
+          "wall_ms": 863.81054087542,
+          "cpu_ms": 1595.0780000000009
+        },
+        "caller_archive_one_symbol": {
+          "wall_ms": 153.78366690129042,
+          "cpu_ms": 310.6160000000102
+        },
+        "caller_retrieval_one_symbol": {
+          "wall_ms": 136.65116694755852,
+          "cpu_ms": 167.06300000001306
+        },
+        "input_rows": 3200,
+        "input_minute_rows": 100
+      },
+      "day_reload": {
+        "public_calculation": {
+          "wall_ms": 605.5555001366884,
+          "cpu_ms": 1624.1369999999904
+        },
+        "caller_archive_one_symbol": {
+          "wall_ms": 177.22433316521347,
+          "cpu_ms": 379.2569999999955
+        },
+        "caller_retrieval_one_symbol": {
+          "wall_ms": 137.83779204823077,
+          "cpu_ms": 172.598000000022
+        },
+        "input_rows": 2700,
+        "input_minute_rows": 100
+      }
+    }
+  ]
+}

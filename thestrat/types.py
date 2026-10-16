@@ -2,7 +2,7 @@
 
 from datetime import datetime
 from enum import StrEnum
-from typing import TypedDict
+from typing import NotRequired, TypedDict
 
 
 class BarDict(TypedDict):
@@ -13,7 +13,7 @@ class BarDict(TypedDict):
     high: float
     low: float
     close: float
-    volume: float
+    volume: NotRequired[object]
 
 
 class Color(StrEnum):

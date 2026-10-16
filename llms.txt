@@ -4,7 +4,7 @@
 
 ## Library documentation
 
-- [API reference](docs/api.md): Public signatures, frame schemas, configuration and validation.
+- [API reference](docs/api.md): Public signatures, source coverage, frame schemas and validation.
 - [Calculation and state behavior](docs/behavior.md): Snapshot replacement, classifications, sessions and caller responsibilities.
 - [Executable examples](README.md): Step-by-step usage with checked outputs for each operation.
 

@@ -4,7 +4,7 @@ Read [api.md](api.md) for exact signatures and input schemas. All calculations a
 
 ## Source snapshots and aggregation
 
-Normalize provider messages to their source-minute interval start. A snapshot is the complete current OHLCV for that minute; it is not an additive volume contribution. The library replaces the stored source row by symbol/timeframe/timestamp, then calculates aggregated bars from source minutes only. Aggregate rows never feed back as source contributions.
+Normalize provider messages to their source-minute interval start. A snapshot is the complete current OHLCV for that minute; it is not an additive volume contribution. Without coverage, the library replaces the stored source row by symbol/timeframe/timestamp, then calculates aggregated bars from source minutes only. Aggregate rows never feed back as source contributions.
 
 For each symbol/window, timestamp order determines first open and last close; high is maximum, low minimum and volume summed. A corrected older minute cannot replace a later constituent's close. Replacing the earliest constituent can correct the open. Retractions of an extreme use the available underlying source set; they are not handled by retaining an obsolete maximum or minimum. A snapshot volume change from 203 to 296 changes an aggregate already containing 203 by 93. It does not add 296 again.
 
@@ -37,7 +37,7 @@ Repeated fall-back local hours merge into their wall-clock bucket, whose label u
 
 Position zero means actual membership in an eligible half-open segment. A break, weekend or holiday has no zero row. With no containing window, previous windows end at/before the query and following windows begin strictly after it; a window spanning a break around the query is excluded from both. With membership, neighboring positions follow distinct canonical labels. This matters during fall-back: a second-occurrence query can belong to a window labeled with the first occurrence. One-minute source windows continue to use their physical timestamps.
 
-Counts are per input/timeframe, closest neighbors are -1/+1, and output preserves input order and duplicate timestamps. Requested neighbors are complete or an unavailable-range error is raised. Window queries do not modify working source state. They do not combine older aggregate summaries with recent minutes: retain or reload underlying source minutes before updating a retained aggregate window.
+Counts are per input/timeframe, closest neighbors are -1/+1, and output preserves input order and duplicate timestamps. Requested neighbors are complete or an unavailable-range error is raised. Window queries do not modify working source state. Window lookup does not combine prices. Explicit mixed aggregation can combine compatible closed summaries with recent minutes under the coverage contract below; ordinary minute aggregation still requires retained/reloaded minutes.
 
 ## Classification
 
@@ -61,3 +61,15 @@ Fields are selective: scenario-only work does not calculate shape/color for unse
 Callers provide normalized, consistently adjusted data, choose retention and sanitize duplicates. They own feed connections, clocks, point-in-time visibility, scheduling, source freshness, persistence and recovery. A backtest must supply only source bars available at its current evaluation time; final future bars do not become valid merely because they are in a DataFrame.
 
 Input validation rejects malformed required values and configuration. A calculation failure leaves the working frame unchanged. Snapshot is the only implemented ingestion mode; delta requests fail explicitly before mutation. Classification warm-up nulls are valid results, while missing source information for an aggregate correction is an error.
+
+## Mixed source calculation
+
+Passing `SourceCoverage` and `through` to `aggregate` selects current-only mixed calculation. Its explicit interval and independent key schemas are defined in [the API reference](api.md#mixed-source-coverage). Working `bars` stays source-only; returned derived bars are not reinserted. All candidate validation and calculation completes before assigning working state. Neither declaration frame is mutated.
+
+Coverage assertions include no-trade intervals; source-row density cannot prove completeness. Each source row must correspond to a fully covered canonical window. Higher-timeframe rows must be closed at the source watermark. The planner uses the same session geometry as aggregation and lookup, selecting disjoint contained source windows, preferring longer contributions only when they lead to a complete path. Backward reachability over eligible endpoints avoids rejecting a complete cover because an initially longer summary dead-ends. If no compatible path completely covers a requested window, it fails rather than splitting an indivisible summary or inventing prices. A source must occupy a contiguous portion of the requested window’s eligible time. Interleaved repeated-DST subhour summaries require finer source inputs; they are rejected when they cannot form such a cover. Callers supply compatible grains. Source intervals at the same grain may be adjacent but cannot overlap.
+
+Stored grains may overlap for different calculations, such as a prior quarter and prior-week days needed on April 1. Only one representation contributes to each portion of any calculated window. Callers assert that those representations are coherent, consistently adjusted point-in-time data. A minute snapshot overlapping a retained higher-timeframe source is rejected before mutation because the summary might become stale. Supply a corrected coherent source frame and declaration instead. The library does not retrieve children, repair every affected historical row, or advance an archive on rollover.
+
+Canonical schedules and window geometry are reused inside each instance with bounded entry counts and no price/source cache. Cache scope includes session timezone, anchor, schedule identity, timeframe and query range. Calendar changes inside the same callable require a new instance. Session eligibility, breaks, holiday labels, overnight sessions, DST and clipped closes retain the same canonical rules; incompatible source partitions fail explicitly.
+
+Classification needs OHLC and valid timestamp/grouping fields only. Missing volume stays missing, and supplied volume is untouched metadata in both DataFrame and whole-bar scalar results. Aggregate operations continue to require valid numeric volume.
