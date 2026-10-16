@@ -96,8 +96,8 @@ def _bar(open_: float, high: float, low: float, close: float) -> BarDict:
 
 def test_classify_bar_first_bar():
     result = strat.classify.scalar(kind="bar", bar=_bar(100.0, 105.0, 99.0, 104.0), prior=None)
-    assert result["scenario0"] is None
-    assert result["color0"] == Color.GREEN
+    assert result["scenario"] is None
+    assert result["color"] == Color.GREEN
     assert result["in_force"] is None
 
 
@@ -105,8 +105,8 @@ def test_classify_bar_2u_green():
     prior = _bar(100.0, 105.0, 99.0, 104.0)
     curr = _bar(104.0, 107.0, 100.0, 106.0)
     result = strat.classify.scalar(kind="bar", bar=curr, prior=prior)
-    assert result["scenario0"] == Scenario.TWO_UP
-    assert result["color0"] == Color.GREEN
+    assert result["scenario"] == Scenario.TWO_UP
+    assert result["color"] == Color.GREEN
     assert result["in_force"] is True
 
 
@@ -114,8 +114,8 @@ def test_classify_bar_2u_red():
     prior = _bar(100.0, 105.0, 99.0, 104.0)
     curr = _bar(107.0, 108.0, 100.0, 103.0)
     result = strat.classify.scalar(kind="bar", bar=curr, prior=prior)
-    assert result["scenario0"] == Scenario.TWO_UP
-    assert result["color0"] == Color.RED
+    assert result["scenario"] == Scenario.TWO_UP
+    assert result["color"] == Color.RED
     assert result["in_force"] is False
 
 
@@ -123,8 +123,8 @@ def test_classify_bar_2d_green():
     prior = _bar(100.0, 105.0, 99.0, 104.0)
     curr = _bar(97.0, 104.0, 96.0, 102.0)
     result = strat.classify.scalar(kind="bar", bar=curr, prior=prior)
-    assert result["scenario0"] == Scenario.TWO_DOWN
-    assert result["color0"] == Color.GREEN
+    assert result["scenario"] == Scenario.TWO_DOWN
+    assert result["color"] == Color.GREEN
     assert result["in_force"] is False
 
 
@@ -132,8 +132,8 @@ def test_classify_bar_2d_red():
     prior = _bar(100.0, 105.0, 99.0, 104.0)
     curr = _bar(102.0, 104.0, 97.0, 98.0)
     result = strat.classify.scalar(kind="bar", bar=curr, prior=prior)
-    assert result["scenario0"] == Scenario.TWO_DOWN
-    assert result["color0"] == Color.RED
+    assert result["scenario"] == Scenario.TWO_DOWN
+    assert result["color"] == Color.RED
     assert result["in_force"] is True
 
 
@@ -141,7 +141,7 @@ def test_classify_bar_scenario_1():
     prior = _bar(100.0, 105.0, 99.0, 104.0)
     curr = _bar(101.0, 103.0, 100.0, 100.5)
     result = strat.classify.scalar(kind="bar", bar=curr, prior=prior)
-    assert result["scenario0"] == Scenario.ONE
+    assert result["scenario"] == Scenario.ONE
     assert result["in_force"] is False
 
 
@@ -149,7 +149,7 @@ def test_classify_bar_scenario_3():
     prior = _bar(100.0, 105.0, 99.0, 104.0)
     curr = _bar(98.0, 107.0, 97.0, 101.0)
     result = strat.classify.scalar(kind="bar", bar=curr, prior=prior)
-    assert result["scenario0"] == Scenario.THREE
+    assert result["scenario"] == Scenario.THREE
     assert result["in_force"] is False
 
 
@@ -157,8 +157,8 @@ def test_classify_bar_neutral():
     prior = _bar(100.0, 105.0, 99.0, 104.0)
     curr = _bar(103.0, 106.0, 100.0, 103.0)
     result = strat.classify.scalar(kind="bar", bar=curr, prior=prior)
-    assert result["scenario0"] == Scenario.TWO_UP
-    assert result["color0"] == Color.NEUTRAL
+    assert result["scenario"] == Scenario.TWO_UP
+    assert result["color"] == Color.NEUTRAL
 
 
 # ---------------------------------------------------------------------------
@@ -187,15 +187,15 @@ def test_classify_bars_df_scenarios():
     result = strat.classify(df)
 
     # First bar: no prior -> scenario is null
-    assert result[0, "scenario0"] is None
+    assert result[0, "scenario"] is None
     # Bar 2: high 108 > 105, low 103 > 99 -> 2U
-    assert result[1, "scenario0"] == "2U"
+    assert result[1, "scenario"] == "2U"
     # Bar 3: high 106 < 108, low 104 > 103 -> 1
-    assert result[2, "scenario0"] == "1"
+    assert result[2, "scenario"] == "1"
     # Bar 4: high 109 > 106, low 97 < 104 -> 3
-    assert result[3, "scenario0"] == "3"
+    assert result[3, "scenario"] == "3"
     # Bar 5: high 103 < 109, low 100 > 97 -> 1
-    assert result[4, "scenario0"] == "1"
+    assert result[4, "scenario"] == "1"
 
 
 def test_classify_bars_df_color():
@@ -211,9 +211,9 @@ def test_classify_bars_df_color():
         }
     )
     result = strat.classify(df)
-    assert result[0, "color0"] == "green"
-    assert result[1, "color0"] == "red"
-    assert result[2, "color0"] == "neutral"
+    assert result[0, "color"] == "green"
+    assert result[1, "color"] == "red"
+    assert result[2, "color"] == "neutral"
 
 
 def test_classify_bars_df_equal_high_not_takeout():
@@ -229,7 +229,7 @@ def test_classify_bars_df_equal_high_not_takeout():
         }
     )
     result = strat.classify(df)
-    assert result[1, "scenario0"] == "1"  # inside bar, not 2U
+    assert result[1, "scenario"] == "1"  # inside bar, not 2U
 
 
 def test_classify_bars_df_missing_columns():
@@ -243,57 +243,6 @@ def test_classify_bars_df_missing_columns():
     )
     with pytest.raises(ValueError, match="missing"):
         strat.classify(df)
-
-
-# ---------------------------------------------------------------------------
-# classify_bars_df — history shifts
-# ---------------------------------------------------------------------------
-
-
-def test_classify_bars_df_history_shift():
-    """Verify scenario1/color1 etc. match prior bar's values."""
-    df = pl.DataFrame(
-        {
-            "timestamp": [
-                datetime(2026, 4, 1, tzinfo=UTC),
-                datetime(2026, 4, 2, tzinfo=UTC),
-                datetime(2026, 4, 3, tzinfo=UTC),
-                datetime(2026, 4, 4, tzinfo=UTC),
-                datetime(2026, 4, 5, tzinfo=UTC),
-            ],
-            "open": [100.0, 104.0, 107.0, 98.0, 101.0],
-            "high": [105.0, 108.0, 107.0, 109.0, 103.0],
-            "low": [99.0, 103.0, 104.0, 97.0, 100.0],
-            "close": [104.0, 107.0, 105.0, 101.0, 100.5],
-            "volume": [1000.0] * 5,
-        }
-    )
-    result = strat.classify(df)
-
-    # Bar 0: no history
-    assert result[0, "scenario1"] is None
-    assert result[0, "scenario2"] is None
-    assert result[0, "scenario3"] is None
-    assert result[0, "color1"] is None
-
-    # Bar 1: scenario1 = bar0's scenario0 (None), color1 = bar0's color0 (green)
-    assert result[1, "scenario1"] is None
-    assert result[1, "color1"] == "green"
-
-    # Bar 2: scenario1 = bar1's scenario0 (2U), color1 = bar1's color0 (green)
-    assert result[2, "scenario1"] == "2U"
-    assert result[2, "color1"] == "green"
-
-    # Bar 4: full history
-    assert result[4, "scenario1"] == "3"
-    assert result[4, "scenario2"] == "1"
-    assert result[4, "scenario3"] == "2U"
-    # bar3: open=98, close=101 -> 101 > 98 -> green
-    # bar2: open=107, close=105 -> 105 < 107 -> red
-    # bar1: open=104, close=107 -> 107 > 104 -> green
-    assert result[4, "color1"] == "green"  # bar3 is green (101 > 98)
-    assert result[4, "color2"] == "red"  # bar2 is red (105 < 107)
-    assert result[4, "color3"] == "green"  # bar1 is green (107 > 104)
 
 
 # ---------------------------------------------------------------------------
@@ -384,7 +333,7 @@ def test_classify_bars_df_in_force_2u():
     # Prior: high=105, Current: high=108 (>105 -> 2U), close=107 > 105
     df = _in_force_df(100, 105, 99, 104, 104, 108, 100, 107)
     result = strat.classify(df)
-    assert result[1, "scenario0"] == "2U"
+    assert result[1, "scenario"] == "2U"
     assert result[1, "in_force"] is True
 
 
@@ -393,7 +342,7 @@ def test_classify_bars_df_in_force_2u_not_past():
     # Prior: high=105, Current: high=108 (>105 -> 2U), close=103 < 105
     df = _in_force_df(100, 105, 99, 104, 104, 108, 100, 103)
     result = strat.classify(df)
-    assert result[1, "scenario0"] == "2U"
+    assert result[1, "scenario"] == "2U"
     assert result[1, "in_force"] is False
 
 
@@ -402,7 +351,7 @@ def test_classify_bars_df_in_force_2d():
     # Prior: low=99, Current: low=97 (<99 -> 2D), close=98 < 99
     df = _in_force_df(100, 105, 99, 104, 102, 104, 97, 98)
     result = strat.classify(df)
-    assert result[1, "scenario0"] == "2D"
+    assert result[1, "scenario"] == "2D"
     assert result[1, "in_force"] is True
 
 
@@ -411,7 +360,7 @@ def test_classify_bars_df_in_force_inside():
     # Prior: h=105, l=99, Current: h=104, l=100 -> inside
     df = _in_force_df(100, 105, 99, 104, 101, 104, 100, 103)
     result = strat.classify(df)
-    assert result[1, "scenario0"] == "1"
+    assert result[1, "scenario"] == "1"
     assert result[1, "in_force"] is False
 
 
@@ -437,8 +386,8 @@ def test_classify_bars_df_in_force_3_green():
     # close 106 > prior high 105 -> True
     df = _in_force_df(100, 105, 99, 104, 100, 108, 97, 106)
     result = strat.classify(df)
-    assert result[1, "scenario0"] == "3"
-    assert result[1, "color0"] == "green"
+    assert result[1, "scenario"] == "3"
+    assert result[1, "color"] == "green"
     assert result[1, "in_force"] is True
 
 
@@ -448,8 +397,8 @@ def test_classify_bars_df_in_force_3_red():
     # close 98 < prior low 99 -> True
     df = _in_force_df(100, 105, 99, 104, 104, 108, 97, 98)
     result = strat.classify(df)
-    assert result[1, "scenario0"] == "3"
-    assert result[1, "color0"] == "red"
+    assert result[1, "scenario"] == "3"
+    assert result[1, "color"] == "red"
     assert result[1, "in_force"] is True
 
 
@@ -459,8 +408,8 @@ def test_classify_bars_df_in_force_3_neutral():
     # close 102 < prior high 105 AND close 102 > prior low 99 -> neither branch, False
     df = _in_force_df(100, 105, 99, 104, 102, 108, 97, 102)
     result = strat.classify(df)
-    assert result[1, "scenario0"] == "3"
-    assert result[1, "color0"] == "neutral"
+    assert result[1, "scenario"] == "3"
+    assert result[1, "color"] == "neutral"
     assert result[1, "in_force"] is False
 
 
@@ -469,7 +418,7 @@ def test_classify_bars_df_in_force_2d_not_past():
     # Prior: low=99, Current: low=97 (<99 -> 2D), close=100 > 99
     df = _in_force_df(100, 105, 99, 104, 102, 104, 97, 100)
     result = strat.classify(df)
-    assert result[1, "scenario0"] == "2D"
+    assert result[1, "scenario"] == "2D"
     assert result[1, "in_force"] is False
 
 
@@ -478,8 +427,8 @@ def test_classify_bars_df_in_force_2d_not_past():
 # ---------------------------------------------------------------------------
 
 
-def test_classify_bars_multi_symbol_history_isolation():
-    """History shifts are per-symbol — bars from one symbol don't bleed into another."""
+def test_classify_bars_multi_symbol_predecessor_isolation():
+    """Scenario predecessors stay within each symbol."""
 
     df = pl.DataFrame(
         {
@@ -499,20 +448,9 @@ def test_classify_bars_multi_symbol_history_isolation():
     ).sort("symbol", "timestamp")
     result = strat.classify(df)
 
-    # AAPL bar 2 (index depends on sort): scenario1 should be AAPL bar 1's scenario, not SPY's
     aapl = result.filter(pl.col("symbol") == "AAPL").sort("timestamp")
     spy = result.filter(pl.col("symbol") == "SPY").sort("timestamp")
-
-    # SPY bar 1: color0 should be green (104>100), scenario0 should be None (first bar)
-    assert spy[0, "color0"] == "green"
-    assert spy[0, "scenario0"] is None
-    # SPY bar 2: color1 should be SPY bar 1's color ("green"), not AAPL's
-    assert spy[1, "color1"] == "green"
-
-    # AAPL bar 1: color0 should be green (208>200), scenario0 should be None (first bar)
-    assert aapl[0, "color0"] == "green"
-    assert aapl[0, "scenario0"] is None
-    # AAPL bar 2: color1 should be AAPL bar 1's color ("green"), not SPY bar 2's
-    assert aapl[1, "color1"] == "green"
-    # AAPL bar 2: scenario1 should be None (AAPL bar 1's scenario0 is None)
-    assert aapl[1, "scenario1"] is None
+    assert spy["color"].to_list() == ["green", "green"]
+    assert spy["scenario"].to_list() == [None, "2U"]
+    assert aapl["color"].to_list() == ["green", "red"]
+    assert aapl["scenario"].to_list() == [None, "2D"]

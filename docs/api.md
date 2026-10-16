@@ -11,8 +11,7 @@ TheStrat(*, session: Session,
 
 aggregate(updates: pl.DataFrame | None = None,
           *, mode: Literal["snapshot"] = "snapshot") -> pl.DataFrame
-classify(bars: pl.DataFrame, *, fields: Sequence[Field] | None = None,
-         history: int = 3) -> pl.DataFrame
+classify(bars: pl.DataFrame, *, fields: Sequence[Field] | None = None) -> pl.DataFrame
 window(timestamp: datetime | Sequence[datetime], *,
        timeframes: Sequence[Timeframe | str] | None = None,
        before: int = 0, after: int = 0) -> pl.DataFrame
@@ -42,18 +41,20 @@ Frames must have a homogeneous session, instrument-label convention, price-adjus
 
 An aggregate-only seed can be classified. Updating its window requires the underlying source minutes. The library raises `InsufficientSourceDataError` when unavailable sources prevent accurate aggregation; it cannot prove missing coverage by looking for a trade in every minute. Callers must supply the full retained source set rather than a partial subset presented as complete. No source history survives secretly after caller pruning.
 
-## Classification fields and history
+## Classification fields
 
 `fields=None` selects all four fields. An empty selector validates/sorts but adds no classifications. Requested existing columns are recalculated; unrequested input columns remain caller data. Only necessary calculations and dependencies run.
 
 | Field | Output columns | Calculation inputs |
 | --- | --- | --- |
-| `scenario` | `scenario0`…`scenarioN`, nullable String | Current and preceding high/low |
-| `color` | `color0`…`colorN`, String with null unavailable history | Open and close |
+| `scenario` | `scenario`, nullable String | Current and preceding high/low |
+| `color` | `color`, String | Open and close |
 | `shape` | `shape`, nullable String | Current OHLC |
 | `in_force` | `in_force`, nullable Boolean | Current OHLC and prior high/low; scenario/color internally |
 
-`history=N` is a nonnegative integer maximum prior offset. Zero is current; three provides current plus three prior classifications. There is no fixed maximum depth. Scenario/color history is isolated by `(symbol, timeframe)` and comes only from the supplied frame. Current-plus-N scenario values can require N+2 OHLC bars. Shape and in-force are current-only fields. Missing context gives null, not fabricated history.
+Each input bar receives one value per selected field. Scenario and in-force use the preceding bar within `(symbol, timeframe)`; missing predecessors give null. Color and shape need only the current bar. Classification adds no lag columns and accepts no history parameter.
+
+Classify with the required predecessor context before filtering recent rows. Use ordinary Polars operations such as `filter`, `tail` or `group_by("symbol", "timeframe").tail(N)` to inspect recent classifications. Truncating before classification removes context needed by the first retained bar's scenario and in-force.
 
 ## Scalar classification
 
@@ -67,7 +68,7 @@ Call `strat.classify.scalar(kind=..., ...)`. Each kind has a typed keyword-only 
 | `in_force` | OHLC prices as above, `reference_high`, `reference_low` | bool |
 | `bar` | `bar: BarDict`, optional `prior: BarDict` | `CurrentBar` |
 
-Reference high/low may describe a prior bar or explicit setup levels. `CurrentBar` preserves the bar keys and adds `scenario0`, `color0`, `shape` and `in_force`; it contains no history slots. Missing prior means null scenario/in-force, while color/shape still calculate. `BarDict` and `CurrentBar` are TypedDict types, not Pydantic models. The runtime validates supplied values.
+Reference high/low may describe a prior bar or explicit setup levels. `CurrentBar` preserves the bar keys and adds `scenario`, `color`, `shape` and `in_force`. Missing prior means null scenario/in-force, while color/shape still calculate. `BarDict` and `CurrentBar` are TypedDict types, not Pydantic models. The runtime validates supplied values.
 
 `Color`: green/red/neutral. `Scenario`: 1/2U/2D/3. `Shape`: hammer/shooter. These domain enums derive from StrEnum; DataFrame columns contain their string values.
 
@@ -119,4 +120,4 @@ Batch queries share schedule fetches and canonical geometry for overlapping time
 
 Invalid fields, frames, values and configuration raise useful validation errors. `mode="delta"` raises `NotImplementedError` before state changes, including empty inputs; unknown modes are invalid arguments. `InsufficientSourceDataError` and `ScheduleRangeError` derive from ValueError. Native resource failures may still propagate.
 
-Future classification additions belong behind the existing components. Define inputs, formulas, output types, dependencies, nulls, history requirements and scalar applicability; add expected-result, parity, grouping and performance checks. Explicitly document any change to default fields or whole-bar output. No signal engine, dynamic plugin registry, provider connection or scalar aggregation is provided.
+Future classification additions belong behind the existing components. Define inputs, formulas, output types, dependencies, nulls, predecessor context and scalar applicability; add expected-result, parity, grouping and performance checks. Explicitly document any change to default fields or whole-bar output. No signal engine, dynamic plugin registry, provider connection or scalar aggregation is provided.

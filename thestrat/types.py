@@ -35,8 +35,8 @@ class Shape(StrEnum):
 
 
 class CurrentBar(BarDict):
-    scenario0: Scenario | None
-    color0: Color
+    scenario: Scenario | None
+    color: Color
     shape: Shape | None
     in_force: bool | None
 

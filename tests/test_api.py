@@ -19,7 +19,7 @@ def test_assignment_no_work_and_explicit_classification():
     s = instance(source)
     assert s.bars is source
     result = s.aggregate()
-    assert "scenario0" not in result.columns
+    assert "scenario" not in result.columns
     working = s.bars
     classified = s.classify(result)
     assert s.bars is working
@@ -69,7 +69,7 @@ def test_no_hidden_source_after_pruning_summary_insufficiency():
     s.bars = s.bars.filter(pl.col("timeframe") != "1min")
     before = s.bars
     # Summary still supports classification, but cannot be guessed into a correction.
-    assert s.classify(s.bars)[0, "color0"] == "green"
+    assert s.classify(s.bars)[0, "color"] == "green"
     with pytest.raises(InsufficientSourceDataError, match="underlying"):
         s.aggregate(bars([utc(2026, 1, 1)]))
     assert s.bars is before
@@ -120,13 +120,13 @@ def test_source_identity_and_update_timeframe():
 def test_empty_and_all_default_targets():
     s = TheStrat(session=session_for("crypto"))
     assert s.aggregate().is_empty()
-    assert s.classify(s.bars, history=4).schema["scenario4"] == pl.String
+    assert s.classify(s.bars).schema["scenario"] == pl.String
     assert s.classify(s.bars).schema["in_force"] == pl.Boolean
     assert len(DEFAULT_TIMEFRAMES) == 13
     assert s.aggregate(bars([utc(2026, 1, 1)]))["timeframe"].to_list() == list(DEFAULT_TIMEFRAMES)
 
 
-def test_groups_history_metadata_selective_recomputation():
+def test_groups_predecessors_metadata_selective_recomputation():
     stamps = [utc(2026, 1, 1) + timedelta(minutes=i) for i in range(6)]
     source = bars(stamps).with_columns(
         pl.Series("open", [10.0, 11.0, 10.0, 10.0, 11.0, 10.0]),
@@ -143,23 +143,23 @@ def test_groups_history_metadata_selective_recomputation():
         ]
     )
     s = instance()
-    output = s.classify(groups.reverse(), fields=["scenario", "color"], history=4)
+    output = s.classify(groups.reverse(), fields=["scenario", "color"])
     assert output.height == 24
     for group in output.partition_by("symbol", "timeframe"):
-        assert group[0, "scenario0"] is None
-        assert group[-1, "color4"] == "red"
-        assert group[-1, "scenario4"] == "2U"
+        assert group[0, "scenario"] is None
+        assert group["color"].to_list() == ["green", "red", "neutral", "green", "red", "neutral"]
+        assert group["scenario"].to_list() == [None, "2U", "2D", "3", "1", "3"]
         assert group["metadata"].to_list() == ["keep"] * 6
     assert "shape" not in output.columns and "in_force" not in output.columns
-    stale = source.with_columns(pl.lit("wrong").alias("color0"), pl.lit("caller").alias("shape"))
-    assert s.classify(stale, fields=["color"], history=0)[0, "color0"] == "green"
-    assert s.classify(stale, fields=["color"], history=0)[0, "shape"] == "caller"
+    stale = source.with_columns(pl.lit("wrong").alias("color"), pl.lit("caller").alias("shape"))
+    assert s.classify(stale, fields=["color"])[0, "color"] == "green"
+    assert s.classify(stale, fields=["color"])[0, "shape"] == "caller"
     assert s.classify(source, fields=[]).columns == [*source.columns, "symbol", "timeframe"]
 
 
 @pytest.mark.parametrize(
     "kwargs",
-    [{"history": True}, {"history": -1}, {"history": 1.5}, {"fields": ["unknown"]}, {"fields": ["color", "color"]}],
+    [{"fields": ["unknown"]}, {"fields": ["color", "color"]}],
 )
 def test_classification_invalid_selection(kwargs):
     with pytest.raises(ValueError):
@@ -174,17 +174,17 @@ def test_scalar_kinds_parity_and_no_history():
         pl.Series("close", [10.0, 11.5]),
     )
     s = instance()
-    vector = s.classify(frame, history=0)
+    vector = s.classify(frame)
     previous = vector.row(0, named=True)
     current = vector.row(1, named=True)
     scalar = s.classify.scalar(kind="bar", bar=cast(BarDict, current), prior=cast(BarDict, previous))
-    for field in ["scenario0", "color0", "shape", "in_force"]:
+    for field in ["scenario", "color", "shape", "in_force"]:
         assert scalar[field] == current[field]
     assert set(scalar) == set(current)
-    assert s.classify.scalar(kind="color", open_price=10.0, close_price=11.5) == current["color0"]
+    assert s.classify.scalar(kind="color", open_price=10.0, close_price=11.5) == current["color"]
     assert (
         s.classify.scalar(kind="scenario", high=12.0, low=8.0, reference_high=11.0, reference_low=9.0)
-        == current["scenario0"]
+        == current["scenario"]
     )
     assert s.classify.scalar(kind="shape", open_price=10.0, high=12.0, low=8.0, close_price=11.5) == current["shape"]
     assert (
@@ -247,7 +247,7 @@ def test_scalar_whole_bar_uses_no_dataframe(monkeypatch):
         raise AssertionError("scalar path must not construct a DataFrame")
 
     monkeypatch.setattr(pl, "DataFrame", forbidden)
-    assert s.classify.scalar(kind="bar", bar=cast(BarDict, current))["color0"] == "green"
+    assert s.classify.scalar(kind="bar", bar=cast(BarDict, current))["color"] == "green"
 
 
 @pytest.mark.parametrize("operation", ["aggregate", "update", "classify"])
@@ -265,3 +265,17 @@ def test_nanosecond_source_timestamp_rejected_before_precision_loss(operation):
         else:
             s.aggregate()
     assert s.bars is before
+
+
+def test_classification_returns_one_unnumbered_value_per_bar_and_rejects_history():
+    frame = bars([utc(2026, 1, 1), utc(2026, 1, 1, 0, 1)])
+    s = instance()
+    result = s.classify(frame)
+    assert result.columns == [*frame.columns, "symbol", "timeframe", "color", "scenario", "shape", "in_force"]
+    assert result.height == frame.height
+    assert result.schema["scenario"] == pl.String
+    assert result.schema["color"] == pl.String
+    assert result.schema["in_force"] == pl.Boolean
+    assert not any(name.startswith(("scenario", "color")) and name[-1:].isdigit() for name in result.columns)
+    with pytest.raises(TypeError, match="history"):
+        s.classify(frame, history=3)  # type: ignore[call-arg]

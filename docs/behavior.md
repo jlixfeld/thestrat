@@ -41,7 +41,7 @@ Counts are per input/timeframe, closest neighbors are -1/+1, and output preserve
 
 ## Classification
 
-Every predecessor and history shift stays within `(symbol, timeframe)`. Null symbol is a valid anonymous group. There is no cross-symbol or cross-timeframe comparison. Missing predecessors yield null scenario and in-force; current color and shape need no prior bar.
+Every predecessor comparison stays within `(symbol, timeframe)`. Null symbol is a valid anonymous group. There is no cross-symbol or cross-timeframe comparison. Missing predecessors yield null scenario and in-force; current color and shape need no prior bar.
 
 | Calculation | Rule |
 | --- | --- |
@@ -52,9 +52,9 @@ Every predecessor and history shift stays within `(symbol, timeframe)`. Null sym
 
 Taking out a level requires strict inequality; equality is not a breakout and is not in-force. Shape threshold equality qualifies. Bar classification is not trade entry/exit or signal detection.
 
-`history=N` gives offsets zero through N for selected scenario/color fields; shape and in-force remain current-only. Unavailable history stays null. Recomputing N+1 scenario values from OHLC can require N+2 rows. Scalar operations accept explicit current/reference values and return no fabricated history.
+Classification returns one `scenario`, `color`, `shape` and `in_force` value per bar when all fields are selected. It accepts no history parameter and generates no lag columns. Scalar whole-bar results use the same current-field names. Classify with predecessor context first, then use Polars filtering, `tail` or grouped `tail` to inspect recent rows. Truncating the input first loses the first retained bar's scenario/in-force context.
 
-Fields are selective: scenario-only work does not calculate shape/color/history for unselected fields. In-force computes its scenario/color dependencies internally. Scalar formulas and DataFrame formulas must agree, comparing enum values to frame strings. Vectorization does not imply zero cost; benchmarks should separate update/aggregation, classification and future signal work.
+Fields are selective: scenario-only work does not calculate shape/color for unselected fields. In-force computes its scenario/color dependencies internally. Scalar formulas and DataFrame formulas must agree, comparing enum values to frame strings. Vectorization does not imply zero cost; benchmarks should separate update/aggregation, classification and future signal work.
 
 ## Caller responsibilities and failures
 

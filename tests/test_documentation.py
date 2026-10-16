@@ -54,7 +54,7 @@ def test_readme_steps_execute_and_every_output_matches():
         "input_preview",
         "aggregate_preview",
         "preview",
-        "minute_history",
+        "recent_minutes",
         "revised_preview",
         "updated_preview",
         "updated_label_preview",
@@ -71,12 +71,18 @@ def test_readme_steps_execute_and_every_output_matches():
     assert aggregate.filter(pl.col("timeframe") != "1min")["volume"].to_list() == [150.0] * 12
     latest = aggregate.filter(pl.col("timeframe") == "1min").row(0, named=True)
     assert [latest[name] for name in ["open", "high", "low", "close", "volume"]] == [103.0, 105.0, 102.0, 104.0, 50.0]
-    history = namespace["minute_history"]
-    assert history["scenario0"].to_list() == [None, "2U", "1", "2U", "2U"]
-    assert history["color0"].to_list() == ["green", "green", "red", "green", "green"]
-    assert history[-1, "scenario3"] == "2U"
-    assert history[-1, "color3"] == "green"
-    assert history[0, "scenario0"] is None and history[0, "color3"] is None
+    recent = namespace["recent_minutes"]
+    assert recent.height == 3
+    assert recent["scenario"].to_list() == ["1", "2U", "2U"]
+    assert recent["color"].to_list() == ["red", "green", "green"]
+    assert recent["in_force"].to_list() == [False, False, False]
+    assert namespace["classified"].filter(pl.col("timeframe") == "1min")["scenario"].to_list() == [
+        None,
+        "2U",
+        "1",
+        "2U",
+        "2U",
+    ]
     assert namespace["revised_preview"][0, "volume"] == 70.0
     updated = namespace["updated_preview"].filter(pl.col("timeframe") == "4h").row(0, named=True)
     assert [updated[name] for name in ["open", "high", "low", "close", "volume"]] == [100.0, 106.0, 99.0, 105.0, 170.0]

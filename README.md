@@ -120,19 +120,19 @@ Aggregation uses the first open, maximum high, minimum low, latest close and sum
 
 #### Classify the calculated bars
 
-Classification adds labels without changing `strat.bars`. Here the default fields include scenario, color, shape and in-force. This thirteen-timeframe preview selects current scenario and color alongside OHLCV; the following history view exposes offsets zero through three.
+Classification adds labels without changing `strat.bars`. Here the default fields include scenario, color, shape and in-force. This thirteen-timeframe preview selects current scenario and color alongside OHLCV; the following view selects recent classified rows with Polars.
 
 ```python
-classified = strat.classify(aggregated, history=3)
+classified = strat.classify(aggregated)
 preview = classified.group_by("timeframe", maintain_order=True).last().select(
     "timeframe", "timestamp", "open", "high", "low", "close", "volume",
-    "scenario0", "color0",
+    "scenario", "color",
 )
 ```
 
 <!-- output: preview -->
 
-| timeframe | timestamp (UTC) | open | high | low | close | volume | scenario0 | color0 |
+| timeframe | timestamp (UTC) | open | high | low | close | volume | scenario | color |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | 12h | 2026-01-05 14:30 | 100.0 | 105.0 | 99.0 | 104.0 | 150.0 | null | green |
 | 15min | 2026-01-05 14:30 | 100.0 | 105.0 | 99.0 | 104.0 | 150.0 | null | green |
@@ -150,27 +150,23 @@ preview = classified.group_by("timeframe", maintain_order=True).last().select(
 
 <!-- /output -->
 
-#### Inspect classification history
+#### Inspect recent classified rows
 
-These are all five source-minute rows for EXAMPLE, with only identity and scenario/color history columns selected. Offset zero is current; offsets one through three are prior bars in the same symbol/timeframe. Null means the supplied frame has no required predecessor.
+Classify the supplied bars with their predecessor context first, then select recent rows. Truncating the input before classification would lose the first retained row's scenario and in-force context. This example shows the latest three source-minute rows for EXAMPLE; callers can also select recent rows per group with Polars `group_by("symbol", "timeframe").tail(3)`.
 
 ```python
-minute_history = classified.filter(pl.col("timeframe") == "1min").select(
-    "symbol", "timeframe", "timestamp",
-    "scenario0", "scenario1", "scenario2", "scenario3",
-    "color0", "color1", "color2", "color3",
-)
+recent_minutes = classified.filter(pl.col("timeframe") == "1min").select(
+    "symbol", "timeframe", "timestamp", "scenario", "color", "shape", "in_force",
+).tail(3)
 ```
 
-<!-- output: minute_history -->
+<!-- output: recent_minutes -->
 
-| symbol | timeframe | timestamp (UTC) | scenario0 | scenario1 | scenario2 | scenario3 | color0 | color1 | color2 | color3 |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| EXAMPLE | 1min | 2026-01-05 14:30 | null | null | null | null | green | null | null | null |
-| EXAMPLE | 1min | 2026-01-05 14:31 | 2U | null | null | null | green | green | null | null |
-| EXAMPLE | 1min | 2026-01-05 14:32 | 1 | 2U | null | null | red | green | green | null |
-| EXAMPLE | 1min | 2026-01-05 14:33 | 2U | 1 | 2U | null | green | red | green | green |
-| EXAMPLE | 1min | 2026-01-05 14:34 | 2U | 2U | 1 | 2U | green | green | red | green |
+| symbol | timeframe | timestamp (UTC) | scenario | color | shape | in_force |
+| --- | --- | --- | --- | --- | --- | --- |
+| EXAMPLE | 1min | 2026-01-05 14:32 | 1 | red | null | false |
+| EXAMPLE | 1min | 2026-01-05 14:33 | 2U | green | null | false |
+| EXAMPLE | 1min | 2026-01-05 14:34 | 2U | green | null | false |
 
 <!-- /output -->
 
@@ -225,12 +221,12 @@ Aggregation does not refresh labels automatically. Classify the updated frame, t
 updated_labels = strat.classify(updated)
 updated_label_preview = updated_labels.filter(pl.col("timeframe").is_in(["1min", "4h"])).filter(
     (pl.col("timeframe") == "4h") | (pl.col("timestamp") == revised[0, "timestamp"])
-).select("symbol", "timeframe", "timestamp", "scenario0", "color0", "shape", "in_force")
+).select("symbol", "timeframe", "timestamp", "scenario", "color", "shape", "in_force")
 ```
 
 <!-- output: updated_label_preview -->
 
-| symbol | timeframe | timestamp (UTC) | scenario0 | color0 | shape | in_force |
+| symbol | timeframe | timestamp (UTC) | scenario | color | shape | in_force |
 | --- | --- | --- | --- | --- | --- | --- |
 | EXAMPLE | 1min | 2026-01-05 14:34 | 2U | green | null | true |
 | EXAMPLE | 4h | 2026-01-05 14:30 | null | green | null | null |
@@ -303,7 +299,7 @@ Equity presets use the exchange calendar, including holidays and early closes. S
 
 ## Extension
 
-Classification fields are scenario, color, shape and in-force. Scalar kinds additionally include a whole-bar result. Future classification types can extend these components with explicit inputs, dependencies, outputs, history needs and tests; signal detection and order handling are outside this API.
+Classification fields are scenario, color, shape and in-force. Scalar kinds additionally include a whole-bar result. Future classification types can extend these components with explicit inputs, dependencies, outputs, predecessor context and tests; signal detection and order handling are outside this API.
 
 ## Development verification
 

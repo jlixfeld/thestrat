@@ -145,9 +145,9 @@ class ScalarClassifier:
             o, h, low, c = (bar[n] for n in ("open", "high", "low", "close"))
             return {
                 **{k: bar[k] for k in ("symbol", "timestamp", "timeframe", "open", "high", "low", "close", "volume")},
-                "color0": _color(o, c),
+                "color": _color(o, c),
                 "shape": _shape(o, h, low, c),
-                "scenario0": None if prior is None else _scenario(h, low, prior["high"], prior["low"]),
+                "scenario": None if prior is None else _scenario(h, low, prior["high"], prior["low"]),
                 "in_force": None if prior is None else _force(o, h, low, c, prior["high"], prior["low"]),
             }
         inputs = {
@@ -169,12 +169,10 @@ class Classifier:
     def __init__(self) -> None:
         self.scalar = ScalarClassifier()
 
-    def __call__(self, bars: pl.DataFrame, *, fields: Sequence[Field] | None = None, history: int = 3) -> pl.DataFrame:
+    def __call__(self, bars: pl.DataFrame, *, fields: Sequence[Field] | None = None) -> pl.DataFrame:
         selected = _FIELDS if fields is None else tuple(fields)
         if isinstance(fields, str) or len(set(selected)) != len(selected) or any(f not in _FIELDS for f in selected):
             raise ValueError("fields must contain unique supported field names")
-        if isinstance(history, bool) or not isinstance(history, int) or history < 0:
-            raise ValueError("history must be a nonnegative integer")
         df = normalize(bars, metadata=True).sort("symbol", "timeframe", "timestamp", nulls_last=False)
         group = ["symbol", "timeframe"]
         ph = pl.col("high").shift(1).over(group)
@@ -199,17 +197,9 @@ class Classifier:
         )
         expressions = []
         if "color" in selected:
-            expressions.extend(
-                color.shift(i).over(group).alias(f"color{i}") if i else color.alias("color0")
-                for i in range(history + 1)
-            )
+            expressions.append(color.alias("color"))
         if "scenario" in selected:
-            # Window expressions cannot be nested; derive current scenario in a temporary frame first.
-            temp = df.select(scenario.alias("__scenario"), *group)
-            for i in range(history + 1):
-                expressions.append(
-                    temp.select(pl.col("__scenario").shift(i).over(group)).to_series().alias(f"scenario{i}")
-                )
+            expressions.append(scenario.alias("scenario"))
         if "shape" in selected:
             r = pl.col("high") - pl.col("low")
             expressions.append(
