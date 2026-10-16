@@ -1,34 +1,28 @@
-"""Strat-domain types: bar shapes, scenarios, colors, timeframes."""
+"""Public bar values and supported timeframe identifiers."""
 
 from datetime import datetime
 from enum import StrEnum
-from typing import TypedDict
+from typing import NotRequired, TypedDict
 
 
 class BarDict(TypedDict):
-    """OHLCV bar dictionary — the standard shape used across fetching, streaming, and storage."""
-
-    symbol: str
+    symbol: str | None
     timestamp: datetime
     timeframe: str
     open: float
     high: float
     low: float
     close: float
-    volume: float
+    volume: NotRequired[object]
 
 
 class Color(StrEnum):
-    """Bar color based on open vs close."""
-
     GREEN = "green"
     RED = "red"
     NEUTRAL = "neutral"
 
 
 class Scenario(StrEnum):
-    """Strat scenario classification."""
-
     ONE = "1"
     TWO_UP = "2U"
     TWO_DOWN = "2D"
@@ -36,31 +30,18 @@ class Scenario(StrEnum):
 
 
 class Shape(StrEnum):
-    """Bar shape classification — hammer or shooter."""
-
     HAMMER = "hammer"
     SHOOTER = "shooter"
 
 
-class ClassifiedBar(BarDict):
-    """OHLCV bar with Strat classification fields."""
-
-    scenario3: Scenario | None
-    scenario2: Scenario | None
-    scenario1: Scenario | None
-    scenario0: Scenario | None
-    color3: Color | None
-    color2: Color | None
-    color1: Color | None
-    color0: Color
-    shape: str | None
+class CurrentBar(BarDict):
+    scenario: Scenario | None
+    color: Color
+    shape: Shape | None
     in_force: bool | None
 
 
 class Timeframe(StrEnum):
-    """Bar timeframe values."""
-
-    FIVE_SEC = "5sec"
     ONE_MIN = "1min"
     FIVE_MIN = "5min"
     FIFTEEN_MIN = "15min"
@@ -71,6 +52,9 @@ class Timeframe(StrEnum):
     TWELVE_HOUR = "12h"
     ONE_DAY = "1d"
     ONE_WEEK = "1w"
-    ONE_MONTH = "1m"  # Calendar month aggregation, not 1 minute (see ONE_MIN)
+    ONE_MONTH = "1m"
     ONE_QUARTER = "1q"
     ONE_YEAR = "1y"
+
+
+DEFAULT_TIMEFRAMES = tuple(Timeframe)

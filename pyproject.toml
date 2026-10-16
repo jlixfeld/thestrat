@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "thestrat"
-version = "1.2.0"
+version = "2.0.0"
 description = "Vectorized OHLCV timeframe aggregation and Strat bar classification (Polars)"
 authors = [
     {name = "Jason Lixfeld", email = "nominal_choroid0y@icloud.com"}
@@ -23,6 +23,7 @@ classifiers = [
     "Private :: Do Not Upload",
 ]
 dependencies = [
+    "pandas-market-calendars>=5.5.0",
     "polars[timezone]>=1.0.0",
 ]
 

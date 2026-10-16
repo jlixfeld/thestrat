@@ -1,242 +1,226 @@
-"""Pure classification functions for Strat scenario analysis."""
+"""Callable classification components, with no retained state."""
+
+from collections.abc import Sequence
+from datetime import UTC, datetime
+from math import isfinite
+from numbers import Real
+from typing import Literal, overload
 
 import polars as pl
 
-from thestrat.types import ClassifiedBar, Color, Scenario
+from thestrat.frames import normalize
+from thestrat.types import DEFAULT_TIMEFRAMES, BarDict, Color, CurrentBar, Scenario, Shape
 
-SHAPE_BODY_ZONE = 0.33
+Field = Literal["scenario", "color", "shape", "in_force"]
+_FIELDS = ("scenario", "color", "shape", "in_force")
+_ZONE = 0.33
 
 
-def classify_bars_df(df: pl.DataFrame) -> pl.DataFrame:
-    """Add scenario0-3, color0-3, shape, in_force columns using vectorized Polars ops.
+def _numbers(values: dict) -> None:
+    for key, value in values.items():
+        if isinstance(value, bool) or not isinstance(value, Real) or not isfinite(value):
+            raise ValueError(f"{key} must be finite numeric")
+    if "high" in values and values["high"] < values["low"]:
+        raise ValueError("high must be >= low")
+    if "reference_high" in values and values["reference_high"] < values["reference_low"]:
+        raise ValueError("reference_high must be >= reference_low")
+    if "high" in values and "open_price" in values:
+        if (
+            not values["low"]
+            <= min(values["open_price"], values["close_price"])
+            <= max(values["open_price"], values["close_price"])
+            <= values["high"]
+        ):
+            raise ValueError("invalid OHLC range")
 
-    Expects a DataFrame sorted by timestamp for a SINGLE symbol+timeframe
-    with at minimum open, high, low, close columns.
-    """
-    required = {"open", "high", "low", "close"}
-    missing = required - set(df.columns)
-    if missing:
-        raise ValueError(f"classify_bars_df requires columns {required}, missing: {missing}")
-    took_high = pl.col("high") > pl.col("high").shift(1)
-    took_low = pl.col("low") < pl.col("low").shift(1)
 
-    # Split into 3 with_columns passes: each pass depends on columns from the prior.
-    df = df.with_columns(
-        pl.when(pl.col("close") > pl.col("open"))
-        .then(pl.lit("green"))
-        .when(pl.col("close") < pl.col("open"))
-        .then(pl.lit("red"))
-        .otherwise(pl.lit("neutral"))
-        .alias("color0"),
-        pl.when(pl.col("high").shift(1).is_null())
-        .then(pl.lit(None))
-        .when(took_high & took_low)
-        .then(pl.lit("3"))
-        .when(took_high)
-        .then(pl.lit("2U"))
-        .when(took_low)
-        .then(pl.lit("2D"))
-        .otherwise(pl.lit("1"))
-        .alias("scenario0"),
+def _color(o: float, c: float) -> Color:
+    return Color.GREEN if c > o else Color.RED if c < o else Color.NEUTRAL
+
+
+def _scenario(h: float, low: float, rh: float, rl: float) -> Scenario:
+    return (
+        Scenario.THREE
+        if h > rh and low < rl
+        else Scenario.TWO_UP
+        if h > rh
+        else Scenario.TWO_DOWN
+        if low < rl
+        else Scenario.ONE
     )
 
-    df = df.with_columns(
-        pl.col("color0").shift(1).alias("color1"),
-        pl.col("color0").shift(2).alias("color2"),
-        pl.col("color0").shift(3).alias("color3"),
-        pl.col("scenario0").shift(1).alias("scenario1"),
-        pl.col("scenario0").shift(2).alias("scenario2"),
-        pl.col("scenario0").shift(3).alias("scenario3"),
+
+def _shape(o: float, h: float, low: float, c: float) -> Shape | None:
+    r = h - low
+    if r == 0:
+        return None
+    if min(o, c) >= low + r * (1 - _ZONE):
+        return Shape.HAMMER
+    if max(o, c) <= low + r * _ZONE:
+        return Shape.SHOOTER
+    return None
+
+
+def _force(o: float, h: float, low: float, c: float, rh: float, rl: float) -> bool:
+    scenario, color = _scenario(h, low, rh, rl), _color(o, c)
+    if scenario == Scenario.TWO_UP or (scenario == Scenario.THREE and color == Color.GREEN):
+        return c > rh
+    if scenario == Scenario.TWO_DOWN or (scenario == Scenario.THREE and color == Color.RED):
+        return c < rl
+    return False
+
+
+def _bar_values(bar: dict) -> dict:
+    required = {"timestamp", "open", "high", "low", "close"}
+    if not isinstance(bar, dict) or required - bar.keys():
+        raise ValueError("bar missing required values")
+    timestamp = bar["timestamp"]
+    if not isinstance(timestamp, datetime):
+        raise ValueError("timestamp must be datetime")
+    timestamp = timestamp.replace(tzinfo=UTC) if timestamp.tzinfo is None else timestamp.astimezone(UTC)
+    symbol, timeframe = bar.get("symbol"), bar.get("timeframe", "1min")
+    if symbol is not None and not isinstance(symbol, str):
+        raise ValueError("symbol must be String or null")
+    if timeframe not in DEFAULT_TIMEFRAMES:
+        raise ValueError("unsupported timeframe")
+    if timeframe == "1min" and (timestamp.second or timestamp.microsecond):
+        raise ValueError("source timestamp must be the exact start of its minute")
+    _numbers(
+        {
+            "open_price": bar["open"],
+            "high": bar["high"],
+            "low": bar["low"],
+            "close_price": bar["close"],
+        }
     )
+    return {
+        "symbol": symbol,
+        "timestamp": timestamp,
+        "timeframe": timeframe,
+        **{name: float(bar[name]) for name in ("open", "high", "low", "close")},
+        **({"volume": bar["volume"]} if "volume" in bar else {}),
+    }
 
-    prior_high = pl.col("high").shift(1)
-    prior_low = pl.col("low").shift(1)
-    range_ = pl.col("high") - pl.col("low")
-    body_top = pl.max_horizontal("open", "close")
-    body_bottom = pl.min_horizontal("open", "close")
 
-    df = df.with_columns(
-        pl.when(range_ == 0)
-        .then(pl.lit(None))
-        .when(body_bottom >= pl.col("low") + range_ * (1 - SHAPE_BODY_ZONE))
-        .then(pl.lit("hammer"))
-        .when(body_top <= pl.col("low") + range_ * SHAPE_BODY_ZONE)
-        .then(pl.lit("shooter"))
-        .otherwise(pl.lit(None))
-        .alias("shape"),
-        pl.when(prior_high.is_null())
-        .then(pl.lit(None).cast(pl.Boolean))
-        .when(pl.col("scenario0") == pl.lit("1"))
-        .then(pl.lit(False))
-        .when(
-            (pl.col("scenario0") == pl.lit("2U"))
-            | ((pl.col("scenario0") == pl.lit("3")) & (pl.col("color0") == pl.lit("green")))
+class ScalarClassifier:
+    @overload
+    def __call__(self, *, kind: Literal["color"], open_price: float, close_price: float) -> Color: ...
+
+    @overload
+    def __call__(
+        self, *, kind: Literal["scenario"], high: float, low: float, reference_high: float, reference_low: float
+    ) -> Scenario: ...
+
+    @overload
+    def __call__(
+        self, *, kind: Literal["shape"], open_price: float, high: float, low: float, close_price: float
+    ) -> Shape | None: ...
+
+    @overload
+    def __call__(
+        self,
+        *,
+        kind: Literal["in_force"],
+        open_price: float,
+        high: float,
+        low: float,
+        close_price: float,
+        reference_high: float,
+        reference_low: float,
+    ) -> bool: ...
+
+    @overload
+    def __call__(self, *, kind: Literal["bar"], bar: BarDict, prior: BarDict | None = None) -> CurrentBar: ...
+
+    def __call__(self, *, kind: str, **kwargs):
+        if kind == "bar":
+            if set(kwargs) - {"bar", "prior"} or "bar" not in kwargs:
+                raise TypeError("bar requires bar and optional prior")
+            bar = _bar_values(kwargs["bar"])
+            prior = kwargs.get("prior")
+            if prior is not None:
+                prior = _bar_values(prior)
+            o, h, low, c = (bar[n] for n in ("open", "high", "low", "close"))
+            return {
+                **bar,
+                "color": _color(o, c),
+                "shape": _shape(o, h, low, c),
+                "scenario": None if prior is None else _scenario(h, low, prior["high"], prior["low"]),
+                "in_force": None if prior is None else _force(o, h, low, c, prior["high"], prior["low"]),
+            }
+        inputs = {
+            "color": ("open_price", "close_price"),
+            "scenario": ("high", "low", "reference_high", "reference_low"),
+            "shape": ("open_price", "high", "low", "close_price"),
+            "in_force": ("open_price", "high", "low", "close_price", "reference_high", "reference_low"),
+        }
+        if kind not in inputs:
+            raise ValueError(f"unknown scalar kind: {kind}")
+        if set(kwargs) != set(inputs[kind]):
+            raise TypeError(f"{kind} requires exactly {inputs[kind]}")
+        _numbers(kwargs)
+        fn = {"color": _color, "scenario": _scenario, "shape": _shape, "in_force": _force}[kind]
+        return fn(*(kwargs[k] for k in inputs[kind]))
+
+
+class Classifier:
+    def __init__(self) -> None:
+        self.scalar = ScalarClassifier()
+
+    def __call__(self, bars: pl.DataFrame, *, fields: Sequence[Field] | None = None) -> pl.DataFrame:
+        selected = _FIELDS if fields is None else tuple(fields)
+        if isinstance(fields, str) or len(set(selected)) != len(selected) or any(f not in _FIELDS for f in selected):
+            raise ValueError("fields must contain unique supported field names")
+        df = normalize(bars, metadata=True, classification=True).sort(
+            "symbol", "timeframe", "timestamp", nulls_last=False
         )
-        .then(pl.col("close") > prior_high)
-        .when(
-            (pl.col("scenario0") == pl.lit("2D"))
-            | ((pl.col("scenario0") == pl.lit("3")) & (pl.col("color0") == pl.lit("red")))
+        group = ["symbol", "timeframe"]
+        ph = pl.col("high").shift(1).over(group)
+        previous_low = pl.col("low").shift(1).over(group)
+        color = (
+            pl.when(pl.col("close") > pl.col("open"))
+            .then(pl.lit("green"))
+            .when(pl.col("close") < pl.col("open"))
+            .then(pl.lit("red"))
+            .otherwise(pl.lit("neutral"))
         )
-        .then(pl.col("close") < prior_low)
-        .otherwise(pl.lit(False))
-        .alias("in_force"),
-    )
-
-    return df
-
-
-def classify_bars_multi_symbol(df: pl.DataFrame) -> pl.DataFrame:
-    """Vectorized classification across multiple symbols.
-
-    Uses `over("symbol")` for per-symbol shift operations. Input must have
-    a "symbol" column. DataFrame must be sorted by (symbol, timestamp).
-    """
-    required = {"symbol", "open", "high", "low", "close"}
-    missing = required - set(df.columns)
-    if missing:
-        raise ValueError(f"classify_bars_multi_symbol requires columns {required}, missing: {missing}")
-
-    took_high = pl.col("high") > pl.col("high").shift(1).over("symbol")
-    took_low = pl.col("low") < pl.col("low").shift(1).over("symbol")
-
-    df = df.with_columns(
-        pl.when(pl.col("close") > pl.col("open"))
-        .then(pl.lit("green"))
-        .when(pl.col("close") < pl.col("open"))
-        .then(pl.lit("red"))
-        .otherwise(pl.lit("neutral"))
-        .alias("color0"),
-        pl.when(pl.col("high").shift(1).over("symbol").is_null())
-        .then(pl.lit(None))
-        .when(took_high & took_low)
-        .then(pl.lit("3"))
-        .when(took_high)
-        .then(pl.lit("2U"))
-        .when(took_low)
-        .then(pl.lit("2D"))
-        .otherwise(pl.lit("1"))
-        .alias("scenario0"),
-    )
-
-    df = df.with_columns(
-        pl.col("color0").shift(1).over("symbol").alias("color1"),
-        pl.col("color0").shift(2).over("symbol").alias("color2"),
-        pl.col("color0").shift(3).over("symbol").alias("color3"),
-        pl.col("scenario0").shift(1).over("symbol").alias("scenario1"),
-        pl.col("scenario0").shift(2).over("symbol").alias("scenario2"),
-        pl.col("scenario0").shift(3).over("symbol").alias("scenario3"),
-    )
-
-    prior_high = pl.col("high").shift(1).over("symbol")
-    prior_low = pl.col("low").shift(1).over("symbol")
-    range_ = pl.col("high") - pl.col("low")
-    body_top = pl.max_horizontal("open", "close")
-    body_bottom = pl.min_horizontal("open", "close")
-
-    df = df.with_columns(
-        pl.when(range_ == 0)
-        .then(pl.lit(None))
-        .when(body_bottom >= pl.col("low") + range_ * (1 - SHAPE_BODY_ZONE))
-        .then(pl.lit("hammer"))
-        .when(body_top <= pl.col("low") + range_ * SHAPE_BODY_ZONE)
-        .then(pl.lit("shooter"))
-        .otherwise(pl.lit(None))
-        .alias("shape"),
-        pl.when(prior_high.is_null())
-        .then(pl.lit(None).cast(pl.Boolean))
-        .when(pl.col("scenario0") == pl.lit("1"))
-        .then(pl.lit(False))
-        .when(
-            (pl.col("scenario0") == pl.lit("2U"))
-            | ((pl.col("scenario0") == pl.lit("3")) & (pl.col("color0") == pl.lit("green")))
+        scenario = (
+            pl.when(ph.is_null())
+            .then(pl.lit(None, dtype=pl.String))
+            .when((pl.col("high") > ph) & (pl.col("low") < previous_low))
+            .then(pl.lit("3"))
+            .when(pl.col("high") > ph)
+            .then(pl.lit("2U"))
+            .when(pl.col("low") < previous_low)
+            .then(pl.lit("2D"))
+            .otherwise(pl.lit("1"))
         )
-        .then(pl.col("close") > prior_high)
-        .when(
-            (pl.col("scenario0") == pl.lit("2D"))
-            | ((pl.col("scenario0") == pl.lit("3")) & (pl.col("color0") == pl.lit("red")))
-        )
-        .then(pl.col("close") < prior_low)
-        .otherwise(pl.lit(False))
-        .alias("in_force"),
-    )
-
-    return df
-
-
-def classify_color(open_price: float, close_price: float) -> Color:
-    """Determine bar color from open and close prices."""
-    if close_price > open_price:
-        return Color.GREEN
-    elif close_price < open_price:
-        return Color.RED
-    return Color.NEUTRAL
-
-
-def classify_scenario(curr_high: float, curr_low: float, prev_high: float, prev_low: float) -> Scenario:
-    """Classify the Strat scenario by comparing current bar range to prior bar range.
-
-    Uses strict inequality — matching is NOT taking out.
-    """
-    took_high = curr_high > prev_high
-    took_low = curr_low < prev_low
-
-    if took_high and took_low:
-        return Scenario.THREE
-    elif took_high:
-        return Scenario.TWO_UP
-    elif took_low:
-        return Scenario.TWO_DOWN
-    return Scenario.ONE
-
-
-def classify_bar(bar: dict, prior: dict | None) -> ClassifiedBar:
-    """Classify a single bar given the prior bar (or None for first bar)."""
-    color = classify_color(bar["open"], bar["close"])
-
-    if prior is None:
-        scenario = None
-        in_force = None
-    else:
-        scenario = classify_scenario(bar["high"], bar["low"], prior["high"], prior["low"])
-        if scenario == Scenario.ONE:
-            in_force = False
-        elif scenario == Scenario.TWO_UP or (scenario == Scenario.THREE and color == Color.GREEN):
-            in_force = bar["close"] > prior["high"]
-        elif scenario == Scenario.TWO_DOWN or (scenario == Scenario.THREE and color == Color.RED):
-            in_force = bar["close"] < prior["low"]
-        else:
-            in_force = False
-
-    range_ = bar["high"] - bar["low"]
-    if range_ == 0:
-        shape = None
-    else:
-        body_bottom = min(bar["open"], bar["close"])
-        body_top = max(bar["open"], bar["close"])
-        if body_bottom >= bar["low"] + range_ * (1 - SHAPE_BODY_ZONE):
-            shape = "hammer"
-        elif body_top <= bar["low"] + range_ * SHAPE_BODY_ZONE:
-            shape = "shooter"
-        else:
-            shape = None
-
-    return ClassifiedBar(
-        symbol=bar["symbol"],
-        timestamp=bar["timestamp"],
-        timeframe=bar["timeframe"],
-        open=bar["open"],
-        high=bar["high"],
-        low=bar["low"],
-        close=bar["close"],
-        volume=bar["volume"],
-        scenario3=None,
-        scenario2=None,
-        scenario1=None,
-        scenario0=scenario,
-        color3=None,
-        color2=None,
-        color1=None,
-        color0=color,
-        shape=shape,
-        in_force=in_force,
-    )
+        expressions = []
+        if "color" in selected:
+            expressions.append(color.alias("color"))
+        if "scenario" in selected:
+            expressions.append(scenario.alias("scenario"))
+        if "shape" in selected:
+            r = pl.col("high") - pl.col("low")
+            expressions.append(
+                pl.when(r == 0)
+                .then(pl.lit(None, dtype=pl.String))
+                .when(pl.min_horizontal("open", "close") >= pl.col("low") + r * (1 - _ZONE))
+                .then(pl.lit("hammer"))
+                .when(pl.max_horizontal("open", "close") <= pl.col("low") + r * _ZONE)
+                .then(pl.lit("shooter"))
+                .otherwise(pl.lit(None, dtype=pl.String))
+                .alias("shape")
+            )
+        if "in_force" in selected:
+            expressions.append(
+                pl.when(ph.is_null())
+                .then(pl.lit(None, dtype=pl.Boolean))
+                .when((scenario == "2U") | ((scenario == "3") & (color == "green")))
+                .then(pl.col("close") > ph)
+                .when((scenario == "2D") | ((scenario == "3") & (color == "red")))
+                .then(pl.col("close") < previous_low)
+                .otherwise(pl.lit(False))
+                .alias("in_force")
+            )
+        return df.with_columns(expressions)

@@ -2,7 +2,7 @@ from datetime import UTC, datetime
 
 import polars as pl
 
-from thestrat.aggregator import TimeframeAggregator
+from thestrat import TheStrat, session_for
 
 
 def _make_daily_bars(days: list[tuple]) -> pl.DataFrame:
@@ -71,8 +71,7 @@ def test_aggregate_daily_from_intraday():
             },
         ]
     )
-    agg = TimeframeAggregator()
-    result = agg.aggregate(bars, "1d").sort("timestamp")
+    result = TheStrat(session=session_for("crypto"), timeframes=["1d"], bars=bars).aggregate().sort("timestamp")
 
     assert len(result) == 2
     day1 = result.row(0, named=True)
@@ -101,8 +100,7 @@ def test_aggregate_weekly():
             ("2026-04-10T20:00:00", 111.0, 115.0, 110.0, 114.0, 1400.0),
         ]
     )
-    agg = TimeframeAggregator()
-    result = agg.aggregate(bars, "1w")
+    result = TheStrat(session=session_for("crypto"), timeframes=["1w"], bars=bars).aggregate()
     assert len(result) == 1
     row = result.row(0, named=True)
     assert row["open"] == 100.0
@@ -120,8 +118,7 @@ def test_aggregate_monthly():
             ("2026-05-01T20:00:00", 108.0, 112.0, 107.0, 111.0, 1100.0),
         ]
     )
-    agg = TimeframeAggregator()
-    result = agg.aggregate(bars, "1m")
+    result = TheStrat(session=session_for("crypto"), timeframes=["1m"], bars=bars).aggregate()
     assert len(result) == 2
     april = result.filter(pl.col("timestamp").dt.month() == 4).row(0, named=True)
     assert april["open"] == 100.0
@@ -139,8 +136,7 @@ def test_aggregate_quarterly():
             ("2026-04-15T20:00:00", 108.0, 112.0, 107.0, 111.0, 1100.0),
         ]
     )
-    agg = TimeframeAggregator()
-    result = agg.aggregate(bars, "1q")
+    result = TheStrat(session=session_for("crypto"), timeframes=["1q"], bars=bars).aggregate()
     assert len(result) == 2
 
 
@@ -151,25 +147,35 @@ def test_aggregate_yearly():
             ("2026-03-15T20:00:00", 108.0, 112.0, 107.0, 111.0, 1100.0),
         ]
     )
-    agg = TimeframeAggregator()
-    result = agg.aggregate(bars, "1y")
+    result = TheStrat(session=session_for("crypto"), timeframes=["1y"], bars=bars).aggregate()
     assert len(result) == 2
 
 
 def _make_5sec_bars(entries: list[tuple]) -> pl.DataFrame:
     """Helper: create 5sec bars. Each tuple: (iso_timestamp, open, high, low, close, volume)"""
-    return pl.DataFrame(
-        [
-            {
-                "timestamp": datetime.fromisoformat(e[0]).replace(tzinfo=UTC),
-                "open": e[1],
-                "high": e[2],
-                "low": e[3],
-                "close": e[4],
-                "volume": e[5],
-            }
-            for e in entries
-        ]
+    return (
+        pl.DataFrame(
+            [
+                {
+                    "timestamp": datetime.fromisoformat(e[0]).replace(tzinfo=UTC),
+                    "open": e[1],
+                    "high": e[2],
+                    "low": e[3],
+                    "close": e[4],
+                    "volume": e[5],
+                }
+                for e in entries
+            ]
+        )
+        .with_columns(pl.col("timestamp").dt.truncate("1m"))
+        .group_by("timestamp", maintain_order=True)
+        .agg(
+            pl.col("open").first(),
+            pl.col("high").max(),
+            pl.col("low").min(),
+            pl.col("close").last(),
+            pl.col("volume").sum(),
+        )
     )
 
 
@@ -184,8 +190,7 @@ def test_aggregate_empty():
             "volume": pl.Float64,
         }
     )
-    agg = TimeframeAggregator()
-    result = agg.aggregate(bars, "1w")
+    result = TheStrat(session=session_for("crypto"), timeframes=["1w"], bars=bars).aggregate()
     assert len(result) == 0
 
 
@@ -194,8 +199,7 @@ def test_aggregate_1min_from_5sec():
     bars = _make_5sec_bars(
         [(f"2026-04-07T13:30:{s:02d}", 100.0 + s, 101.0 + s, 99.0, 100.5 + s, 1000.0) for s in range(0, 60, 5)]
     )
-    agg = TimeframeAggregator()
-    result = agg.aggregate(bars, "1min")
+    result = TheStrat(session=session_for("crypto"), timeframes=["1min"], bars=bars).aggregate()
     assert len(result) == 1
     row = result.row(0, named=True)
     assert row["open"] == 100.0
@@ -210,8 +214,7 @@ def test_aggregate_5min_from_5sec():
         for s in range(0, 60, 5):
             bars_list.append((f"2026-04-07T13:{minute}:{s:02d}", 100.0, 101.0, 99.0, 100.0, 100.0))
     bars = _make_5sec_bars(bars_list)
-    agg = TimeframeAggregator()
-    result = agg.aggregate(bars, "5min")
+    result = TheStrat(session=session_for("crypto"), timeframes=["5min"], bars=bars).aggregate()
     assert len(result) == 2
 
 
@@ -226,8 +229,7 @@ def test_aggregate_1h_equity_offset():
             ("2026-04-07T14:30:00", 104.0, 106.0, 103.0, 105.0, 100.0),
         ]
     )
-    agg = TimeframeAggregator()
-    result = agg.aggregate(bars, "1h", equity_offset=True)
+    result = TheStrat(session=session_for("equity_us"), timeframes=["1h"], bars=bars).aggregate()
     assert len(result) == 2  # 13:30-14:29 and 14:30+
 
 
@@ -240,8 +242,7 @@ def test_aggregate_1h_no_offset():
             ("2026-04-07T14:00:00", 102.0, 104.0, 101.0, 103.0, 100.0),
         ]
     )
-    agg = TimeframeAggregator()
-    result = agg.aggregate(bars, "1h", equity_offset=False)
+    result = TheStrat(session=session_for("crypto"), timeframes=["1h"], bars=bars).aggregate()
     assert len(result) == 2
 
 
@@ -253,8 +254,7 @@ def test_aggregate_4h_equity_offset():
             ("2026-04-07T17:30:00", 110.0, 112.0, 109.0, 111.0, 100.0),
         ]
     )
-    agg = TimeframeAggregator()
-    result = agg.aggregate(bars, "4h", equity_offset=True)
+    result = TheStrat(session=session_for("equity_us"), timeframes=["4h"], bars=bars).aggregate()
     assert len(result) == 2
 
 
@@ -266,8 +266,7 @@ def test_aggregate_6h():
             ("2026-04-07T06:00:00", 105.0, 107.0, 104.0, 106.0, 100.0),
         ]
     )
-    agg = TimeframeAggregator()
-    result = agg.aggregate(bars, "6h", equity_offset=False)
+    result = TheStrat(session=session_for("crypto"), timeframes=["6h"], bars=bars).aggregate()
     assert len(result) == 2
 
 
@@ -279,8 +278,7 @@ def test_aggregate_12h():
             ("2026-04-07T12:00:00", 105.0, 107.0, 104.0, 106.0, 100.0),
         ]
     )
-    agg = TimeframeAggregator()
-    result = agg.aggregate(bars, "12h", equity_offset=False)
+    result = TheStrat(session=session_for("crypto"), timeframes=["12h"], bars=bars).aggregate()
     assert len(result) == 2
 
 
@@ -292,10 +290,9 @@ def test_existing_daily_aggregation_still_works():
             ("2026-04-07T20:00:00", 104.0, 108.0, 103.0, 107.0, 1200.0),
         ]
     )
-    agg = TimeframeAggregator()
     # Without equity_offset (default)
-    result = agg.aggregate(bars, "1w")
+    result = TheStrat(session=session_for("crypto"), timeframes=["1w"], bars=bars).aggregate()
     assert len(result) == 1
     # With equity_offset explicitly False
-    result = agg.aggregate(bars, "1w", equity_offset=False)
+    result = TheStrat(session=session_for("crypto"), timeframes=["1w"], bars=bars).aggregate()
     assert len(result) == 1
