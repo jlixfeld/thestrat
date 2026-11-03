@@ -31,6 +31,7 @@ The source code is all rights reserved. Read the [license, community and support
 - [API reference](docs/api.md): Signatures and schemas.
 - [Calculation and state behavior](docs/behavior.md): Calculations and caller responsibilities.
 - [Agent documentation](llms.txt): An index of references and examples for agents.
+- [Keep It Simple](AGENTS.md#keep-it-simple): The design rule for this library. Read before proposing changes.
 
 ## Installation
 
@@ -351,7 +352,7 @@ windows = strat.window(
 
 `strat.bars` initially stores the supplied frame. After ordinary `aggregate()`, it contains source minutes and calculated timeframe bars. With `coverage=...`, it contains only supplied source rows after snapshots; current calculated rows are returned separately. Callers can filter it with Polars and assign the result back. Assignment alone does no calculation. `aggregate` applies snapshots and calculates bars; `classify` returns labels without aggregating or changing the instance's frame.
 
-Callers normalize provider fields, units and timestamps, sanitize duplicates, and choose retention. Ordinary minute aggregation requires underlying source minutes to update a retained aggregate-only window. Mixed aggregation requires an explicitly complete compatible source cover. Classification of a summary itself is valid. Do not prune those source minutes and expect later corrections to reconstruct them.
+Callers normalize provider fields, units and timestamps, sanitize duplicates, and choose retention. Ordinary minute aggregation extends a loaded higher-timeframe row with new minutes and keeps it when the frame's minutes are only a recent tail. Retain the newest minute of each symbol, and do not prune a minute and expect a later correction of it to be applied. Mixed aggregation requires an explicitly complete compatible source cover. Classification of a summary itself is valid.
 
 Only snapshot updates are implemented. Passing `mode="delta"` raises `NotImplementedError` before state changes. Invalid inputs still raise clear validation errors.
 
