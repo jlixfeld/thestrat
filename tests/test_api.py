@@ -7,7 +7,7 @@ import polars as pl
 import pytest
 from test_sessions import bars, utc
 
-from thestrat import DEFAULT_TIMEFRAMES, BarDict, InsufficientSourceDataError, TheStrat, session_for
+from thestrat import DEFAULT_TIMEFRAMES, BarDict, TheStrat, session_for
 
 
 def instance(frame=None, targets=("1min", "5min", "1h", "1d")):
@@ -63,16 +63,14 @@ def test_source_retained_when_not_selected_null_symbol_replacement():
     assert s.aggregate(update)["volume"].to_list() == [5.0]
 
 
-def test_no_hidden_source_after_pruning_summary_insufficiency():
+def test_loaded_summary_without_minutes_is_extended_by_new_minutes():
     s = instance(bars([utc(2026, 1, 1)]), targets=["5min"])
     s.aggregate()
     s.bars = s.bars.filter(pl.col("timeframe") != "1min")
-    before = s.bars
-    # Summary still supports classification, but cannot be guessed into a correction.
+    # The summary still classifies, and a minute outside it is added to it.
     assert s.classify(s.bars)[0, "color"] == "green"
-    with pytest.raises(InsufficientSourceDataError, match="underlying"):
-        s.aggregate(bars([utc(2026, 1, 1)]))
-    assert s.bars is before
+    output = s.aggregate(bars([utc(2026, 1, 1, 0, 1)]))
+    assert output[0, "volume"] == 2.0
 
 
 def test_sparse_sources_valid_no_synthetic_grid_and_unaffected_seed():

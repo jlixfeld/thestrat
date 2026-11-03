@@ -40,7 +40,7 @@ The working key is `(symbol, timeframe, timestamp)`; null symbol is a group. Sup
 
 Frames must have a homogeneous session, instrument-label convention, price-adjustment basis and volume unit. Mixed symbols are automatic; sessions or price bases are not inferred from symbols. Typed empty input returns the documented empty schema after validation. Missing market minutes do not create synthetic rows.
 
-An aggregate-only seed can be classified. In ordinary aggregation without coverage, updating its window requires the underlying source minutes. Mixed aggregation with explicit coverage can instead use complete compatible closed children; see [Mixed source coverage](#mixed-source-coverage). The library raises `InsufficientSourceDataError` when unavailable sources prevent accurate aggregation; it cannot prove missing coverage by looking for a trade in every minute. Callers must supply the full retained source set rather than a partial subset presented as complete. No source history survives secretly after caller pruning.
+An aggregate-only seed can be classified. In ordinary aggregation without coverage, a higher-timeframe row in `bars` is extended by submitted minutes, or recalculated when the frame's minutes reproduce it; [behavior.md](behavior.md#source-snapshots-and-aggregation) has the rules. The library does not verify that loaded rows agree with the minutes and cannot prove missing coverage by looking for a trade in every minute. Mixed aggregation with explicit coverage can instead use complete compatible closed children; see [Mixed source coverage](#mixed-source-coverage). No source history survives secretly after caller pruning.
 
 ## Classification fields
 
@@ -119,7 +119,7 @@ Batch queries share schedule fetches and canonical geometry for overlapping time
 
 ## Errors and extension
 
-Invalid fields, frames, values and configuration raise useful validation errors. `mode="delta"` raises `NotImplementedError` before state changes, including empty inputs; unknown modes are invalid arguments. `InsufficientSourceDataError` and `ScheduleRangeError` derive from ValueError. Native resource failures may still propagate.
+Invalid fields, frames, values and configuration raise useful validation errors. `mode="delta"` raises `NotImplementedError` before state changes, including empty inputs; unknown modes are invalid arguments. `ScheduleRangeError` derives from ValueError. Native resource failures may still propagate.
 
 Future classification additions belong behind the existing components. Define inputs, formulas, output types, dependencies, nulls, predecessor context and scalar applicability; add expected-result, parity, grouping and performance checks. Explicitly document any change to default fields or whole-bar output. No signal engine, dynamic plugin registry, provider connection or scalar aggregation is provided.
 

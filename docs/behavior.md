@@ -4,13 +4,21 @@ Read [api.md](api.md) for exact signatures and input schemas. All calculations a
 
 ## Source snapshots and aggregation
 
-Normalize provider messages to their source-minute interval start. A snapshot is the complete current OHLCV for that minute; it is not an additive volume contribution. Without coverage, the library replaces the stored source row by symbol/timeframe/timestamp, then calculates aggregated bars from source minutes only. Aggregate rows never feed back as source contributions.
+Normalize provider messages to their source-minute interval start. A snapshot is the complete current OHLCV for that minute; it is not an additive volume contribution. Without coverage, the library replaces the stored source row by symbol/timeframe/timestamp, then calculates aggregated bars from the source minutes, extending a loaded higher-timeframe row where one exists (see below). Aggregate rows never feed back as source contributions.
 
-For each symbol/window, timestamp order determines first open and last close; high is maximum, low minimum and volume summed. A corrected older minute cannot replace a later constituent's close. Replacing the earliest constituent can correct the open. Retractions of an extreme use the available underlying source set; they are not handled by retaining an obsolete maximum or minimum. A snapshot volume change from 203 to 296 changes an aggregate already containing 203 by 93. It does not add 296 again.
+For each symbol/window, timestamp order determines first open and last close; high is maximum, low minimum and volume summed. A corrected older minute cannot replace a later constituent's close. Replacing the earliest constituent can correct the open. Retractions of an extreme use the available underlying source set, which must reproduce the window; they are not handled by retaining an obsolete maximum or minimum. A snapshot volume change from 203 to 296 changes an aggregate already containing 203 by 93. It does not add 296 again.
 
 Both aggregation and classification sort their input; classification orders independently within each symbol and timeframe. Caller-sanitized inputs contain one row per key. A timestamp is interval identity, not receipt order. Multiple distinct snapshots for one source key across calls are legitimate replacements.
 
-An aggregate-only summary can be classified but cannot be updated without the source minutes behind its window. The caller must retain or restore those minutes. Missing grid positions do not prove missing data: a minute without an eligible trade may legitimately be absent. No hidden history, automatic pruning or message deduplication is performed.
+An aggregate-only summary can be classified. Without coverage, a higher-timeframe row in `bars` is the caller's loaded state for its window, and the minutes in the frame are taken to be already inside it. A submitted minute whose `(symbol, timestamp)` is not in the frame is new. Missing grid positions do not prove missing data: a minute without an eligible trade may legitimately be absent. No hidden history, automatic pruning or message deduplication is performed.
+
+For each window that a submitted minute changes, with a loaded row:
+
+- If the frame's minutes reproduce the loaded row, the window is recalculated from them, so a correction can retract an extreme.
+- Otherwise the new minutes are added to the loaded row. Open stays. High is the larger of the loaded high and the frame's high for the window, and low the smaller. Close is the window's latest close. Volume is the loaded volume plus the new volume minus the volume of any replaced snapshot.
+- A window with no loaded row is built from the minutes present. A loaded row no submitted minute changes is kept as loaded.
+
+The library does not check that a loaded row agrees with the minutes. Re-sending a minute that was pruned counts it again, and a correction cannot lower an extreme the frame's minutes do not hold. The caller supplies consistent rows and minutes.
 
 Aggregation stores the full source-plus-aggregate working frame in `bars`, and returns bars for selected timeframes. If `1min` is unselected, assigning the returned aggregate-only frame back to `bars` discards source history by the caller's choice. Caller metadata is not reduced into aggregate output. Classification preserves extra columns and does not mutate instance state; requested classification fields are recalculated rather than trusted as current.
 
@@ -37,7 +45,7 @@ Repeated fall-back local hours merge into their wall-clock bucket, whose label u
 
 Position zero means actual membership in an eligible half-open segment. A break, weekend or holiday has no zero row. With no containing window, previous windows end at/before the query and following windows begin strictly after it; a window spanning a break around the query is excluded from both. With membership, neighboring positions follow distinct canonical labels. This matters during fall-back: a second-occurrence query can belong to a window labeled with the first occurrence. One-minute source windows continue to use their physical timestamps.
 
-Counts are per input/timeframe, closest neighbors are -1/+1, and output preserves input order and duplicate timestamps. Requested neighbors are complete or an unavailable-range error is raised. Window queries do not modify working source state. Window lookup does not combine prices. Explicit mixed aggregation can combine compatible closed summaries with recent minutes under the coverage contract below; ordinary minute aggregation still requires retained/reloaded minutes.
+Counts are per input/timeframe, closest neighbors are -1/+1, and output preserves input order and duplicate timestamps. Requested neighbors are complete or an unavailable-range error is raised. Window queries do not modify working source state. Window lookup does not combine prices. Explicit mixed aggregation can combine compatible closed summaries with recent minutes under the coverage contract below. Ordinary minute aggregation extends loaded rows with new minutes and recalculates only from minutes that reproduce them.
 
 ## Classification
 

@@ -2,7 +2,7 @@
 
 from importlib.metadata import PackageNotFoundError, version
 
-from thestrat.api import InsufficientSourceDataError, TheStrat
+from thestrat.api import TheStrat
 from thestrat.coverage import SourceCoverage
 from thestrat.sessions import SESSIONS, InstrumentType, Schedule, ScheduleRangeError, Session, session_for
 from thestrat.types import DEFAULT_TIMEFRAMES, BarDict, Color, CurrentBar, Scenario, Shape, Timeframe
@@ -15,7 +15,6 @@ except PackageNotFoundError:
 __all__ = [
     "TheStrat",
     "SourceCoverage",
-    "InsufficientSourceDataError",
     "Session",
     "Schedule",
     "ScheduleRangeError",
