@@ -8,15 +8,12 @@ import polars as pl
 
 from thestrat.classifier import Classifier
 from thestrat.coverage import SourceCoverage
-from thestrat.frames import KEY, SCHEMA, normalize, targets
+from thestrat.extension import extend_window, tag_prior, window_stats
+from thestrat.frames import KEY, PRICES, SCHEMA, normalize, targets
 from thestrat.mixed import calculate_mixed
 from thestrat.sessions import Session
 from thestrat.types import DEFAULT_TIMEFRAMES, Timeframe
 from thestrat.windows import WindowCache
-
-
-class InsufficientSourceDataError(ValueError):
-    """An opaque summary cannot be updated without underlying source minutes."""
 
 
 class TheStrat:
@@ -59,18 +56,16 @@ class TheStrat:
             return output
         sources = current.filter(pl.col("timeframe") == "1min")
         summaries = current.filter(pl.col("timeframe") != "1min")
-        # Existing sources, rather than newly submitted updates, establish whether a
-        # summary is opaque. A supplied subset cannot establish historical coverage.
-        if summaries.height:
-            self._check_sources(summaries, sources, incoming)
-        if incoming.height:
-            sources = pl.concat([sources.join(incoming.select(KEY), on=KEY, how="anti", nulls_equal=True), incoming])
-        sources = sources.sort("symbol", "timestamp", nulls_last=False)
-        outputs = [sources]
-        if sources.height:
+        # Prior-snapshot bookkeeping only matters when a loaded row could be extended.
+        tracked = summaries.filter(pl.col("timeframe").is_in(list(self.timeframes))).height > 0
+        tagged = (tag_prior(sources, incoming) if tracked else self._replaced(sources, incoming)).sort(
+            "symbol", "timestamp", nulls_last=False
+        )
+        outputs = [tagged.select(list(SCHEMA))]
+        if tagged.height:
             start, end = (
-                cast(datetime, sources["timestamp"].min()),
-                cast(datetime, sources["timestamp"].max()) + timedelta(minutes=1),
+                cast(datetime, tagged["timestamp"].min()),
+                cast(datetime, tagged["timestamp"].max()) + timedelta(minutes=1),
             )
             boundaries, schedule = self._calendar().intervals(
                 start, end, tuple(tf for tf in self.timeframes if tf != "1min")
@@ -79,32 +74,18 @@ class TheStrat:
                 (row["segment_open"], row["segment_open"], row["segment_close"])
                 for row in schedule.iter_rows(named=True)
             ]
-            sources = self._mapped(sources, eligible_intervals).select(list(SCHEMA))
-            outputs = [sources]
+            tagged = self._mapped(tagged, eligible_intervals).drop("__window")
+            outputs = [tagged.select(list(SCHEMA))]
             for tf in self.timeframes:
                 if tf == "1min":
                     continue
-                mapped = self._mapped(sources, boundaries[tf])
+                mapped = self._mapped(tagged, boundaries[tf])
                 if mapped.is_empty():
                     continue
-                grouped = (
-                    mapped.sort("timestamp")
-                    .group_by("symbol", "__window")
-                    .agg(
-                        pl.col("open").first(),
-                        pl.col("high").max(),
-                        pl.col("low").min(),
-                        pl.col("close").last(),
-                        pl.col("volume").sum(),
-                    )
-                )
-                outputs.append(
-                    grouped.rename({"__window": "timestamp"})
-                    .with_columns(pl.lit(tf).alias("timeframe"))
-                    .select(list(SCHEMA))
-                )
+                outputs.append(self._windows_for(tf, window_stats(mapped, tracked=tracked), summaries))
         calculated = pl.concat(outputs)
-        # Unaffected aggregate-only seeds remain visible for classification; never reduce them.
+        # Loaded summaries that no submitted minute touched stay as they are, and so do
+        # aggregate-only seeds outside the selected timeframes.
         if summaries.height:
             summaries = summaries.join(calculated.select(KEY), on=KEY, how="anti", nulls_equal=True)
             calculated = pl.concat([calculated, summaries])
@@ -116,6 +97,44 @@ class TheStrat:
         )
         self.bars = calculated
         return calculated.filter(pl.col("timeframe").is_in(list(self.timeframes)))
+
+    @staticmethod
+    def _replaced(sources: pl.DataFrame, incoming: pl.DataFrame) -> pl.DataFrame:
+        if incoming.is_empty():
+            return sources
+        return pl.concat([sources.join(incoming.select(KEY), on=KEY, how="anti", nulls_equal=True), incoming])
+
+    @staticmethod
+    def _windows_for(tf: str, stats: pl.DataFrame, summaries: pl.DataFrame) -> pl.DataFrame:
+        """Bars for one timeframe: recalculated unless a loaded row exists, which is extended or kept."""
+        if "touched" not in stats.columns:
+            return stats.select(
+                "symbol",
+                pl.col("__window").alias("timestamp"),
+                pl.lit(tf).alias("timeframe"),
+                *(pl.col(f"new_{n}").alias(n) for n in PRICES),
+            )
+        held = summaries.filter(pl.col("timeframe") == tf).select(
+            "symbol", pl.col("timestamp").alias("__window"), *(pl.col(n).alias(f"held_{n}") for n in PRICES)
+        )
+        stats = stats.join(held, on=["symbol", "__window"], how="left", nulls_equal=True)
+        fresh = stats.filter(pl.col("held_open").is_null())
+        bars = fresh.select(
+            "symbol",
+            pl.col("__window").alias("timestamp"),
+            pl.lit(tf).alias("timeframe"),
+            *(pl.col(f"new_{n}").alias(n) for n in PRICES),
+        )
+        extended = [
+            {
+                "symbol": window["symbol"],
+                "timestamp": window["__window"],
+                "timeframe": tf,
+                **extend_window(window),
+            }
+            for window in stats.filter(pl.col("held_open").is_not_null() & pl.col("touched")).iter_rows(named=True)
+        ]
+        return pl.concat([bars, pl.DataFrame(extended, schema=SCHEMA)]) if extended else bars
 
     def _calendar(self) -> WindowCache:
         identity = (self.session.timezone, self.session.anchor_minutes, id(self.session.schedule))
@@ -142,35 +161,6 @@ class TheStrat:
             .filter(pl.col("timestamp") < pl.col("__right"))
             .drop("__left", "__right")
         )
-
-    def _check_sources(self, summaries: pl.DataFrame, sources: pl.DataFrame, incoming: pl.DataFrame) -> None:
-        def coverage(frame: pl.DataFrame) -> set[tuple]:
-            if frame.is_empty():
-                return set()
-            start, end = (
-                cast(datetime, frame["timestamp"].min()),
-                cast(datetime, frame["timestamp"].max()) + timedelta(minutes=1),
-            )
-            boundaries, _ = self._calendar().intervals(start, end, tuple(tf for tf in self.timeframes if tf != "1min"))
-            keys = set()
-            for tf in self.timeframes:
-                if tf != "1min":
-                    keys.update(
-                        (symbol, tf, label)
-                        for symbol, label in self._mapped(frame, boundaries[tf])
-                        .select("symbol", "__window")
-                        .unique()
-                        .iter_rows()
-                    )
-            return keys
-
-        existing, affected = coverage(sources), coverage(incoming)
-        for row in summaries.iter_rows(named=True):
-            key = tuple(row[name] for name in KEY)
-            if row["timeframe"] in self.timeframes and key not in existing and (incoming.is_empty() or key in affected):
-                raise InsufficientSourceDataError(
-                    f"symbol={row['symbol']!r} window={row['timeframe']}@{row['timestamp']}: underlying retained source minutes unavailable"
-                )
 
     def window(
         self,

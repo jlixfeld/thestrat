@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "thestrat"
-version = "2.0.0"
+version = "2.1.0"
 description = "Vectorized OHLCV timeframe aggregation and Strat bar classification (Polars)"
 authors = [
     {name = "Jason Lixfeld", email = "nominal_choroid0y@icloud.com"}
